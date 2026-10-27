@@ -11,6 +11,11 @@ function apiMiddlewarePlugin(env: Record<string, string>): Plugin {
   return {
     name: "api-middleware",
     configureServer(server) {
+      if (process.env.BACKEND_URL) {
+        // Backend container handles /api proxying
+        return;
+      }
+
       server.middlewares.use((req, res, next) => {
         if (!req.url || !req.url.startsWith("/api/")) {
           return next();
@@ -53,7 +58,11 @@ function apiMiddlewarePlugin(env: Record<string, string>): Plugin {
           });
 
           try {
-            if (url === "/api/checkout-intent") {
+            if (url === "/api/health" || url === "/health") {
+              res.statusCode = 200;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() }));
+            } else if (url === "/api/checkout-intent") {
               await checkoutIntentHandler(vercelReq as any, vercelRes as any);
             } else if (url === "/api/validate-coupon") {
               await validateCouponHandler(vercelReq as any, vercelRes as any);
@@ -86,14 +95,30 @@ export default defineConfig(({ mode }) => {
 
   return {
     server: {
-      host: "::",
+      host: "0.0.0.0",
       port: 8080,
+      strictPort: true,
+      watch: {
+        usePolling: true,
+        interval: 100,
+      },
       headers: {
         "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
       },
       hmr: {
+        clientPort: 8080,
         overlay: false,
       },
+      ...(process.env.BACKEND_URL
+        ? {
+            proxy: {
+              "/api": {
+                target: process.env.BACKEND_URL,
+                changeOrigin: true,
+              },
+            },
+          }
+        : {}),
     },
     plugins: [react(), apiMiddlewarePlugin(env)].filter(Boolean),
     resolve: {

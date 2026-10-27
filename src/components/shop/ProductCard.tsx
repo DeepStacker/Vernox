@@ -15,11 +15,12 @@ interface ProductCardProps {
 
 export function ProductCard({ product, compact, onToggleCompare, isComparing }: ProductCardProps) {
   const { add } = useCart();
-  const { wishlist, toggleWishlist } = useCatalog();
+  const { wishlist, toggleWishlist, storeConfig } = useCatalog();
 
   const isWishlisted = wishlist.includes(product.id);
   const defaultSize = product.sizes?.[0] || { label: 'Standard', widthMm: 800, heightMm: 800, priceDelta: 0 };
   const price = product.price;
+  const currencySymbol = (storeConfig?.currency && storeConfig.currency !== '$') ? storeConfig.currency : '₹';
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -172,7 +173,7 @@ export function ProductCard({ product, compact, onToggleCompare, isComparing }: 
             "font-sans font-medium text-dark-brown",
             compact ? "text-[11px] sm:text-xs" : "text-xs sm:text-sm"
           )}>
-            ${price.toLocaleString()}
+            {currencySymbol}{price.toLocaleString()}
           </span>
 
           <div className="flex items-center gap-2">

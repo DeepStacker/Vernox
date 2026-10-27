@@ -28,7 +28,7 @@ export default function Trade() {
     phone: '',
     projectType: 'hospitality',
     estimatedQuantity: '10-50 units',
-    estimatedBudget: '$5,000 - $15,000',
+    estimatedBudget: '₹50,000 - ₹150,000',
     timeline: '1-3 months',
     notes: '',
   });

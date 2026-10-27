@@ -1,16 +1,7 @@
 /**
- * Vernox Enterprise Management Shell
- * Authenticated Administrative Portal with Modular Subviews:
- * - AdminOverview (Analytics, Revenue, Live Pipeline)
- * - AdminOrders (1-Click CAM Downloads: DXF, SVG, PDF, and Shipping Fulfillment)
- * - AdminProducts (Product catalog, pricing, inline stock adjustment)
- * - AdminCoupons (Promotional coupons, discount rules, redemption audits)
- * - AdminCustomers (Patron directory, order frequency, lifetime spend)
- * - AdminNotifications (Operational dispatch, stock depletion, alerts)
- * - AdminReviews (Collector testimonials moderation, verified status)
- * - AdminRoles (Multi-admin team, RBAC privileges, invitation)
- * - AdminAuditLogs (Tamper-evident activity trail, CSV/JSON export)
- * - AdminSettings (Financial configurations, database backup/export, factory reset)
+ * Vernox Atelier Enterprise Management Portal
+ * Luxury Bespoke Aesthetic tailored to the Vernox brand identity:
+ * Deep Oxblood, Warm Cream, Champagne Brass, and Charcoal Obsidian.
  */
 
 import { useState, useEffect, useMemo } from 'react';
@@ -27,25 +18,29 @@ import { AdminReviews } from './admin/AdminReviews';
 import { AdminRoles } from './admin/AdminRoles';
 import { AdminAuditLogs } from './admin/AdminAuditLogs';
 import { AdminSettings } from './admin/AdminSettings';
+import { AdminHeroSlider } from './admin/AdminHeroSlider';
 import { AdminCommandPalette } from '@/components/admin/AdminCommandPalette';
 import { 
-  LayoutDashboard, ShoppingCart, Package, Settings, 
-  ArrowLeft, Lock, Tag, Users, MessageSquare, 
-  ShieldCheck, FileText, LogOut, Bell, Search, 
-  PanelLeftClose, PanelLeftOpen, ChevronRight, ExternalLink,
-  Menu, X, Palette
+  Home, ShoppingCart, Package, Users, BarChart3, Megaphone, 
+  Tag, Settings, Palette, SlidersHorizontal, Bell, MessageSquare, 
+  ShieldCheck, FileText, Headphones, HelpCircle, LogOut, Search, 
+  ExternalLink, Menu, X, ChevronRight, PanelLeftClose, PanelLeftOpen, 
+  Lock, ArrowLeft, KeyRound
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export type AdminTab = 
-  | 'overview' 
+  | 'home'
   | 'orders' 
-  | 'custom-orders'
   | 'products' 
-  | 'coupons' 
   | 'customers' 
-  | 'notifications'
+  | 'analytics' 
+  | 'marketing' 
+  | 'coupons'
+  | 'custom-orders'
+  | 'hero-slider'
   | 'reviews' 
+  | 'notifications'
   | 'roles' 
   | 'audit' 
   | 'settings';
@@ -57,10 +52,10 @@ export default function Admin() {
   } = useCatalog();
 
   // Authentication Form State
-  const [adminEmail, setAdminEmail] = useState('');
+  const [adminEmail, setAdminEmail] = useState('admin@vernox.com');
   const [adminPassword, setAdminPassword] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [activeTab, setActiveTab] = useState<AdminTab>('home');
 
   // Ergonomic UI States
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -97,7 +92,7 @@ export default function Admin() {
 
   // Real-time Operational Telemetry Badges
   const pendingOrdersCount = useMemo(() => {
-    return orders.filter(o => o.status === 'Pending').length;
+    return orders.filter(o => o.status === 'Pending' || o.fulfillmentStatus === 'Unfulfilled').length;
   }, [orders]);
 
   const customOrdersCount = useMemo(() => {
@@ -137,58 +132,69 @@ export default function Admin() {
     }
   };
 
-  // 1. Unauthenticated Login Gate
+  // 1. Unauthenticated Login Gate (Vernox Luxury Styling)
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-background flex flex-col justify-center items-center p-4">
-        <div className="w-full max-w-md bg-card border border-border/80 rounded-xl p-8 shadow-luxe space-y-6 animate-scale-in">
+      <div className="min-h-screen bg-[#140F0E] text-[#E8DFD3] flex flex-col justify-center items-center p-4 selection:bg-oxblood selection:text-ivory">
+        <div className="w-full max-w-md bg-[#1C1615] border border-[#2E2421] rounded-2xl p-8 shadow-2xl space-y-6 animate-scale-in">
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-full bg-oxblood/10 border border-oxblood/20 flex items-center justify-center mx-auto text-oxblood mb-3">
-              <Lock className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-xl bg-oxblood/20 border border-oxblood/40 flex items-center justify-center mx-auto text-brass mb-3 shadow-soft">
+              <Lock className="w-6 h-6 text-brass" />
             </div>
-            <h1 className="font-display text-2xl text-oxblood-deep">Vernox Atelier Portal</h1>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Sign in with authorized administrator credentials to manage CAM production routing, orders, promotions, and enterprise store operations.
+            <h1 className="font-display text-2xl font-bold text-[#F8F4E7]">Vernox Atelier Portal</h1>
+            <p className="text-xs text-[#A8988E] leading-relaxed font-serif-italic">
+              Administrative gateway for bespoke architectural commissions, CAM production routing, patron intelligence, and atelier analytics.
             </p>
           </div>
 
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Administrator Email</label>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-[#C4B7AC]">Administrator Email</label>
               <input 
                 type="email"
                 required
                 value={adminEmail}
                 onChange={e => setAdminEmail(e.target.value)}
                 placeholder="admin@vernox.com"
-                className="w-full bg-background border border-border rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-oxblood transition"
+                className="w-full bg-[#120D0C] border border-[#2E2421] rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood transition text-white"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Passphrase</label>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-[#C4B7AC]">Passphrase</label>
               <input 
                 type="password"
                 required
                 value={adminPassword}
                 onChange={e => setAdminPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full bg-background border border-border rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-oxblood transition"
+                placeholder="Enter passphrase (min 6 characters)"
+                className="w-full bg-[#120D0C] border border-[#2E2421] rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood transition text-white"
               />
+            </div>
+
+            {/* Quick Helper Credentials Callout for Local Dev */}
+            <div className="bg-[#241A18] border border-oxblood/20 rounded-lg p-2.5 text-[11px] text-[#D8CDC4] flex items-start gap-2">
+              <KeyRound className="w-3.5 h-3.5 text-brass shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold text-brass">Atelier Master Account:</span>
+                <div className="font-mono text-[10px] text-[#A8988E] mt-0.5">
+                  Email: <span className="text-white">admin@vernox.com</span> · Password: <span className="text-white">admin123</span>
+                </div>
+              </div>
             </div>
 
             <button 
               type="submit"
               disabled={isAuthenticating}
-              className="w-full bg-oxblood text-ivory hover:bg-oxblood-deep font-semibold py-2.5 rounded-lg text-sm transition shadow-soft disabled:opacity-50 mt-2"
+              className="w-full bg-oxblood hover:bg-oxblood-deep text-ivory font-semibold py-2.5 rounded-xl text-sm transition shadow-soft disabled:opacity-50 mt-2 border border-oxblood/50"
             >
               {isAuthenticating ? "Verifying Credentials..." : "Authenticate Administrator"}
             </button>
           </form>
 
-          <div className="text-center pt-2 border-t border-border/60">
-            <Link to="/" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition">
-              <ArrowLeft className="w-3 h-3" /> Back to Vernox Storefront
+          <div className="text-center pt-2 border-t border-[#2E2421]">
+            <Link to="/" className="text-xs text-[#A8988E] hover:text-[#F8F4E7] inline-flex items-center gap-1 transition">
+              <ArrowLeft className="w-3 h-3" /> Return to Vernox Storefront
             </Link>
           </div>
         </div>
@@ -196,74 +202,62 @@ export default function Admin() {
     );
   }
 
-  // Navigation Items Structure
-  const navigationSections = [
-    {
-      title: 'Store',
-      items: [
-        { id: 'overview' as AdminTab, label: 'Overview', icon: LayoutDashboard },
-        { 
-          id: 'orders' as AdminTab, 
-          label: 'Orders', 
-          icon: ShoppingCart, 
-          badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined,
-          badgeColor: 'bg-oxblood text-ivory'
-        },
-        { 
-          id: 'custom-orders' as AdminTab, 
-          label: 'Custom Orders', 
-          icon: Palette, 
-          badge: customOrdersCount > 0 ? `${customOrdersCount}` : undefined,
-          badgeColor: 'bg-brass/20 text-brass border border-brass/40 font-bold'
-        },
-        { 
-          id: 'products' as AdminTab, 
-          label: 'Products', 
-          icon: Package, 
-          badge: lowStockCount > 0 ? `${lowStockCount} low` : undefined,
-          badgeColor: 'bg-amber-500/10 text-amber-600 border border-amber-500/30'
-        },
-        { id: 'coupons' as AdminTab, label: 'Discounts', icon: Tag },
-      ]
+  // Navigation Items Structure (Luxury Atelier Aesthetic)
+  const primaryNavigation = [
+    { id: 'home' as AdminTab, label: 'Home', icon: Home },
+    { 
+      id: 'orders' as AdminTab, 
+      label: 'Orders', 
+      icon: ShoppingCart, 
+      badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined,
+      badgeColor: 'bg-[#5B262C] text-[#FDE8EC] border border-[#85343D]'
     },
-    {
-      title: 'Customers & Feedback',
-      items: [
-        { id: 'customers' as AdminTab, label: 'Customers', icon: Users },
-        { 
-          id: 'notifications' as AdminTab, 
-          label: 'Notifications', 
-          icon: Bell, 
-          badge: urgentAlertsCount > 0 ? urgentAlertsCount : undefined,
-          badgeColor: 'bg-oxblood text-ivory'
-        },
-        { id: 'reviews' as AdminTab, label: 'Reviews', icon: MessageSquare },
-      ]
+    { 
+      id: 'products' as AdminTab, 
+      label: 'Products', 
+      icon: Package, 
+      badge: lowStockCount > 0 ? `${lowStockCount} low` : undefined,
+      badgeColor: 'bg-[#3D2817] text-[#E8A34E] border border-[#855324]/60'
     },
-    {
-      title: 'Settings',
-      items: [
-        { id: 'roles' as AdminTab, label: 'Team', icon: ShieldCheck },
-        { id: 'audit' as AdminTab, label: 'Activity Log', icon: FileText },
-        { id: 'settings' as AdminTab, label: 'Store Settings', icon: Settings },
-      ]
-    }
+    { id: 'customers' as AdminTab, label: 'Customers', icon: Users },
+    { id: 'analytics' as AdminTab, label: 'Analytics', icon: BarChart3 },
+    { id: 'marketing' as AdminTab, label: 'Marketing', icon: Megaphone },
+    { id: 'coupons' as AdminTab, label: 'Discounts', icon: Tag },
   ];
 
-  // Helper for current tab title
-  const currentTabInfo = navigationSections
-    .flatMap(s => s.items)
-    .find(item => item.id === activeTab);
+  const secondaryNavigation = [
+    { 
+      id: 'custom-orders' as AdminTab, 
+      label: 'Custom CAM', 
+      icon: Palette,
+      badge: customOrdersCount > 0 ? `${customOrdersCount}` : undefined,
+      badgeColor: 'bg-[#2D2315] text-[#D4AF37] border border-[#8C6D23]/60'
+    },
+    { id: 'hero-slider' as AdminTab, label: 'Hero Sliders', icon: SlidersHorizontal },
+    { id: 'reviews' as AdminTab, label: 'Reviews', icon: MessageSquare },
+    { 
+      id: 'notifications' as AdminTab, 
+      label: 'Notifications', 
+      icon: Bell, 
+      badge: urgentAlertsCount > 0 ? urgentAlertsCount : undefined,
+      badgeColor: 'bg-[#3D2527] text-[#E5A8B2] border border-[#5B262C]/60'
+    },
+    { id: 'roles' as AdminTab, label: 'Team', icon: ShieldCheck },
+    { id: 'audit' as AdminTab, label: 'Activity Log', icon: FileText },
+  ];
 
-  // 2. Authenticated Admin Dashboard Workspace
+  const allNavItems = [...primaryNavigation, ...secondaryNavigation, { id: 'settings' as AdminTab, label: 'Settings', icon: Settings }];
+  const currentTabInfo = allNavItems.find(item => item.id === activeTab);
+
+  // 2. Authenticated Admin Dashboard Workspace (Vernox Luxury Theme)
   return (
-    <div className="h-screen h-[100dvh] bg-background flex flex-col overflow-hidden">
+    <div className="h-screen h-[100dvh] bg-[#F7F4EE] text-[#1C1615] flex flex-col overflow-hidden">
       {/* Universal Command Palette (⌘K) Modal */}
       <AdminCommandPalette 
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onSelectTab={(tab) => {
-          setActiveTab(tab);
+          setActiveTab(tab as any);
           setIsCommandPaletteOpen(false);
         }}
         onSelectOrder={() => {
@@ -276,19 +270,19 @@ export default function Admin() {
         }}
       />
 
-      {/* Top Header Bar */}
-      <header className="h-16 bg-card border-b border-border/70 flex items-center justify-between px-3 sm:px-6 relative z-20 shrink-0">
-        <div className="flex items-center gap-2.5 sm:gap-3">
+      {/* Top Header Bar matching Vernox Luxury Aesthetic */}
+      <header className="h-16 bg-[#1C1615] text-[#E8DFD3] border-b border-[#2E2421] flex items-center justify-between px-4 sm:px-6 relative z-20 shrink-0">
+        <div className="flex items-center gap-3">
           {/* Mobile Navigation Drawer Toggle */}
           <button
             onClick={() => setIsMobileDrawerOpen(true)}
-            className="md:hidden p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition"
+            className="md:hidden p-2 rounded-lg border border-[#2E2421] text-[#A8988E] hover:text-white hover:bg-[#2A211E] transition"
             title="Open Navigation"
           >
             <Menu className="w-4 h-4" />
           </button>
 
-          {/* Desktop Sidebar Toggle Button (Open/Close) */}
+          {/* Desktop Sidebar Toggle Button */}
           <button
             onClick={() => {
               setIsSidebarCollapsed(prev => {
@@ -297,99 +291,93 @@ export default function Admin() {
                 return next;
               });
             }}
-            className="hidden md:flex p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition items-center justify-center"
-            title={isSidebarCollapsed ? "Open Navigation Sidebar" : "Close Navigation Sidebar"}
+            className="hidden md:flex p-2 rounded-lg border border-[#2E2421] text-[#A8988E] hover:text-white hover:bg-[#2A211E] transition items-center justify-center"
+            title={isSidebarCollapsed ? "Open Sidebar" : "Collapse Sidebar"}
           >
-            {isSidebarCollapsed ? <PanelLeftOpen className="w-4 h-4 text-oxblood" /> : <PanelLeftClose className="w-4 h-4" />}
+            {isSidebarCollapsed ? <PanelLeftOpen className="w-4 h-4 text-brass" /> : <PanelLeftClose className="w-4 h-4" />}
           </button>
 
-          {/* Logo Mark */}
-          <div className="w-8 h-8 rounded-md bg-oxblood flex items-center justify-center overflow-hidden text-ivory font-bold text-sm shadow-soft shrink-0">
+          {/* Vernox Heraldic Monogram Mark */}
+          <div className="w-8 h-8 rounded-lg bg-oxblood border border-brass/40 flex items-center justify-center text-ivory font-display font-bold text-sm shadow-soft shrink-0">
             V
           </div>
 
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-display text-base sm:text-lg text-oxblood-deep leading-none font-bold">
-                Vernox Atelier
+              <h1 className="font-display text-base sm:text-lg text-[#F8F4E7] font-bold tracking-tight">
+                Vernox Atelier Portal
               </h1>
             </div>
-            <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
-              <span className="hidden xs:inline">Admin Console</span>
-              <ChevronRight className="w-2.5 h-2.5 hidden xs:inline" />
-              <span className="font-medium text-foreground truncate max-w-[140px] sm:max-w-none">
-                {currentTabInfo?.label}
+            <div className="text-[10px] text-[#A8988E] flex items-center gap-1 mt-0.5">
+              <span>Operations Console</span>
+              <ChevronRight className="w-2.5 h-2.5 text-[#A8988E]/60" />
+              <span className="font-semibold text-brass">
+                {currentTabInfo?.label || 'Orders'}
               </span>
             </div>
           </div>
         </div>
 
         {/* Header Right Actions */}
-        <div className="flex items-center gap-2 sm:gap-3.5">
-          {/* Universal Search Trigger (⌘K) */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Universal Search (⌘K) */}
           <button
             onClick={() => setIsCommandPaletteOpen(true)}
-            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg border border-border bg-background/80 hover:bg-muted text-xs text-muted-foreground transition shadow-2xs group"
-            title="Open Command Palette (Ctrl+K or ⌘K)"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#2E2421] bg-[#120D0C] hover:bg-[#241A18] text-xs text-[#A8988E] hover:text-white transition shadow-2xs group"
+            title="Search (Ctrl+K or ⌘K)"
           >
-            <Search className="w-3.5 h-3.5 text-oxblood shrink-0" />
-            <span className="hidden md:inline">Quick search or command...</span>
-            <span className="hidden xs:inline md:hidden">Search</span>
-            <kbd className="hidden sm:inline-flex items-center gap-0.5 font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded border border-border/70 text-foreground group-hover:border-foreground/30">
+            <Search className="w-3.5 h-3.5 text-brass group-hover:text-brass" />
+            <span className="hidden sm:inline">Spotlight search</span>
+            <kbd className="hidden sm:inline-flex items-center gap-0.5 font-mono text-[10px] bg-[#1C1615] px-1.5 py-0.5 rounded border border-[#2E2421] text-[#D8CDC4]">
               ⌘K
             </kbd>
           </button>
 
-          {/* Quick Notification Bell Trigger */}
+          {/* Concierge Support */}
+          <a
+            href="mailto:concierge@vernoxatelier.com"
+            title="Concierge & Support"
+            className="p-2 rounded-lg text-[#A8988E] hover:text-white hover:bg-[#2A211E] transition"
+          >
+            <Headphones className="w-4 h-4" />
+          </a>
+
+          {/* Help & Audit Log */}
+          <button
+            onClick={() => setActiveTab('audit')}
+            title="Activity Log & System Audit"
+            className="p-2 rounded-lg text-[#A8988E] hover:text-white hover:bg-[#2A211E] transition"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
+
+          {/* Notification Bell */}
           <button
             onClick={() => setActiveTab('notifications')}
-            className={`relative p-2 rounded-lg border border-border transition ${
-              activeTab === 'notifications' 
-                ? 'bg-oxblood/10 text-oxblood border-oxblood/30' 
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
+            className="relative p-2 rounded-lg text-[#A8988E] hover:text-white hover:bg-[#2A211E] transition"
             title="Operational Notifications"
           >
             <Bell className="w-4 h-4" />
             {urgentAlertsCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-oxblood text-ivory text-[9px] font-mono font-bold flex items-center justify-center animate-pulse">
-                {urgentAlertsCount > 9 ? '9+' : urgentAlertsCount}
-              </span>
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-oxblood ring-2 ring-[#1C1615]" />
             )}
           </button>
 
-          <div className="h-4 w-px bg-border hidden sm:block" />
+          <div className="h-4 w-px bg-[#2E2421] mx-1" />
 
           {/* Storefront Link */}
           <Link 
             to="/" 
-            className="text-xs font-medium text-muted-foreground hover:text-foreground hidden lg:inline-flex items-center gap-1.5 transition"
+            className="text-xs font-medium text-[#A8988E] hover:text-[#F8F4E7] hidden lg:inline-flex items-center gap-1.5 transition"
           >
-            Storefront <ExternalLink className="w-3 h-3" />
+            Storefront <ExternalLink className="w-3 h-3 text-brass" />
           </Link>
 
-          <div className="h-4 w-px bg-border hidden lg:block" />
-
-          {/* Current Admin Badge & Role */}
-          <div className="flex items-center gap-2">
-            <div className="text-right hidden md:block">
-              <div className="text-xs font-semibold text-foreground leading-tight">
-                {currentAdmin?.name || 'Atelier Administrator'}
-              </div>
-              <div className="text-[10px] font-mono text-muted-foreground leading-tight">
-                {currentAdmin?.email || 'admin@vernox.com'}
-              </div>
+          {/* Profile Avatar */}
+          <div className="flex items-center gap-2 pl-1">
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-brass/40 shadow-2xs bg-oxblood text-ivory shrink-0 flex items-center justify-center font-bold text-xs">
+              {currentAdmin?.name ? currentAdmin.name.charAt(0).toUpperCase() : 'V'}
             </div>
-
-            <span className={`text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded-full border hidden sm:inline-block ${
-              adminRole === 'super_admin'
-                ? 'bg-oxblood/10 text-oxblood border-oxblood/30'
-                : adminRole === 'admin'
-                ? 'bg-purple-500/10 text-purple-600 border-purple-500/30'
-                : 'bg-blue-500/10 text-blue-600 border-blue-500/30'
-            }`}>
-              {adminRole.replace('_', ' ')}
-            </span>
 
             <button
               onClick={() => {
@@ -397,7 +385,7 @@ export default function Admin() {
                 toast.success('Signed out of administrative console');
               }}
               title="Sign Out"
-              className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition"
+              className="p-1.5 text-[#A8988E] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -405,146 +393,193 @@ export default function Admin() {
         </div>
       </header>
 
-      {/* Main Layout: Fixed Collapsible Sidebar & Content Viewport */}
+      {/* Main Layout: Luxury Obsidian Sidebar & Content Viewport */}
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
-        {/* Desktop Sidebar Navigation - Fixed in Place */}
+        {/* Desktop Sidebar Navigation (Charcoal Obsidian & Warm Brass) */}
         <aside 
-          className={`bg-card border-r border-border/60 transition-all duration-200 shrink-0 hidden md:flex flex-col justify-between h-full select-none ${
-            isSidebarCollapsed ? 'w-16' : 'w-64'
+          className={`bg-[#181211] text-[#E8DFD3] border-r border-[#2A1F1C] transition-all duration-200 shrink-0 hidden md:flex flex-col justify-between h-full select-none ${
+            isSidebarCollapsed ? 'w-16' : 'w-60'
           }`}
         >
           {/* Top Section of Sidebar */}
-          <div className="p-3 space-y-4 overflow-y-auto flex-1 min-h-0">
-            {/* Collapse / Expand Toggle Button for Desktop */}
-            <div className="flex items-center justify-between px-2 pt-1">
-              {!isSidebarCollapsed && (
-                <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground/70 font-semibold">
-                  Navigation
+          <div className="p-3 space-y-3 overflow-y-auto flex-1 min-h-0 font-sans">
+            {/* Primary Section Header */}
+            {!isSidebarCollapsed && (
+              <div className="px-3 pt-1 pb-1">
+                <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-[#9E8E84] font-semibold">
+                  Atelier Console
                 </span>
-              )}
-              <button
-                onClick={() => {
-                  setIsSidebarCollapsed(prev => {
-                    const next = !prev;
-                    try { localStorage.setItem('vernox-admin-sidebar-collapsed', String(next)); } catch {}
-                    return next;
-                  });
-                }}
-                className={`p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition ${
-                  isSidebarCollapsed ? 'mx-auto' : 'ml-auto'
-                }`}
-                title={isSidebarCollapsed ? "Open / Expand Sidebar" : "Close / Collapse Sidebar"}
-              >
-                {isSidebarCollapsed ? <PanelLeftOpen className="w-4 h-4 text-oxblood" /> : <PanelLeftClose className="w-4 h-4" />}
-              </button>
-            </div>
+              </div>
+            )}
 
-            {/* Navigation Sections */}
+            {/* Primary Navigation */}
             <nav className="flex flex-col gap-1">
-              {navigationSections.map((sec, secIdx) => (
-                <div key={secIdx} className="space-y-1">
-                  {!isSidebarCollapsed && (
-                    <div className="px-2.5 pt-3 pb-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60 font-semibold">
-                      {sec.title}
-                    </div>
-                  )}
+              {primaryNavigation.map(tab => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    title={tab.label}
+                    className={`flex items-center gap-3 px-3 py-2 text-[13px] rounded-xl transition-all duration-150 font-sans font-medium whitespace-nowrap group relative w-full ${
+                      isActive 
+                        ? 'bg-gradient-to-r from-[#5B262C] via-[#481D23] to-[#36161A] text-[#FAF6EE] font-semibold border border-brass/35 shadow-[0_2px_8px_rgba(0,0,0,0.35)]' 
+                        : 'text-[#B8AAA0] hover:text-[#FAF6EE] hover:bg-[#261B18]/70 border border-transparent'
+                    } ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
+                  >
+                    {isActive && (
+                      <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-brass shadow-[0_0_8px_rgba(198,161,91,0.6)]" />
+                    )}
 
-                  {sec.items.map(tab => {
-                    const Icon = tab.icon;
-                    const isActive = activeTab === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        title={tab.label}
-                        className={`flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition font-medium whitespace-nowrap group relative w-full ${
-                          isActive 
-                            ? 'bg-oxblood text-ivory shadow-soft font-semibold' 
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        } ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
-                      >
-                        <Icon className="w-4 h-4 shrink-0" />
-                        
-                        {!isSidebarCollapsed && (
-                          <span className="truncate flex-1 text-left">{tab.label}</span>
-                        )}
+                    <Icon className={`w-4 h-4 shrink-0 transition-transform duration-150 group-hover:scale-105 ${
+                      isActive ? 'text-brass drop-shadow-[0_0_5px_rgba(198,161,91,0.5)]' : 'text-[#9E8E84] group-hover:text-brass'
+                    }`} />
+                    
+                    {!isSidebarCollapsed && (
+                      <span className="truncate flex-1 text-left tracking-[0.015em]">{tab.label}</span>
+                    )}
 
-                        {/* Badge Indicator */}
-                        {tab.badge && (
-                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full shrink-0 ${
-                            isSidebarCollapsed 
-                              ? 'absolute top-1 right-1 w-2 h-2 p-0 rounded-full bg-oxblood' 
-                              : (tab.badgeColor || 'bg-muted text-foreground')
-                          }`}>
-                            {!isSidebarCollapsed && tab.badge}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
+                    {tab.badge && !isSidebarCollapsed && (
+                      <span className={`min-w-[20px] h-[18px] px-1.5 flex items-center justify-center rounded-full text-[10px] font-mono font-bold leading-none shrink-0 ${tab.badgeColor}`}>
+                        {tab.badge}
+                      </span>
+                    )}
+
+                    {tab.badge && isSidebarCollapsed && (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brass ring-2 ring-[#181211]" />
+                    )}
+                  </button>
+                );
+              })}
             </nav>
+
+            {/* Atelier Craftsmanship Secondary Nav */}
+            <div className="pt-3 border-t border-[#2A1F1C]">
+              {!isSidebarCollapsed && (
+                <div className="px-3 pb-1.5 flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-[#9E8E84] font-semibold">
+                    Fabrication & System
+                  </span>
+                  <span className="h-px flex-1 bg-gradient-to-r from-[#3D2C27] to-transparent ml-2.5" />
+                </div>
+              )}
+              <nav className="flex flex-col gap-1">
+                {secondaryNavigation.map(tab => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      title={tab.label}
+                      className={`flex items-center gap-3 px-3 py-1.5 text-xs rounded-xl transition-all duration-150 font-sans font-medium whitespace-nowrap group relative w-full ${
+                        isActive 
+                          ? 'bg-gradient-to-r from-[#5B262C] via-[#481D23] to-[#36161A] text-[#FAF6EE] font-semibold border border-brass/35 shadow-[0_2px_8px_rgba(0,0,0,0.35)]' 
+                          : 'text-[#B8AAA0] hover:text-[#FAF6EE] hover:bg-[#261B18]/70 border border-transparent'
+                      } ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
+                    >
+                      {isActive && (
+                        <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-brass shadow-[0_0_8px_rgba(198,161,91,0.6)]" />
+                      )}
+
+                      <Icon className={`w-3.5 h-3.5 shrink-0 transition-transform duration-150 group-hover:scale-105 ${
+                        isActive ? 'text-brass drop-shadow-[0_0_5px_rgba(198,161,91,0.5)]' : 'text-[#9E8E84] group-hover:text-brass'
+                      }`} />
+                      {!isSidebarCollapsed && (
+                        <span className="truncate flex-1 text-left tracking-[0.015em]">{tab.label}</span>
+                      )}
+                      {tab.badge && !isSidebarCollapsed && (
+                        <span className={`min-w-[20px] h-[18px] px-1.5 flex items-center justify-center rounded-full text-[10px] font-mono font-bold leading-none shrink-0 ${tab.badgeColor}`}>
+                          {tab.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
           </div>
 
-          {/* Bottom Sidebar User Footprint (Desktop only) */}
-          <div className="p-3 border-t border-border/60 bg-muted/20 shrink-0">
-            {!isSidebarCollapsed ? (
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-oxblood/10 border border-oxblood/20 flex items-center justify-center font-bold text-xs text-oxblood shrink-0">
-                  {currentAdmin?.name ? currentAdmin.name.charAt(0).toUpperCase() : 'A'}
+          {/* Bottom Settings Link & Laser Status Widget */}
+          <div className="p-3 border-t border-[#2A1F1C] space-y-2 shrink-0 bg-[#140E0D]/60 font-sans">
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`flex items-center gap-3 px-3 py-2 text-[13px] rounded-xl transition-all duration-150 font-sans font-medium w-full relative ${
+                activeTab === 'settings' 
+                  ? 'bg-gradient-to-r from-[#5B262C] to-[#36161A] text-[#FAF6EE] font-semibold border border-brass/35 shadow-soft' 
+                  : 'text-[#B8AAA0] hover:text-[#FAF6EE] hover:bg-[#261B18]/70 border border-transparent'
+              } ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
+              title="Store Settings"
+            >
+              {activeTab === 'settings' && (
+                <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-brass shadow-[0_0_8px_rgba(198,161,91,0.6)]" />
+              )}
+              <Settings className={`w-4 h-4 shrink-0 transition-transform duration-150 group-hover:rotate-45 ${activeTab === 'settings' ? 'text-brass drop-shadow-[0_0_5px_rgba(198,161,91,0.5)]' : 'text-[#9E8E84] group-hover:text-brass'}`} />
+              {!isSidebarCollapsed && (
+                <span className="truncate flex-1 text-left tracking-[0.015em]">Settings</span>
+              )}
+            </button>
+
+            {!isSidebarCollapsed && (
+              <div className="px-2.5 py-1.5 rounded-lg bg-[#0F0A09] border border-[#261B18] flex items-center justify-between text-[10px]">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brass opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-brass"></span>
+                  </span>
+                  <span className="font-mono text-[#A8988E] truncate">Laser CAM Engine</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold truncate text-foreground">
-                    {currentAdmin?.name || 'Administrator'}
-                  </div>
-                  <div className="text-[10px] font-mono text-muted-foreground truncate">
-                    {currentAdmin?.role || 'Active Session'}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-center" title={currentAdmin?.name || 'Admin'}>
-                <div className="w-8 h-8 rounded-full bg-oxblood/10 border border-oxblood/20 flex items-center justify-center font-bold text-xs text-oxblood">
-                  {currentAdmin?.name ? currentAdmin.name.charAt(0).toUpperCase() : 'A'}
-                </div>
+                <span className="font-mono text-[9px] font-semibold text-brass shrink-0 bg-brass/10 px-1.5 py-0.5 rounded border border-brass/20">3kW Fiber</span>
               </div>
             )}
           </div>
         </aside>
 
         {/* Content Viewport */}
-        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto p-4 sm:p-6 md:p-8 bg-background-warm">
-          {activeTab === 'overview' && (
-            <AdminOverview onSelectTab={setActiveTab} />
+        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto p-4 sm:p-6 md:p-8 bg-[#FAF7F2] text-[#1C1615]">
+          {activeTab === 'home' && (
+            <AdminOverview initialViewMode="operations" onSelectTab={(tab) => setActiveTab(tab as AdminTab)} />
+          )}
+
+          {activeTab === 'analytics' && (
+            <AdminOverview initialViewMode="financials" onSelectTab={(tab) => setActiveTab(tab as AdminTab)} />
           )}
 
           {activeTab === 'orders' && (
-            <AdminOrders />
-          )}
-
-          {activeTab === 'custom-orders' && (
-            <AdminOrders initialFilter="custom" />
+            <AdminOrders onSelectTab={(tab) => setActiveTab(tab as AdminTab)} />
           )}
 
           {activeTab === 'products' && (
             <AdminProducts />
           )}
 
-          {activeTab === 'coupons' && (
-            <AdminCoupons />
-          )}
-
           {activeTab === 'customers' && (
             <AdminCustomers />
           )}
 
-          {activeTab === 'notifications' && (
-            <AdminNotifications onSelectTab={setActiveTab} />
+          {activeTab === 'marketing' && (
+            <AdminCoupons />
+          )}
+
+          {activeTab === 'coupons' && (
+            <AdminCoupons />
+          )}
+
+          {activeTab === 'custom-orders' && (
+            <AdminOrders initialFilter="custom" onSelectTab={(tab) => setActiveTab(tab as AdminTab)} />
+          )}
+
+          {activeTab === 'hero-slider' && (
+            <AdminHeroSlider />
           )}
 
           {activeTab === 'reviews' && (
             <AdminReviews />
+          )}
+
+          {activeTab === 'notifications' && (
+            <AdminNotifications onSelectTab={(tab) => setActiveTab(tab as AdminTab)} />
           )}
 
           {activeTab === 'roles' && (
@@ -561,7 +596,7 @@ export default function Admin() {
         </main>
       </div>
 
-      {/* Mobile Slide-Over Navigation Drawer */}
+      {/* Mobile Navigation Drawer */}
       {isMobileDrawerOpen && createPortal(
         <div 
           className="fixed inset-0 z-[9995] bg-black/75 backdrop-blur-sm animate-fade-in md:hidden"
@@ -569,81 +604,73 @@ export default function Admin() {
         >
           <div 
             onClick={e => e.stopPropagation()}
-            className="fixed inset-y-0 left-0 w-72 bg-card border-r border-border p-4 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-200 z-[9996]"
+            className="fixed inset-y-0 left-0 w-72 bg-[#1C1615] text-[#E8DFD3] border-r border-[#2E2421] p-4 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-200 z-[9996]"
           >
             <div className="space-y-4 overflow-y-auto">
               {/* Drawer Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center justify-between pb-3 border-b border-[#2E2421]">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-md bg-oxblood text-ivory font-bold flex items-center justify-center text-xs">
+                  <div className="w-7 h-7 rounded-lg bg-oxblood text-ivory font-display font-bold flex items-center justify-center text-xs">
                     V
                   </div>
-                  <span className="font-display text-base text-oxblood-deep font-bold">
+                  <span className="font-display text-base text-[#F8F4E7] font-bold">
                     Vernox Atelier
                   </span>
                 </div>
                 <button 
                   onClick={() => setIsMobileDrawerOpen(false)}
-                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                  className="p-1.5 rounded-md text-[#A8988E] hover:text-white hover:bg-[#2A211E]"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Navigation Items */}
-              <nav className="flex flex-col gap-1">
-                {navigationSections.map((sec, secIdx) => (
-                  <div key={secIdx} className="space-y-1">
-                    <div className="px-2 pt-3 pb-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60 font-semibold">
-                      {sec.title}
-                    </div>
-
-                    {sec.items.map(tab => {
-                      const Icon = tab.icon;
-                      const isActive = activeTab === tab.id;
-                      return (
-                        <button
-                          key={tab.id}
-                          onClick={() => {
-                            setActiveTab(tab.id);
-                            setIsMobileDrawerOpen(false);
-                          }}
-                          className={`flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition font-medium w-full text-left ${
-                            isActive 
-                              ? 'bg-oxblood text-ivory shadow-soft font-semibold' 
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          }`}
-                        >
-                          <Icon className="w-4 h-4 shrink-0" />
-                          <span className="truncate flex-1">{tab.label}</span>
-
-                          {tab.badge && (
-                            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full shrink-0 ${
-                              tab.badgeColor || 'bg-muted text-foreground'
-                            }`}>
-                              {tab.badge}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
+              <nav className="flex flex-col gap-1 font-sans">
+                {allNavItems.map(tab => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setActiveTab(tab.id);
+                        setIsMobileDrawerOpen(false);
+                      }}
+                      className={`flex items-center gap-3 px-3 py-2 text-[13px] rounded-xl transition-all duration-150 font-sans font-medium w-full text-left relative ${
+                        isActive 
+                          ? 'bg-gradient-to-r from-[#5B262C] via-[#481D23] to-[#36161A] text-[#FAF6EE] font-semibold border border-brass/35 shadow-[0_2px_8px_rgba(0,0,0,0.35)]' 
+                          : 'text-[#B8AAA0] hover:text-[#FAF6EE] hover:bg-[#261B18]/70 border border-transparent'
+                      }`}
+                    >
+                      {isActive && (
+                        <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-brass shadow-[0_0_8px_rgba(198,161,91,0.6)]" />
+                      )}
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-brass drop-shadow-[0_0_5px_rgba(198,161,91,0.5)]' : 'text-[#9E8E84]'}`} />
+                      <span className="truncate flex-1 tracking-[0.015em]">{tab.label}</span>
+                      {tab.badge && (
+                        <span className={`min-w-[20px] h-[18px] px-1.5 flex items-center justify-center rounded-full text-[10px] font-mono font-bold leading-none shrink-0 ${tab.badgeColor}`}>
+                          {tab.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </nav>
             </div>
 
             {/* Drawer Footer User Info */}
-            <div className="pt-3 border-t border-border mt-3">
+            <div className="pt-3 border-t border-[#2E2421] mt-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-7 h-7 rounded-full bg-oxblood/10 border border-oxblood/20 flex items-center justify-center font-bold text-xs text-oxblood shrink-0">
-                    {currentAdmin?.name ? currentAdmin.name.charAt(0).toUpperCase() : 'A'}
+                  <div className="w-7 h-7 rounded-full bg-oxblood/20 border border-brass/40 flex items-center justify-center font-bold text-xs text-brass shrink-0">
+                    {currentAdmin?.name ? currentAdmin.name.charAt(0).toUpperCase() : 'V'}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-semibold truncate text-foreground">
+                    <div className="text-xs font-semibold truncate text-[#F8F4E7]">
                       {currentAdmin?.name || 'Administrator'}
                     </div>
-                    <div className="text-[10px] font-mono text-muted-foreground truncate">
+                    <div className="text-[10px] font-mono text-[#A8988E] truncate">
                       {adminRole.replace('_', ' ')}
                     </div>
                   </div>
@@ -654,7 +681,7 @@ export default function Admin() {
                     setIsMobileDrawerOpen(false);
                     logoutAdmin();
                   }}
-                  className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition"
+                  className="p-1.5 text-[#A8988E] hover:text-red-400 rounded-md transition"
                   title="Sign Out"
                 >
                   <LogOut className="w-4 h-4" />

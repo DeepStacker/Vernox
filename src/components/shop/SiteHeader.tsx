@@ -29,7 +29,7 @@ export function SiteHeader({ onOpenStudio }: Props = {}) {
   // Global Cmd+K / Ctrl+K keyboard shortcut
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setSearchOpen(prev => !prev);
       }
@@ -49,52 +49,73 @@ export function SiteHeader({ onOpenStudio }: Props = {}) {
 
   return (
     <>
-      {/* Top Subtle Announcement Ribbon */}
-      <div className="bg-maroon-deep text-cream text-[9px] sm:text-[10px] uppercase tracking-[0.16em] sm:tracking-[0.24em] py-2 px-3 sm:px-6 font-sans text-center relative z-20 w-full overflow-hidden">
-        <div className="max-w-7xl mx-auto flex items-center justify-between w-full min-w-0">
-          <Link to="/trade" className="hidden sm:inline-block text-gold hover:text-cream transition-colors shrink-0">
-            Architect & Designer Trade Program
+      {/* 1. TOP ANNOUNCEMENT RIBBON - Fixed edge-to-edge, ultra-clean luxury typographic hierarchy */}
+      <div className="bg-[#4E1E24] text-[#F8F4E7] text-[9.5px] sm:text-[10px] uppercase font-sans border-b border-[#C6A15B]/20 relative z-30 w-full overflow-hidden select-none">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-8 sm:h-8.5 flex items-center justify-between">
+          
+          {/* Left: Architect & Designer Trade Link */}
+          <Link 
+            to="/trade" 
+            className="hidden md:inline-flex items-center gap-1.5 text-[#C6A15B] hover:text-[#F8F4E7] transition-colors tracking-[0.2em] font-medium shrink-0 cursor-pointer"
+          >
+            <span>Architect & Designer Trade Program</span>
           </Link>
-          <span className="mx-auto sm:mx-0 font-medium tracking-[0.16em] sm:tracking-[0.26em] truncate max-w-full block min-w-0 flex-1 px-2">
-            Curated Wall Art & Statement Pieces · Complimentary Insured Crating Worldwide
-          </span>
-          <Link to="/track-order" className="hidden sm:inline-block text-cream/80 hover:text-gold transition-colors shrink-0">
-            Track Order →
+
+          {/* Center: Main Atelier Assurance Message (Always fits seamlessly without truncating) */}
+          <div className="flex-1 text-center px-2 sm:px-4">
+            <span className="tracking-[0.2em] sm:tracking-[0.26em] text-[#F8F4E7]/95 font-medium whitespace-nowrap">
+              Curated Wall Art & Statement Pieces · Complimentary Insured Crating Worldwide
+            </span>
+          </div>
+
+          {/* Right: Track Order Link */}
+          <Link 
+            to="/track-order" 
+            className="hidden md:inline-flex items-center gap-1 text-[#F8F4E7]/80 hover:text-[#C6A15B] transition-colors tracking-[0.2em] shrink-0 cursor-pointer font-medium"
+          >
+            <span>Track Order</span>
+            <span className="text-[#C6A15B]">→</span>
           </Link>
+
         </div>
       </div>
 
-      {/* Main Clean Sticky Header */}
+      {/* 2. MAIN STICKY LUXURY HEADER */}
       <header
         className={cn(
-          "sticky top-0 z-40 transition-all duration-300 bg-cream/95 backdrop-blur-md border-b border-[#EBE4D6] w-full max-w-full overflow-hidden",
-          scrolled ? "py-3 shadow-xs" : "py-4.5"
+          "sticky top-0 z-40 transition-all duration-300 bg-[#F8F4E7]/95 backdrop-blur-md border-b border-[#EBE4D6] w-full",
+          scrolled ? "py-3 shadow-xs" : "py-4 sm:py-4.5"
         )}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between w-full min-w-0">
-          {/* Left: Brand Logo */}
-          <Link to="/" className="flex items-center group py-1" title="Vernox Art & Sculptures">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between">
+          
+          {/* Left: Iconic Brand Mark */}
+          <Link 
+            to="/" 
+            className="flex items-center group py-0.5 select-none shrink-0" 
+            title="Vernox Art & Sculptures"
+          >
             <div className="flex flex-col">
-              <span className="font-brand text-2xl sm:text-[25px] tracking-[0.28em] font-semibold text-dark-brown uppercase leading-none group-hover:text-burgundy transition-colors">
+              <span className="font-brand text-2xl sm:text-[26px] tracking-[0.3em] font-medium text-dark-brown uppercase leading-none group-hover:text-burgundy transition-colors duration-200">
                 VERNOX
               </span>
-              <span className="text-[8px] uppercase tracking-[0.38em] text-dark-brown/60 font-sans mt-1">
+              <span className="text-[7.5px] uppercase tracking-[0.4em] text-dark-brown/60 font-sans mt-1">
                 Art & Sculptures
               </span>
             </div>
           </Link>
 
-          {/* Center: Clean Modernist Navigation with breathing room */}
-          <nav className="hidden lg:flex items-center gap-8 xl:gap-11">
+          {/* Center: Perfectly Spaced Navigation Bar - Guaranteed Single-Line (whitespace-nowrap) */}
+          <nav className="hidden lg:flex items-center gap-6 xl:gap-8 2xl:gap-10">
             {navLinks.map(item => (
               <NavLink
                 key={item.label}
                 to={item.to}
                 className={({ isActive }) => cn(
-                  "relative text-[11px] xl:text-[11.5px] uppercase tracking-[0.24em] font-sans font-medium transition-colors py-1 group/nav",
+                  "relative text-[11px] xl:text-[11.5px] uppercase tracking-[0.22em] font-sans font-medium transition-colors py-1 group/nav whitespace-nowrap shrink-0",
                   isActive
                     ? "text-burgundy font-semibold"
-                    : "text-dark-brown hover:text-gold"
+                    : "text-dark-brown hover:text-[#C6A15B]"
                 )}
               >
                 {({ isActive }) => (
@@ -102,7 +123,7 @@ export function SiteHeader({ onOpenStudio }: Props = {}) {
                     <span>{item.label}</span>
                     <span
                       className={cn(
-                        "absolute bottom-0 left-0 w-full h-[1.5px] transition-transform duration-300 origin-left bg-gold",
+                        "absolute bottom-0 left-0 w-full h-[1.5px] transition-transform duration-200 origin-left bg-[#C6A15B]",
                         isActive ? "scale-x-100" : "scale-x-0 group-hover/nav:scale-x-100"
                       )}
                     />
@@ -113,22 +134,23 @@ export function SiteHeader({ onOpenStudio }: Props = {}) {
           </nav>
 
           {/* Right: Functional Action Icons */}
-          <div className="flex items-center gap-4 sm:gap-5 text-dark-brown">
-            {/* Search */}
+          <div className="flex items-center gap-3.5 sm:gap-4.5 text-dark-brown shrink-0">
+            
+            {/* Search Trigger */}
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="p-1.5 hover:text-gold transition-colors cursor-pointer relative"
+              className="p-1.5 hover:text-[#C6A15B] transition-colors cursor-pointer relative"
               title="Search collection (⌘K)"
               aria-label="Search"
             >
               <Search className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
             </button>
 
-            {/* Account */}
+            {/* Collector Account */}
             <Link
               to="/account"
-              className="p-1.5 hover:text-gold transition-colors hidden sm:block"
+              className="p-1.5 hover:text-[#C6A15B] transition-colors hidden sm:block"
               title="Collector Account"
               aria-label="Account"
             >
@@ -138,7 +160,7 @@ export function SiteHeader({ onOpenStudio }: Props = {}) {
             {/* Wishlist */}
             <Link
               to="/account?tab=wishlist"
-              className="p-1.5 hover:text-gold transition-colors relative"
+              className="p-1.5 hover:text-[#C6A15B] transition-colors relative"
               title="Wishlist"
               aria-label="Wishlist"
             >
@@ -150,11 +172,11 @@ export function SiteHeader({ onOpenStudio }: Props = {}) {
               )}
             </Link>
 
-            {/* Cart */}
+            {/* Cart Bag */}
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
-              className="p-1.5 hover:text-gold transition-colors relative cursor-pointer"
+              className="p-1.5 hover:text-[#C6A15B] transition-colors relative cursor-pointer"
               title="Shopping Cart"
               aria-label="Cart"
             >
@@ -170,15 +192,17 @@ export function SiteHeader({ onOpenStudio }: Props = {}) {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-1.5 lg:hidden hover:text-gold transition-colors cursor-pointer ml-1"
+              className="p-1.5 lg:hidden hover:text-[#C6A15B] transition-colors cursor-pointer ml-1"
               aria-label="Toggle navigation menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
+
           </div>
+
         </div>
 
-        {/* Mobile Navigation Dropdown */}
+        {/* 3. MOBILE RESPONSIVE DRAWER */}
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.div
@@ -202,6 +226,7 @@ export function SiteHeader({ onOpenStudio }: Props = {}) {
                     {item.label}
                   </NavLink>
                 ))}
+
                 <div className="pt-4 border-t border-[#EBE4D6] space-y-2 text-xs text-dark-brown/80 font-sans">
                   <div className="flex items-center justify-between pb-2">
                     <Link
@@ -221,6 +246,7 @@ export function SiteHeader({ onOpenStudio }: Props = {}) {
                       <span>Wishlist ({wishlist.length})</span>
                     </Link>
                   </div>
+
                   <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-[#EBE4D6]/60">
                     <Link
                       to="/track-order"
@@ -237,11 +263,11 @@ export function SiteHeader({ onOpenStudio }: Props = {}) {
                       Shipping & Crating
                     </Link>
                     <Link
-                      to="/returns"
+                      to="/trade"
                       onClick={() => setMobileMenuOpen(false)}
                       className="text-dark-brown/70 hover:text-burgundy"
                     >
-                      30-Day Returns
+                      Trade Program
                     </Link>
                     <Link
                       to="/contact"
@@ -252,13 +278,14 @@ export function SiteHeader({ onOpenStudio }: Props = {}) {
                     </Link>
                   </div>
                 </div>
+
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </header>
 
-      {/* Quick Search Modal */}
+      {/* Global Quick Search Modal (⌘K) */}
       <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} onOpenChange={setSearchOpen} />
     </>
   );

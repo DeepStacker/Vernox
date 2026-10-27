@@ -18,7 +18,7 @@ export function AdminSettings() {
 
   const [configForm, setConfigForm] = useState({
     storeName: storeConfig.storeName,
-    currency: storeConfig.currency || '$',
+    currency: storeConfig.currency || '₹',
     taxRate: storeConfig.taxRate,
     freeShippingThreshold: storeConfig.freeShippingThreshold,
     shippingFee: storeConfig.shippingFee,
@@ -32,7 +32,7 @@ export function AdminSettings() {
     setConfigForm(prev => ({
       ...prev,
       storeName: storeConfig.storeName,
-      currency: storeConfig.currency || '$',
+      currency: storeConfig.currency || '₹',
       taxRate: storeConfig.taxRate,
       freeShippingThreshold: storeConfig.freeShippingThreshold,
       shippingFee: storeConfig.shippingFee,

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { SiteHeader } from '@/components/shop/SiteHeader';
 import { SiteFooter } from '@/components/shop/SiteFooter';
+import { useCatalog } from '@/lib/catalogContext';
 import { 
   Truck, 
   ShieldCheck, 
@@ -16,6 +17,9 @@ import {
 } from 'lucide-react';
 
 export default function Shipping() {
+  const { storeConfig } = useCatalog();
+  const currencySymbol = (storeConfig?.currency && storeConfig.currency !== '$') ? storeConfig.currency : '₹';
+  const threshold = storeConfig?.freeShippingThreshold || 150;
   return (
     <div className="min-h-screen flex flex-col bg-cream text-dark-brown selection:bg-burgundy selection:text-cream">
       <SiteHeader />
@@ -120,7 +124,7 @@ export default function Shipping() {
               <div className="p-3.5 bg-cream/30 rounded-xs border border-[#E8E1D3]">
                 <strong className="text-dark-brown block font-semibold">Domestic India Express</strong>
                 <span className="text-dark-brown/70 mt-1 block">2 – 4 Business Days</span>
-                <span className="text-[10px] text-dark-brown/50 block mt-0.5">Complimentary over ₹150</span>
+                <span className="text-[10px] text-dark-brown/50 block mt-0.5">Complimentary over {currencySymbol}{threshold}</span>
               </div>
               <div className="p-3.5 bg-cream/30 rounded-xs border border-[#E8E1D3]">
                 <strong className="text-dark-brown block font-semibold">Europe & UK Air Courier</strong>

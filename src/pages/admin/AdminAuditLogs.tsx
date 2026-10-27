@@ -159,6 +159,7 @@ export function AdminAuditLogs() {
             { id: 'order', label: 'Orders' },
             { id: 'inventory', label: 'Inventory' },
             { id: 'product', label: 'Products' },
+            { id: 'config', label: 'Banners & Hero' },
             { id: 'admin', label: 'Team Roles' },
           ].map(f => (
             <button

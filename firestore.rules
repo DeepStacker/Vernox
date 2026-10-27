@@ -67,11 +67,11 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
-    // 7. Reviews: Public read; verified authenticated creation; Admin delete
+    // 7. Reviews: Public read; verified authenticated creation; Admin or authenticated management
     match /reviews/{reviewId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin() || request.auth != null;
     }
 
     // 8. Orders: Customer can read only their own orders by email matching; Admin full access
@@ -92,10 +92,10 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
-    // 10. Coupons & Promotions: Publicly readable; Admin editable
+    // 10. Coupons & Promotions: Publicly readable; Admin or authenticated management
     match /coupons/{couponId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin() || request.auth != null;
     }
 
     // 11. Coupon Redemptions / Usages: Admin read/write; users can view their own

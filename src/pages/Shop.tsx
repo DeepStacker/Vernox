@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 export default function Shop() {
   const { products, categories, storeConfig } = useCatalog();
   const { category } = useParams<{ category?: string }>();
+  const currencySymbol = (storeConfig?.currency && storeConfig.currency !== '$') ? storeConfig.currency : '₹';
   
   const maxCatalogPrice = useMemo(() => {
     const highest = Math.max(...products.map(p => p.price), 350);
@@ -372,7 +373,7 @@ export default function Shop() {
                     Maximum Investment
                   </label>
                   <span className="font-mono text-sm font-semibold text-dark-brown">
-                    ${maxPrice}
+                    {currencySymbol}{maxPrice}
                   </span>
                 </div>
                 <input
@@ -385,8 +386,8 @@ export default function Shop() {
                   className="w-full accent-burgundy cursor-pointer"
                 />
                 <div className="flex justify-between text-[10px] text-dark-brown/50 font-mono mt-1">
-                  <span>$100</span>
-                  <span>${maxCatalogPrice}</span>
+                  <span>{currencySymbol}100</span>
+                  <span>{currencySymbol}{maxCatalogPrice}</span>
                 </div>
 
                 {/* Quick Price Shortcuts */}
@@ -403,7 +404,7 @@ export default function Shop() {
                           : 'border-[#EBE4D6] bg-white text-dark-brown/70 hover:text-dark-brown'
                       )}
                     >
-                      {val === maxCatalogPrice ? 'All Prices' : `Under $${val}`}
+                      {val === maxCatalogPrice ? 'All Prices' : `Under ${currencySymbol}${val}`}
                     </button>
                   ))}
                 </div>

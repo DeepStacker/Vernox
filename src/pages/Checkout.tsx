@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { SiteHeader } from '@/components/shop/SiteHeader';
 import { SiteFooter } from '@/components/shop/SiteFooter';
@@ -7,19 +7,56 @@ import { useCart } from '@/lib/cartContext';
 import { useCatalog } from '@/lib/catalogContext';
 import { toast } from 'sonner';
 import { CreditCard, Landmark, QrCode, Smartphone, X, Phone, Tag } from 'lucide-react';
+import { calculateCouponDiscount } from '@/lib/couponValidator';
+import { trackStoreEvent } from '@/lib/storeAnalytics';
 
 export default function Checkout() {
-  const { items, subtotal, clear } = useCart();
-  const { addOrder, storeConfig, currentCustomer } = useCatalog();
+  const { 
+    items, subtotal, clear, 
+    appliedCoupon: cartAppliedCoupon, 
+    applyCoupon: cartApplyCoupon, 
+    removeCoupon: cartRemoveCoupon 
+  } = useCart();
+  const { addOrder, storeConfig, currentCustomer, coupons } = useCatalog();
   const [placing, setPlacing] = useState(false);
   const navigate = useNavigate();
 
   // Coupon State
   const [couponInput, setCouponInput] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number; description?: string } | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number; description?: string } | null>(
+    () => cartAppliedCoupon || null
+  );
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
 
-  const discount = appliedCoupon ? appliedCoupon.discountAmount : 0;
+  // Track checkout visit
+  useEffect(() => {
+    trackStoreEvent('checkout');
+  }, []);
+
+  // Sync if cartAppliedCoupon was set from the Cart page
+  useEffect(() => {
+    if (cartAppliedCoupon && !appliedCoupon) {
+      setAppliedCoupon(cartAppliedCoupon);
+    }
+  }, [cartAppliedCoupon]);
+
+  // Real-time recalculation of coupon discount against current cart items
+  const discount = useMemo(() => {
+    if (!appliedCoupon) return 0;
+    const reval = calculateCouponDiscount({
+      code: appliedCoupon.code,
+      cartSubtotal: subtotal,
+      cartItems: items.map(i => ({
+        productId: i.productId,
+        productSlug: i.productSlug,
+        unitPrice: i.unitPrice,
+        quantity: i.quantity,
+      })),
+      currency: storeConfig.currency || '₹',
+    }, coupons);
+    return reval.isValid ? reval.discountAmount : appliedCoupon.discountAmount;
+  }, [appliedCoupon, subtotal, items, coupons, storeConfig.currency]);
+
   const discountedSubtotal = Math.max(0, subtotal - discount);
   const shipping = subtotal > storeConfig.freeShippingThreshold ? 0 : storeConfig.shippingFee;
   const tax = discountedSubtotal * (storeConfig.taxRate / 100);
@@ -226,6 +263,7 @@ export default function Checkout() {
                 adminNotes: `Verified Razorpay Payment: ${razorpay_payment_id}`
               });
               localStorage.setItem('vernox-customer-email', form.email.trim().toLowerCase());
+              trackStoreEvent('purchase', { orderId: verifiedId, orderTotal: orderData.pricing?.total || total });
               clear();
               toast.success('Payment verified & order confirmed!');
               navigate(`/order-confirmation/${verifiedId}`);
@@ -559,6 +597,7 @@ export default function Checkout() {
                     type="button"
                     onClick={() => {
                       setAppliedCoupon(null);
+                      cartRemoveCoupon();
                       setCouponInput('');
                       toast.info('Coupon removed');
                     }}
@@ -571,18 +610,25 @@ export default function Checkout() {
 
               {appliedCoupon ? (
                 <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded text-xs">
-                  <div className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                    {appliedCoupon.code}
+                  <div>
+                    <div className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                      {appliedCoupon.code}
+                    </div>
+                    {appliedCoupon.description && (
+                      <div className="text-[10px] text-muted-foreground">
+                        {appliedCoupon.description}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-emerald-700 dark:text-emerald-400 font-semibold font-mono">
-                    -{storeConfig.currency}{appliedCoupon.discountAmount.toFixed(2)}
+                  <div className="text-emerald-700 dark:text-emerald-400 font-semibold font-mono text-sm">
+                    -{storeConfig.currency}{discount.toFixed(2)}
                   </div>
                 </div>
               ) : (
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="e.g. WELCOME10"
+                    placeholder="e.g. WELCOME10, ATELIER50, VERNOXVIP"
                     value={couponInput}
                     onChange={e => setCouponInput(e.target.value.toUpperCase())}
                     className="flex-1 bg-card border border-border rounded px-3 py-1.5 text-xs font-mono uppercase outline-none focus:border-oxblood transition"
@@ -594,6 +640,23 @@ export default function Checkout() {
                       const cleanCode = couponInput.trim().toUpperCase();
                       if (!cleanCode) return;
                       setIsValidatingCoupon(true);
+
+                      // 1. Authoritative local calculation against all admin and launch coupons
+                      const localResult = calculateCouponDiscount({
+                        code: cleanCode,
+                        cartSubtotal: subtotal,
+                        cartItems: items.map(i => ({
+                          productId: i.productId,
+                          productSlug: i.productSlug,
+                          unitPrice: i.unitPrice,
+                          quantity: i.quantity,
+                        })),
+                        customerEmail: form.email.trim() || undefined,
+                        currency: storeConfig.currency || '₹',
+                      }, coupons);
+
+                      // 2. Query serverless endpoint /api/validate-coupon (passing clientCoupons: coupons)
+                      let serverHandled = false;
                       try {
                         const res = await fetch('/api/validate-coupon', {
                           method: 'POST',
@@ -604,23 +667,48 @@ export default function Checkout() {
                             cartItems: items,
                             customerEmail: form.email.trim() || undefined,
                             currency: storeConfig.currency || '₹',
+                            clientCoupons: coupons,
                           })
                         });
-                        const data = await res.json();
-                        if (data.isValid) {
-                          setAppliedCoupon({
-                            code: data.couponCode,
-                            discountAmount: data.discountAmount,
-                            description: data.description,
-                          });
-                          toast.success(`Coupon ${data.couponCode} applied! Saved ${storeConfig.currency}${data.discountAmount.toFixed(2)}`);
-                        } else {
-                          toast.error(data.error || 'Invalid coupon code');
+                        if (res.ok) {
+                          const data = await res.json();
+                          if (data.isValid) {
+                            const couponObj = {
+                              code: data.couponCode,
+                              discountAmount: data.discountAmount,
+                              description: data.description,
+                            };
+                            setAppliedCoupon(couponObj);
+                            cartApplyCoupon(couponObj);
+                            toast.success(`Coupon ${data.couponCode} applied! Saved ${storeConfig.currency}${data.discountAmount.toFixed(2)}`);
+                            setCouponInput('');
+                            serverHandled = true;
+                          } else if (!localResult.isValid) {
+                            toast.error(data.error || 'Invalid coupon code');
+                            serverHandled = true;
+                          }
                         }
                       } catch {
-                        toast.error('Failed to validate coupon');
+                        // Offline or emulator network error: fall through to localResult
                       } finally {
                         setIsValidatingCoupon(false);
+                      }
+
+                      // 3. Fallback to local evaluation if server was unreachable or in offline mode
+                      if (!serverHandled) {
+                        if (localResult.isValid) {
+                          const couponObj = {
+                            code: localResult.couponCode || cleanCode,
+                            discountAmount: localResult.discountAmount,
+                            description: localResult.description,
+                          };
+                          setAppliedCoupon(couponObj);
+                          cartApplyCoupon(couponObj);
+                          toast.success(`Coupon ${localResult.couponCode || cleanCode} applied! Saved ${storeConfig.currency}${localResult.discountAmount.toFixed(2)}`);
+                          setCouponInput('');
+                        } else {
+                          toast.error(localResult.error || 'Invalid coupon code');
+                        }
                       }
                     }}
                     className="px-3 py-1.5 bg-oxblood text-ivory hover:bg-oxblood-deep font-semibold text-xs rounded transition shadow-2xs disabled:opacity-50"

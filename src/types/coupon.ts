@@ -47,6 +47,7 @@ export interface CouponValidationRequest {
   }>;
   customerEmail?: string;
   currency?: string;
+  clientCoupons?: Coupon[];
 }
 
 export interface CouponValidationResult {
@@ -77,7 +78,7 @@ export const LAUNCH_COUPONS: Record<string, Omit<Coupon, 'id' | 'createdAt' | 'u
     description: '10% Welcome Discount for Vernox Atelier patrons',
     discountType: 'percentage',
     discountValue: 10,
-    maxDiscountLimit: 150,
+    maxDiscountLimit: 1500,
     minOrderValue: 100,
     maxUsageCount: 1000,
     usedCount: 0,
@@ -86,7 +87,7 @@ export const LAUNCH_COUPONS: Record<string, Omit<Coupon, 'id' | 'createdAt' | 'u
   },
   'ATELIER50': {
     code: 'ATELIER50',
-    description: 'Flat ₹50 / $50 atelier discount on orders over 200',
+    description: 'Flat ₹50 atelier discount on orders over ₹200',
     discountType: 'fixed',
     discountValue: 50,
     minOrderValue: 200,
@@ -100,8 +101,56 @@ export const LAUNCH_COUPONS: Record<string, Omit<Coupon, 'id' | 'createdAt' | 'u
     description: '15% Exclusive Collector Privilege',
     discountType: 'percentage',
     discountValue: 15,
-    maxDiscountLimit: 300,
+    maxDiscountLimit: 3000,
     minOrderValue: 350,
+    maxUsageCount: 200,
+    usedCount: 0,
+    maxUsagePerCustomer: 1,
+    isActive: true,
+  },
+  'ATELIER10': {
+    code: 'ATELIER10',
+    description: '10% Atelier Architectural Privilege',
+    discountType: 'percentage',
+    discountValue: 10,
+    maxDiscountLimit: 1500,
+    minOrderValue: 100,
+    maxUsageCount: 1000,
+    usedCount: 0,
+    maxUsagePerCustomer: 1,
+    isActive: true,
+  },
+  'ARCHITECT15': {
+    code: 'ARCHITECT15',
+    description: '15% Architectural Studio Trade Discount',
+    discountType: 'percentage',
+    discountValue: 15,
+    maxDiscountLimit: 3000,
+    minOrderValue: 200,
+    maxUsageCount: 500,
+    usedCount: 0,
+    maxUsagePerCustomer: 2,
+    isActive: true,
+  },
+  'TRADE15': {
+    code: 'TRADE15',
+    description: '15% Trade Partner Discount',
+    discountType: 'percentage',
+    discountValue: 15,
+    maxDiscountLimit: 3000,
+    minOrderValue: 200,
+    maxUsageCount: 500,
+    usedCount: 0,
+    maxUsagePerCustomer: 2,
+    isActive: true,
+  },
+  'VERNOX20': {
+    code: 'VERNOX20',
+    description: '20% Master Collector Commission Privilege',
+    discountType: 'percentage',
+    discountValue: 20,
+    maxDiscountLimit: 5000,
+    minOrderValue: 300,
     maxUsageCount: 200,
     usedCount: 0,
     maxUsagePerCustomer: 1,

@@ -18,6 +18,14 @@ export interface CartItem {
   uploadedArtworkName?: string;
 }
 
+export interface AppliedCoupon {
+  code: string;
+  discountAmount: number;
+  discountType?: 'percentage' | 'fixed';
+  discountValue?: number;
+  description?: string;
+}
+
 interface CartCtx {
   items: CartItem[];
   add: (item: Omit<CartItem, 'id' | 'quantity'> & { quantity?: number }) => void;
@@ -28,14 +36,26 @@ interface CartCtx {
   subtotal: number;
   isDrawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
+  appliedCoupon: AppliedCoupon | null;
+  applyCoupon: (coupon: AppliedCoupon) => void;
+  removeCoupon: () => void;
 }
 
 const Ctx = createContext<CartCtx | null>(null);
 const KEY = 'vernox-cart';
+const COUPON_KEY = 'vernox-applied-coupon';
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
     try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; }
+  });
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(() => {
+    try {
+      const saved = localStorage.getItem(COUPON_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
   const [isDrawerOpen, setDrawerOpen] = useState(false);
 
@@ -93,14 +113,43 @@ export function CartProvider({ children }: { children: ReactNode }) {
   
   const updateQty = (id: string, qty: number) =>
     setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(1, qty) } : i));
+
   const remove = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
-  const clear = () => setItems([]);
+
+  const applyCoupon = (coupon: AppliedCoupon) => {
+    setAppliedCoupon(coupon);
+    try {
+      localStorage.setItem(COUPON_KEY, JSON.stringify(coupon));
+    } catch {}
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    try {
+      localStorage.removeItem(COUPON_KEY);
+    } catch {}
+  };
+
+  const clear = () => {
+    setItems([]);
+    removeCoupon();
+  };
+
+  useEffect(() => {
+    if (items.length === 0 && appliedCoupon) {
+      removeCoupon();
+    }
+  }, [items.length]);
 
   const count = items.reduce((a, i) => a + i.quantity, 0);
   const subtotal = items.reduce((a, i) => a + i.unitPrice * i.quantity, 0);
 
   return (
-    <Ctx.Provider value={{ items, add, updateQty, remove, clear, count, subtotal, isDrawerOpen, setDrawerOpen }}>
+    <Ctx.Provider value={{ 
+      items, add, updateQty, remove, clear, count, subtotal, 
+      isDrawerOpen, setDrawerOpen,
+      appliedCoupon, applyCoupon, removeCoupon 
+    }}>
       {children}
     </Ctx.Provider>
   );

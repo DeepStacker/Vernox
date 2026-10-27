@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const { code, cartSubtotal, cartItems, customerEmail, currency } = req.body || {};
+  const { code, cartSubtotal, cartItems, customerEmail, currency, clientCoupons } = req.body || {};
 
   if (!code || typeof code !== 'string') {
     return res.status(400).json({ 
@@ -58,6 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       cartItems: Array.isArray(cartItems) ? cartItems : undefined,
       customerEmail: customerEmail && typeof customerEmail === 'string' ? customerEmail.trim() : undefined,
       currency: currency && typeof currency === 'string' ? currency : 'INR',
+      clientCoupons: Array.isArray(clientCoupons) ? clientCoupons : undefined,
     });
 
     if (!result.isValid) {

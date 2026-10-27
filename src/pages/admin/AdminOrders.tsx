@@ -1,387 +1,278 @@
 /**
- * Enterprise Admin Orders Management View
- * Matching the exact visual architecture, split analytics rail,
- * multi-select floating action dock, and flyout order inspector window
- * from the reference screenshots.
- * 
- * Powered by real Cloud Firestore data, atomic updates, and 1-Click CAM production routing.
+ * Vernox Atelier Commissions Management View
+ * Bespoke orders table, interactive filters, CSV export, CAM production routing,
+ * and high-precision laser fabrication inspector.
+ * - Tab row: All Orders, Open, Unfulfilled, Unpaid, From Canada (and Country selector), Paid Orders, Customers
+ * - Search bar, interactive Filters popover, Download CSV export, and Pagination
+ * - Multi-select checkbox column with floating bulk action bar
+ * - Real table columns: ORDER (#195867), DATE, CUSTOMER, PAYMENT STATUS, FULFILLMENT STATUS, TOTAL
+ * - Full Order Inspector modal with items, 1-Click CAM production downloads (DXF, SVG, PDF), and shipping tracking.
  */
 
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { useCatalog, Order, OrderStatus, OrderItem } from '@/lib/catalogContext';
+import { useCatalog, Order, OrderStatus, PaymentStatus, FulfillmentStatus } from '@/lib/catalogContext';
 import { exportDocumentAsSVG, exportDocumentAsDXF, exportDocumentAsPDF } from '@/lib/exportCAM';
 import { getShapeById } from '@/lib/shapes';
 import { FIBER_LASER_3KW_PROFILE, getGaugeParameters, type VectorDocument } from '@/lib/cadEngineTypes';
 import { 
-  ShoppingCart, Package, Scissors, Truck, Clock, Eye, Trash2, 
-  Search, X, Layers, Download, FileCode, FileText, ChevronDown, 
-  Printer, Copy, MoreHorizontal, ArrowUpRight, CheckCircle2, 
-  Maximize2, Minimize2, MapPin, Phone, Mail, Check, AlertCircle, 
-  MessageSquare, Tag, ShieldCheck, RefreshCw, Filter,
-  ZoomIn, Image as ImageIcon, ExternalLink
+  Search, Filter as FilterIcon, Download, ChevronLeft, ChevronRight, 
+  Check, CheckSquare, Square, X, MoreHorizontal, ArrowUpRight,
+  Eye, Trash2, Printer, FileCode, FileText, ExternalLink,
+  MapPin, Phone, Mail, Clock, Package, AlertCircle, ShoppingCart,
+  Scissors, Truck, ShieldCheck, Tag, ZoomIn, Image as ImageIcon,
+  Gift, Percent, ShoppingBag, Leaf, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { AtelierSelect } from '@/components/ui/select';
 
 export interface AdminOrdersProps {
-  initialFilter?: 'all' | 'custom' | 'shipping' | 'pickups';
+  initialFilter?: 'all' | 'open' | 'unfulfilled' | 'unpaid' | 'canada' | 'paid' | 'customers' | 'custom';
+  onSelectTab?: (tab: any) => void;
 }
 
-export function AdminOrders({ initialFilter = 'all' }: AdminOrdersProps = {}) {
-  const { orders, updateOrderStatus, updateOrder, deleteOrder, storeConfig, products } = useCatalog();
+export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersProps) {
+  const { orders, updateOrderStatus, updateOrder, deleteOrder, storeConfig } = useCatalog();
   const navigate = useNavigate();
 
-  // Search & Filters
-  const [orderSearch, setOrderSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'custom' | 'standard' | 'shipping' | 'pickups'>(
-    initialFilter === 'custom' ? 'custom' : (initialFilter as any)
+  // Active Tab Filter (Matching Image 1)
+  const [activeTab, setActiveTab] = useState<'all' | 'open' | 'unfulfilled' | 'unpaid' | 'canada' | 'paid' | 'customers' | 'custom'>(
+    initialFilter || 'all'
   );
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
 
-  // Sync initialFilter prop if changed
-  useEffect(() => {
-    if (initialFilter) {
-      setTypeFilter(initialFilter === 'custom' ? 'custom' : (initialFilter as any));
-    }
-  }, [initialFilter]);
+  // Search & Detailed Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [welcomeSearch, setWelcomeSearch] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState<string>('Canada');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('all');
+  const [filterFulfillmentStatus, setFilterFulfillmentStatus] = useState<string>('all');
+  const [filterDateRange, setFilterDateRange] = useState<'all' | 'today' | 'last7' | 'last30'>('all');
+  const [minTotal, setMinTotal] = useState<string>('');
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
 
   // Multi-Select State
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
 
-  // Inspector Flyout State
+  // Flyout Order Details Inspector State
   const [inspectingOrder, setInspectingOrder] = useState<Order | null>(null);
-  const [inspectorTab, setInspectorTab] = useState<'items' | 'artwork' | 'delivery' | 'docs'>('items');
-  const [isInspectorExpanded, setIsInspectorExpanded] = useState(false);
-
-  // Lightbox Modal State for Client Uploaded Artwork
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
 
-  // Prevent background scroll and support ESC to close inspector or lightbox
+  // Inspector Form State
+  const [trackingCarrier, setTrackingCarrier] = useState('');
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [estimatedDelivery, setEstimatedDelivery] = useState('');
+  const [adminNotes, setAdminNotes] = useState('');
+
+  // Sync initial inspecting order fields when opened
   useEffect(() => {
-    if (inspectingOrder || lightboxImage) {
-      document.body.style.overflow = 'hidden';
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          if (lightboxImage) {
-            setLightboxImage(null);
-          } else {
-            setInspectingOrder(null);
-          }
-        }
-      };
-      window.addEventListener('keydown', handleKeyDown);
-      return () => {
-        document.body.style.overflow = '';
-        window.removeEventListener('keydown', handleKeyDown);
-      };
+    if (inspectingOrder) {
+      setTrackingCarrier(inspectingOrder.trackingCarrier || '');
+      setTrackingNumber(inspectingOrder.trackingNumber || '');
+      setEstimatedDelivery(inspectingOrder.estimatedDelivery || '');
+      setAdminNotes(inspectingOrder.adminNotes || '');
     }
+  }, [inspectingOrder]);
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (lightboxImage) setLightboxImage(null);
+        else if (inspectingOrder) setInspectingOrder(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [inspectingOrder, lightboxImage]);
 
-  // Inspector Tracking Form
-  const [trackingForm, setTrackingForm] = useState({
-    shippingName: '',
-    shippingAddress: '',
-    shippingCity: '',
-    shippingZip: '',
-    shippingCountry: 'United States',
-    trackingCarrier: '',
-    trackingNumber: '',
-    estimatedDelivery: '',
-    adminNotes: ''
-  });
-
-  // Filtered Orders
-  const filteredOrders = useMemo(() => {
-    const now = new Date();
-    return orders
-      .filter(o => {
-        const customerName = o.shippingName || (typeof (o as any).shippingAddress === 'object' ? (o as any).shippingAddress?.name : '');
-        const q = orderSearch.toLowerCase();
-        const matchesSearch = 
-          o.id.toLowerCase().includes(q) || 
-          o.email.toLowerCase().includes(q) ||
-          (customerName && customerName.toLowerCase().includes(q));
-
-        const matchesStatus = statusFilter === 'all' || o.status === statusFilter;
-
-        // Custom orders vs Standard vs Pickup vs Shipping
-        const isPickup = o.shippingAddress?.toLowerCase().includes('pickup') || o.shippingAddress?.toLowerCase().includes('studio');
-        const isCustom = o.items?.some(i => i.customDesignRef || i.userUploadedImage || i.productId === 'custom-bespoke');
-
-        let matchesType = true;
-        if (typeFilter === 'custom') matchesType = isCustom;
-        if (typeFilter === 'standard') matchesType = !isCustom;
-        if (typeFilter === 'shipping') matchesType = !isPickup;
-        if (typeFilter === 'pickups') matchesType = isPickup;
-
-        // Date filter
-        let matchesDate = true;
-        const orderTime = o.placedAt || new Date(o.createdAt || 0).getTime();
-        if (dateFilter === 'today') {
-          matchesDate = new Date(orderTime).toDateString() === now.toDateString();
-        } else if (dateFilter === 'week') {
-          matchesDate = now.getTime() - orderTime <= 7 * 24 * 60 * 60 * 1000;
-        } else if (dateFilter === 'month') {
-          matchesDate = now.getTime() - orderTime <= 30 * 24 * 60 * 60 * 1000;
-        }
-
-        return matchesSearch && matchesStatus && matchesType && matchesDate;
-      })
-      .sort((a, b) => {
-        const timeA = a.placedAt || new Date(a.createdAt || 0).getTime();
-        const timeB = b.placedAt || new Date(b.createdAt || 0).getTime();
-        return timeB - timeA;
-      });
-  }, [orders, orderSearch, statusFilter, typeFilter, dateFilter]);
-
-  // Counts for pills
-  const customOrdersCount = useMemo(() => {
-    return orders.filter(o => o.items?.some(i => i.customDesignRef || i.userUploadedImage || i.productId === 'custom-bespoke')).length;
-  }, [orders]);
-
-  const standardOrdersCount = useMemo(() => {
-    return Math.max(0, orders.length - customOrdersCount);
-  }, [orders, customOrdersCount]);
-
-  // Analytics Rail Metrics
-  const analytics = useMemo(() => {
-    const totalCount = orders.length;
-    const totalRev = orders.reduce((sum, o) => sum + (o.total || 0), 0);
-    const avgOrderVal = totalCount > 0 ? totalRev / totalCount : 0;
-
-    // Delivery split
-    let shipmentRev = 0;
-    let pickupRev = 0;
-    let shipmentCount = 0;
-    let pickupCount = 0;
-
-    orders.forEach(o => {
-      const isPickup = o.shippingAddress?.toLowerCase().includes('pickup') || o.shippingAddress?.toLowerCase().includes('studio');
-      if (isPickup) {
-        pickupRev += (o.total || 0);
-        pickupCount += 1;
-      } else {
-        shipmentRev += (o.total || 0);
-        shipmentCount += 1;
-      }
-    });
-
-    // Status Breakdown
-    const paidCount = orders.filter(o => o.status === 'Paid' || o.status === 'Finished' || o.status === 'Delivered').length;
-    const pendingCount = orders.filter(o => o.status === 'Pending' || o.status === 'Designing' || o.status === 'Cutting').length;
-    const cancelledCount = orders.filter(o => o.status === 'Cancelled').length;
-
-    const paidPct = totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0;
-    const pendingPct = totalCount > 0 ? Math.round((pendingCount / totalCount) * 100) : 0;
-    const cancelledPct = totalCount > 0 ? Math.round((cancelledCount / totalCount) * 100) : 0;
-
-    // Top sellers
-    const productSalesMap = new Map<string, { name: string; count: number; image?: string }>();
-    orders.forEach(o => {
-      o.items?.forEach(i => {
-        const pId = i.productId || i.productSlug || 'custom';
-        const existing = productSalesMap.get(pId) || {
-          name: i.productName || 'Vernox Piece',
-          count: 0,
-          image: i.customDesignThumb || products.find(p => p.id === pId)?.imageUrl
-        };
-        existing.count += (i.quantity || 1);
-        productSalesMap.set(pId, existing);
-      });
-    });
-
-    const topSellers = Array.from(productSalesMap.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 3);
-
-    return {
-      totalCount,
-      totalRev,
-      avgOrderVal,
-      shipmentRev,
-      pickupRev,
-      shipmentCount,
-      pickupCount,
-      paidPct,
-      pendingPct,
-      cancelledPct,
-      topSellers
-    };
-  }, [orders, products]);
-
-  // Handle Multi-Selection
-  const handleToggleSelectAll = () => {
-    if (selectedOrderIds.size === filteredOrders.length) {
-      setSelectedOrderIds(new Set());
-    } else {
-      setSelectedOrderIds(new Set(filteredOrders.map(o => o.id)));
-    }
+  // Format Date matching Image 1: e.g. "04/05/2026 10:08AM"
+  const formatOrderDate = (timestamp: number | string | undefined) => {
+    if (!timestamp) return '—';
+    const d = new Date(timestamp);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const formattedHours = String(hours).padStart(2, '0');
+    return `${day}/${month}/${year} ${formattedHours}:${minutes}${ampm}`;
   };
 
-  const handleToggleSelectRow = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const currency = storeConfig.currency || '₹';
+
+  // Master Filter Logic
+  const filteredOrders = useMemo(() => {
+    const query = (searchQuery || welcomeSearch).trim().toLowerCase();
+    const now = Date.now();
+    const dayMs = 24 * 3600 * 1000;
+
+    return orders.filter(order => {
+      // 1. Text Search across Order ID, Customer name, Email, City
+      if (query) {
+        const idMatch = order.id.toLowerCase().includes(query);
+        const nameMatch = order.shippingName?.toLowerCase().includes(query);
+        const emailMatch = order.email.toLowerCase().includes(query);
+        const cityMatch = order.shippingCity?.toLowerCase().includes(query);
+        const itemMatch = order.items?.some(i => i.productName.toLowerCase().includes(query));
+        if (!idMatch && !nameMatch && !emailMatch && !cityMatch && !itemMatch) {
+          return false;
+        }
+      }
+
+      // 2. Tab Filter
+      if (activeTab === 'open') {
+        if (order.status === 'Delivered' || order.status === 'Cancelled' || order.status === 'Finished') {
+          return false;
+        }
+      } else if (activeTab === 'unfulfilled') {
+        if (order.fulfillmentStatus !== 'Unfulfilled') {
+          return false;
+        }
+      } else if (activeTab === 'unpaid') {
+        if (order.paymentStatus !== 'Pending' && order.paymentStatus !== 'Authorized') {
+          return false;
+        }
+      } else if (activeTab === 'canada') {
+        const country = (order.shippingCountry || '').toLowerCase();
+        if (!country.includes(selectedCountry.toLowerCase())) {
+          return false;
+        }
+      } else if (activeTab === 'paid') {
+        if (order.paymentStatus !== 'Paid') {
+          return false;
+        }
+      } else if (activeTab === 'custom') {
+        const isCustom = order.items?.some(i => i.customDesignRef || i.userUploadedImage || i.productId === 'custom-bespoke');
+        if (!isCustom) return false;
+      }
+
+      // 3. Dropdown Popover Filters
+      if (filterPaymentStatus !== 'all' && order.paymentStatus !== filterPaymentStatus) {
+        return false;
+      }
+      if (filterFulfillmentStatus !== 'all' && order.fulfillmentStatus !== filterFulfillmentStatus) {
+        return false;
+      }
+      if (filterDateRange === 'today') {
+        const orderTime = order.placedAt || new Date(order.createdAt || 0).getTime();
+        if (now - orderTime > dayMs) return false;
+      } else if (filterDateRange === 'last7') {
+        const orderTime = order.placedAt || new Date(order.createdAt || 0).getTime();
+        if (now - orderTime > 7 * dayMs) return false;
+      } else if (filterDateRange === 'last30') {
+        const orderTime = order.placedAt || new Date(order.createdAt || 0).getTime();
+        if (now - orderTime > 30 * dayMs) return false;
+      }
+
+      if (minTotal && Number(minTotal) > 0) {
+        if (order.total < Number(minTotal)) return false;
+      }
+
+      return true;
+    }).sort((a, b) => {
+      const timeA = a.placedAt || new Date(a.createdAt || 0).getTime() || 0;
+      const timeB = b.placedAt || new Date(b.createdAt || 0).getTime() || 0;
+      return timeB - timeA;
+    });
+  }, [
+    orders, searchQuery, welcomeSearch, activeTab, selectedCountry, 
+    filterPaymentStatus, filterFulfillmentStatus, filterDateRange, minTotal
+  ]);
+
+  // Pagination calculation
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / itemsPerPage));
+  const paginatedOrders = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredOrders.slice(start, start + itemsPerPage);
+  }, [filteredOrders, currentPage, itemsPerPage]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, welcomeSearch, activeTab, selectedCountry, filterPaymentStatus, filterFulfillmentStatus, filterDateRange, minTotal]);
+
+  // Bulk Selection Handlers
+  const isAllCurrentPageSelected = paginatedOrders.length > 0 && paginatedOrders.every(o => selectedOrderIds.has(o.id));
+  const toggleSelectAllPage = () => {
     const next = new Set(selectedOrderIds);
-    if (next.has(id)) {
-      next.delete(id);
+    if (isAllCurrentPageSelected) {
+      paginatedOrders.forEach(o => next.delete(o.id));
     } else {
-      next.add(id);
+      paginatedOrders.forEach(o => next.add(o.id));
     }
     setSelectedOrderIds(next);
   };
 
-  // Open Inspector
-  const handleOpenInspector = (order: Order) => {
-    setInspectingOrder(order);
-    setInspectorTab('items');
-    setTrackingForm({
-      shippingName: order.shippingName || (typeof (order as any).shippingAddress === 'object' ? (order as any).shippingAddress?.name : '') || '',
-      shippingAddress: (typeof order.shippingAddress === 'string' ? order.shippingAddress : (order as any).shippingAddress?.line1) || '',
-      shippingCity: order.shippingCity || (typeof (order as any).shippingAddress === 'object' ? (order as any).shippingAddress?.city : '') || '',
-      shippingZip: order.shippingZip || (typeof (order as any).shippingAddress === 'object' ? (order as any).shippingAddress?.postalCode : '') || '',
-      shippingCountry: order.shippingCountry || (typeof (order as any).shippingAddress === 'object' ? (order as any).shippingAddress?.country : '') || 'India',
-      trackingCarrier: order.trackingCarrier || (order as any).tracking?.carrier || '',
-      trackingNumber: order.trackingNumber || (order as any).tracking?.trackingNumber || '',
-      estimatedDelivery: order.estimatedDelivery || (order as any).tracking?.estimatedDelivery || '',
-      adminNotes: order.adminNotes || ''
-    });
+  const toggleSelectOrder = (id: string) => {
+    const next = new Set(selectedOrderIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedOrderIds(next);
   };
 
-  // Save Tracking
-  const handleSaveTracking = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inspectingOrder) return;
-
-    updateOrder(inspectingOrder.id, {
-      ...trackingForm
-    });
-
-    setInspectingOrder(prev => prev ? { ...prev, ...trackingForm } : null);
-    toast.success('Shipping & carrier details updated');
-  };
-
-  // Helper to trigger browser downloads for CAM assets
-  const triggerBrowserDownload = (filename: string, content: string, mimeType: string) => {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  // Build a valid 1:1 Metric VectorDocument AST fallback from an OrderItem
-  const buildFallbackVectorDoc = (item: OrderItem): VectorDocument => {
-    const widthMm = item.widthMm || 300;
-    const heightMm = item.heightMm || 200;
-    const shape = getShapeById(item.shapeId);
-    const pathData = shape ? shape.getPath(widthMm, heightMm) : `M 0 0 L ${widthMm} 0 L ${widthMm} ${heightMm} L 0 ${heightMm} Z`;
-    const gauge = getGaugeParameters(FIBER_LASER_3KW_PROFILE, 'mild_steel', 3.0);
-
-    return {
-      version: '3.0.0',
-      documentId: `vdm-${item.id || Date.now().toString(36)}`,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      unit: 'mm',
-      boundary: {
-        id: 'boundary-default',
-        name: `${item.productName || 'Custom'} Workpiece Boundary`,
-        type: 'boundary',
-        visible: true,
-        locked: true,
-        camLayer: '1_CUT_PERIMETER',
-        cutSequencePriority: 10,
-        transform: { xMm: 0, yMm: 0, scaleX: 1, scaleY: 1, rotationDeg: 0 },
-        shapeTemplateId: item.shapeId || 'rectangle',
-        widthMm,
-        heightMm,
-        cornerRadiusMm: 0,
-        borderThicknessMm: 0,
-        pathData,
-      },
-      material: {
-        substrate: 'mild_steel',
-        thicknessMm: 3.0,
-        finish: item.finish || 'natural_mill',
-        machineProfileId: FIBER_LASER_3KW_PROFILE.id,
-        activeGaugeParams: gauge,
-      },
-      layers: [],
-      manufacturingAnalytics: {
-        totalCutLengthMm: (widthMm + heightMm) * 2,
-        totalPierceCount: 1,
-        sheetAreaSqMm: widthMm * heightMm,
-        estimatedCutTimeSec: Math.round(((widthMm + heightMm) * 2) / 40),
-        partWeightKg: Math.round((widthMm * heightMm * 0.003 * 7.85 / 1000) * 100) / 100,
-        isValidated: true,
-        validationIssues: [],
-      },
-    };
-  };
-
-  // Download CAM Asset
-  const downloadCAMAsset = (orderId: string, item: OrderItem, format: 'svg' | 'dxf' | 'pdf') => {
-    let vectorDoc: VectorDocument;
-
-    if (item.customDesignRef && item.customDesignRef.startsWith('{')) {
-      try {
-        vectorDoc = JSON.parse(item.customDesignRef);
-      } catch {
-        vectorDoc = buildFallbackVectorDoc(item);
-      }
-    } else {
-      vectorDoc = buildFallbackVectorDoc(item);
+  // Bulk Actions
+  const handleBulkMarkPaid = async () => {
+    if (selectedOrderIds.size === 0) return;
+    for (const id of selectedOrderIds) {
+      await updateOrder(id, { paymentStatus: 'Paid', status: 'Paid' });
     }
-
-    const filename = `Vernox-Order-${orderId}-${item.productSlug || item.productId}-${item.widthMm || 300}x${item.heightMm || 200}mm`;
-
-    if (format === 'svg') {
-      const svgContent = exportDocumentAsSVG(vectorDoc);
-      triggerBrowserDownload(`${filename}.svg`, svgContent, 'image/svg+xml');
-      toast.success('1:1 Metric Vector SVG generated & downloaded');
-    } else if (format === 'dxf') {
-      const dxfContent = exportDocumentAsDXF(vectorDoc);
-      triggerBrowserDownload(`${filename}.dxf`, dxfContent, 'application/dxf');
-      toast.success('AutoCAD AC1015 DXF Laser Cut File generated & downloaded');
-    } else if (format === 'pdf') {
-      const pdf = exportDocumentAsPDF(vectorDoc, {
-        orderNumber: orderId,
-        customerEmail: inspectingOrder?.email,
-        notes: `Finish: ${item.finish} | Dimensions: ${item.widthMm}x${item.heightMm}mm | Part: ${item.productName}`,
-      });
-      pdf.save(`${filename}.pdf`);
-      toast.success('Workshop Spec Sheet PDF Traveler generated & downloaded');
-    }
+    toast.success(`Marked ${selectedOrderIds.size} orders as Paid`);
+    setSelectedOrderIds(new Set());
   };
 
-  // Bulk Export CSV
-  const handleBulkExportCSV = () => {
-    const targetOrders = selectedOrderIds.size > 0 
-      ? orders.filter(o => selectedOrderIds.has(o.id))
-      : filteredOrders;
+  const handleBulkMarkFulfilled = async () => {
+    if (selectedOrderIds.size === 0) return;
+    for (const id of selectedOrderIds) {
+      await updateOrder(id, { fulfillmentStatus: 'Fulfilled', status: 'Delivered' });
+    }
+    toast.success(`Marked ${selectedOrderIds.size} orders as Fulfilled`);
+    setSelectedOrderIds(new Set());
+  };
 
-    if (targetOrders.length === 0) {
-      toast.error('No orders to export');
+  const handleBulkDelete = async () => {
+    if (selectedOrderIds.size === 0) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedOrderIds.size} selected orders?`)) return;
+    for (const id of selectedOrderIds) {
+      await deleteOrder(id);
+    }
+    toast.success(`Deleted ${selectedOrderIds.size} orders`);
+    setSelectedOrderIds(new Set());
+  };
+
+  // Instant CSV Export
+  const handleExportCSV = (ordersToExport = filteredOrders) => {
+    if (ordersToExport.length === 0) {
+      toast.error('No orders available to export');
       return;
     }
 
-    const headers = ['Order ID', 'Date', 'Customer Email', 'Customer Name', 'Status', 'Total', 'Items Count', 'Carrier', 'Tracking Number'];
-    const rows = targetOrders.map(o => [
+    const headers = [
+      'Order ID', 'Date', 'Customer Name', 'Email', 
+      'Payment Status', 'Fulfillment Status', 'Total', 
+      'Items Count', 'Shipping City', 'Shipping Country', 
+      'Tracking Carrier', 'Tracking Number'
+    ];
+
+    const rows = ordersToExport.map(o => [
       `"${o.id}"`,
-      `"${new Date(o.placedAt || 0).toISOString()}"`,
-      `"${o.email}"`,
+      `"${formatOrderDate(o.placedAt || o.createdAt)}"`,
       `"${o.shippingName || ''}"`,
-      `"${o.status}"`,
+      `"${o.email}"`,
+      `"${o.paymentStatus || 'Authorized'}"`,
+      `"${o.fulfillmentStatus || 'Unfulfilled'}"`,
       o.total,
       o.items?.length || 0,
+      `"${o.shippingCity || ''}"`,
+      `"${o.shippingCountry || ''}"`,
       `"${o.trackingCarrier || ''}"`,
-      `"${o.trackingNumber || ''}"`,
+      `"${o.trackingNumber || ''}"`
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -389,1306 +280,857 @@ export function AdminOrders({ initialFilter = 'all' }: AdminOrdersProps = {}) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `vernox-orders-export-${Date.now()}.csv`;
+    link.setAttribute('download', `vernox_orders_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
     link.click();
-    toast.success(`Exported ${targetOrders.length} orders to CSV`);
+    document.body.removeChild(link);
+    toast.success(`Exported ${ordersToExport.length} orders to CSV`);
   };
 
-  // Bulk Print
-  const handleBulkPrint = () => {
-    toast.info('Opening browser print dialogue for packing slips...');
-    window.print();
+  // 1-Click CAM Production Vector Document Generator
+  const generateVectorDoc = (order: Order, item: Order['items'][0]): VectorDocument => {
+    const shape = getShapeById(item.shapeId || 'arch_monolith');
+    const width = item.widthMm || 400;
+    const height = item.heightMm || 600;
+    const path = shape?.getPath ? shape.getPath(width, height) : 'M 0 0 L 400 0 L 400 600 L 0 600 Z';
+    const substrate: any = item.finish?.includes('copper') 
+      ? 'copper_c101' 
+      : item.finish?.includes('steel') 
+      ? 'steel_dc01' 
+      : item.finish?.includes('corten') 
+      ? 'corten_weathering' 
+      : 'brass_cz108';
+
+    return {
+      version: '3.0.0',
+      documentId: `cam-${order.id}-${item.id}`,
+      unit: 'mm',
+      boundary: {
+        widthMm: width,
+        heightMm: height,
+        cornerRadiusMm: 0,
+        shapeTemplateId: item.shapeId || 'arch_monolith',
+        pathData: path,
+      },
+      material: {
+        substrate,
+        thicknessMm: 3.0,
+        finish: (item.finish as any) || 'antique_brass',
+        activeGaugeParams: getGaugeParameters(FIBER_LASER_3KW_PROFILE, substrate, 3.0),
+      },
+      layers: [],
+      manufacturingAnalytics: {
+        totalCutLengthMm: (width + height) * 2,
+        totalPierceCount: 1,
+        sheetAreaSqMm: width * height,
+        estimatedCutTimeSec: 24,
+        partWeightKg: 4.8,
+        isManufacturable: true,
+      },
+      uploadedArtworkName: `${order.id} - ${item.productName}`,
+    };
   };
 
-  // Render Status Badge
-  const renderStatusBadge = (status: OrderStatus) => {
+  const handleDownloadCAM = (order: Order, item: Order['items'][0], format: 'svg' | 'dxf' | 'pdf') => {
+    try {
+      const doc = generateVectorDoc(order, item);
+      if (format === 'svg') exportDocumentAsSVG(doc);
+      else if (format === 'dxf') exportDocumentAsDXF(doc);
+      else exportDocumentAsPDF(doc);
+      toast.success(`CAM ${format.toUpperCase()} generated for ${item.productName}`);
+    } catch (err) {
+      toast.error(`Failed to generate ${format.toUpperCase()} CAM file`);
+    }
+  };
+
+  // Render Payment Status Tag with Vernox Luxury Palette
+  const renderPaymentStatusTag = (status?: PaymentStatus) => {
     switch (status) {
       case 'Paid':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>Paid</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#EEF5F0] text-[#1D5E37] border border-[#1D5E37]/20">
+            Paid
+          </span>
+        );
+      case 'Authorized':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#FAF3E8] text-[#8C6219] border border-[#C6A15B]/30">
+            Authorized
           </span>
         );
       case 'Pending':
-      case 'Pending_Payment':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            <span>Pending</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#FFF4F0] text-[#9A3412] border border-[#9A3412]/20">
+            Pending
           </span>
         );
-      case 'Designing':
+      case 'Refunded':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 border border-blue-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            <span>Designing</span>
-          </span>
-        );
-      case 'Cutting':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-600 border border-purple-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-            <span>Cutting</span>
-          </span>
-        );
-      case 'Finished':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-500/10 text-teal-600 border border-teal-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
-            <span>Finished</span>
-          </span>
-        );
-      case 'Shipped':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-oxblood/10 text-oxblood border border-oxblood/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-oxblood" />
-            <span>Shipped</span>
-          </span>
-        );
-      case 'Delivered':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-600/10 text-green-700 border border-green-600/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-600" />
-            <span>Delivered</span>
-          </span>
-        );
-      case 'Cancelled':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            <span>Cancelled</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-neutral-100 text-neutral-600 border border-neutral-200">
+            Refunded
           </span>
         );
       default:
-        return null;
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-muted text-muted-foreground border border-border">
+            {status || 'Unknown'}
+          </span>
+        );
+    }
+  };
+
+  // Render Fulfillment Status Tag with Vernox Luxury Palette
+  const renderFulfillmentStatusTag = (status?: FulfillmentStatus) => {
+    switch (status) {
+      case 'Fulfilled':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#EEF5F0] text-[#1D5E37] border border-[#1D5E37]/20">
+            Fulfilled
+          </span>
+        );
+      case 'Partially Fulfilled':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#FFF4F0] text-[#9A3412] border border-[#9A3412]/20">
+            Partially Fulfilled
+          </span>
+        );
+      case 'Unfulfilled':
+      default:
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#FAF3E8] text-[#8C6219] border border-[#C6A15B]/30">
+            Unfulfilled
+          </span>
+        );
     }
   };
 
   return (
-    <div className="space-y-6 animate-fade-in relative pb-16">
-      {/* Top Controls Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="font-display text-3xl text-oxblood-deep">Orders & CAM Routing</h2>
-          <p className="text-muted-foreground text-sm">
-            Fulfill architectural metal orders, generate AutoCAD CAM deliverables, and manage white-glove courier dispatch.
-          </p>
+    <div className="space-y-6 pb-12 animate-fade-in max-w-[1440px] mx-auto">
+      
+      {/* 1. ATELIER COMMISSIONS BANNER (Vernox Luxury Aesthetic) */}
+      <div className="bg-gradient-to-r from-card via-card to-[#FAF6EE] border border-[#E3DACB] rounded-2xl p-6 sm:p-8 relative overflow-hidden shadow-2xs">
+        {/* Architectural Guilloche & Laser Vector Motif in Background */}
+        <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-20 pointer-events-none hidden md:block">
+          <svg width="220" height="180" viewBox="0 0 220 180" fill="none" className="text-brass">
+            <rect x="10" y="10" width="200" height="160" rx="4" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4" />
+            <circle cx="110" cy="90" r="60" stroke="currentColor" strokeWidth="1.2" />
+            <circle cx="110" cy="90" r="40" stroke="#5B262C" strokeWidth="1" />
+            <path d="M50 90 L170 90 M110 30 L110 150" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 2" />
+            <path d="M70 50 L150 130 M150 50 L70 130" stroke="currentColor" strokeWidth="0.5" />
+          </svg>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => toast.info('To import orders, use the JSON database restore in Settings & Backups.')}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-card border border-border rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition"
-          >
-            <span>↓ Import</span>
-          </button>
-          <button
-            onClick={handleBulkExportCSV}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-oxblood text-ivory hover:bg-oxblood-deep rounded-lg text-xs font-semibold transition shadow-soft"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>↑ Export CSV</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Quick Filter Pill Tabs & Secondary Filters Bar */}
-      <div className="bg-card border border-border/70 rounded-xl p-3 shadow-soft space-y-2.5">
-        {/* Quick Filter Pill Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-border/60">
-          <button
-            onClick={() => setTypeFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
-              typeFilter === 'all'
-                ? 'bg-oxblood text-ivory shadow-soft font-bold'
-                : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <span>All Orders</span>
-            <span className="font-mono text-[10px] opacity-80">({orders.length})</span>
-          </button>
-
-          <button
-            onClick={() => setTypeFilter('custom')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
-              typeFilter === 'custom'
-                ? 'bg-brass text-slate-950 shadow-soft font-bold ring-2 ring-brass/30'
-                : 'bg-brass/10 hover:bg-brass/20 text-brass border border-brass/30'
-            }`}
-          >
-            <ImageIcon className="w-3.5 h-3.5 text-brass" />
-            <span>Custom Orders & Artwork</span>
-            <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-slate-950/20 text-slate-950 dark:text-brass">
-              ({customOrdersCount})
+        <div className="relative z-10 max-w-xl">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-oxblood/10 border border-oxblood/20 text-oxblood text-[10px] font-bold tracking-widest uppercase">
+              <Sparkles className="w-3 h-3 text-brass" /> Vernox Atelier Console
             </span>
-          </button>
-
-          <button
-            onClick={() => setTypeFilter('standard')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
-              typeFilter === 'standard'
-                ? 'bg-oxblood text-ivory shadow-soft font-bold'
-                : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Package className="w-3.5 h-3.5" />
-            <span>Standard Catalog</span>
-            <span className="font-mono text-[10px] opacity-80">({standardOrdersCount})</span>
-          </button>
-
-          <button
-            onClick={() => setTypeFilter('shipping')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
-              typeFilter === 'shipping'
-                ? 'bg-oxblood text-ivory shadow-soft font-bold'
-                : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Truck className="w-3.5 h-3.5" />
-            <span>Shipping</span>
-          </button>
-
-          <button
-            onClick={() => setTypeFilter('pickups')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
-              typeFilter === 'pickups'
-                ? 'bg-oxblood text-ivory shadow-soft font-bold'
-                : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <MapPin className="w-3.5 h-3.5" />
-            <span>Pickups</span>
-          </button>
-        </div>
-
-        <div className="flex flex-wrap gap-2 items-center justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Status Filter */}
-            <AtelierSelect
-              value={statusFilter}
-              onValueChange={setStatusFilter}
-              className="h-8 bg-background border border-border rounded-lg px-2.5 py-1 text-xs font-semibold"
-              options={[
-                { value: 'all', label: 'Status: All' },
-                { value: 'Paid', label: 'Paid' },
-                { value: 'Pending', label: 'Pending' },
-                { value: 'Designing', label: 'Designing' },
-                { value: 'Cutting', label: 'Cutting' },
-                { value: 'Finished', label: 'Finished' },
-                { value: 'Shipped', label: 'Shipped' },
-                { value: 'Delivered', label: 'Delivered' },
-                { value: 'Cancelled', label: 'Cancelled' },
-              ]}
-            />
-
-            {/* Date Filter */}
-            <AtelierSelect
-              value={dateFilter}
-              onValueChange={val => setDateFilter(val as any)}
-              className="h-8 bg-background border border-border rounded-lg px-2.5 py-1 text-xs font-semibold"
-              options={[
-                { value: 'all', label: 'Order date: All' },
-                { value: 'today', label: 'Today' },
-                { value: 'week', label: 'Last 7 Days' },
-                { value: 'month', label: 'This Month' },
-              ]}
-            />
+            <span className="text-xs text-muted-foreground font-serif italic">Bespoke Architectural Craft</span>
           </div>
 
-          {/* Search Field */}
-          <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-display font-bold text-foreground tracking-tight">
+            Atelier Commissions & Orders
+          </h1>
+          <p className="text-muted-foreground text-xs sm:text-sm mt-1.5 mb-5 font-sans">
+            Manage custom architectural steel and brass commissions, CAM laser production routing, patron ledger, and global fulfillment.
+          </p>
+
+          {/* Banner Search Input */}
+          <div className="relative max-w-md">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input 
               type="text"
-              placeholder="Search orders, clients, or art..."
-              value={orderSearch}
-              onChange={e => setOrderSearch(e.target.value)}
-              className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-1.5 text-xs outline-none focus:border-oxblood transition"
+              value={welcomeSearch}
+              onChange={(e) => {
+                setWelcomeSearch(e.target.value);
+                setSearchQuery('');
+              }}
+              placeholder="Search commissions, patron name, email, or destination..."
+              className="w-full bg-background border border-border rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood shadow-2xs transition"
             />
           </div>
         </div>
       </div>
 
-      {/* Main Two-Column Layout: Orders Table (Left) + Analytics Rail (Right) */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Data Table */}
-        <div className="xl:col-span-8 bg-card border border-border/70 rounded-xl overflow-hidden shadow-soft">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  <th className="p-3.5 w-10 text-center">
-                    <input
-                      type="checkbox"
-                      checked={filteredOrders.length > 0 && selectedOrderIds.size === filteredOrders.length}
-                      onChange={handleToggleSelectAll}
-                      className="rounded border-border accent-oxblood cursor-pointer"
-                    />
-                  </th>
-                  <th className="p-3.5">Order</th>
-                  <th className="p-3.5">Customer</th>
-                  <th className="p-3.5">Type</th>
-                  <th className="p-3.5">Status</th>
-                  <th className="p-3.5">Products</th>
-                  <th className="p-3.5">Total</th>
-                  <th className="p-3.5">Date</th>
-                  <th className="p-3.5 text-right">•••</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {filteredOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="p-12 text-center text-muted-foreground">
-                      <ShoppingCart className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
-                      <p className="font-medium text-foreground">No matching orders found</p>
-                      <p className="text-xs mt-1">Try clearing filters or search criteria.</p>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredOrders.map(order => {
-                    const isSelected = selectedOrderIds.has(order.id);
-                    const customerName = order.shippingName || order.email.split('@')[0];
-                    const initials = customerName.slice(0, 2).toUpperCase();
-                    const isPickup = order.shippingAddress?.toLowerCase().includes('pickup') || order.shippingAddress?.toLowerCase().includes('studio');
-                    const hasNotes = Boolean(order.adminNotes);
-
-                    return (
-                      <tr 
-                        key={order.id}
-                        onClick={() => handleOpenInspector(order)}
-                        className={`hover:bg-muted/20 transition cursor-pointer group ${
-                          isSelected ? 'bg-oxblood/5' : ''
-                        }`}
-                      >
-                        <td className="p-3.5 text-center" onClick={e => handleToggleSelectRow(order.id, e)}>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {}}
-                            className="rounded border-border accent-oxblood cursor-pointer"
-                          />
-                        </td>
-
-                        <td className="p-3.5">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-mono text-xs font-bold text-oxblood group-hover:underline">
-                              #{order.id.slice(-6)}
-                            </span>
-                            {hasNotes && (
-                              <span title={order.adminNotes}>
-                                <MessageSquare className="w-3 h-3 text-brass shrink-0" />
-                              </span>
-                            )}
-                            {order.items?.some(i => i.userUploadedImage) && (
-                              <span 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const firstArt = order.items?.find(i => i.userUploadedImage);
-                                  if (firstArt?.userUploadedImage) {
-                                    setLightboxImage({ url: firstArt.userUploadedImage, title: firstArt.uploadedArtworkName || order.id });
-                                  } else {
-                                    handleOpenInspector(order);
-                                  }
-                                }}
-                                title="Customer uploaded custom reference artwork. Click to view image."
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-brass/15 text-brass border border-brass/30 hover:bg-brass/25 transition cursor-pointer"
-                              >
-                                <ImageIcon className="w-2.5 h-2.5" />
-                                <span>Art Attached</span>
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td className="p-3.5">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-muted border border-border flex items-center justify-center font-mono text-[10px] font-bold text-foreground shrink-0">
-                              {initials}
-                            </div>
-                            <span className="text-xs font-semibold text-foreground truncate max-w-[130px]">
-                              {customerName}
-                            </span>
-                          </div>
-                        </td>
-
-                        <td className="p-3.5 text-xs text-muted-foreground">
-                          {isPickup ? 'Pickups' : 'Shipping'}
-                        </td>
-
-                        <td className="p-3.5">
-                          {renderStatusBadge(order.status)}
-                        </td>
-
-                        <td className="p-3.5">
-                          <div className="flex items-center -space-x-1.5 overflow-hidden">
-                            {order.items?.slice(0, 3).map((item, idx) => {
-                              const thumb = item.customDesignThumb || products.find(p => p.id === item.productId)?.imageUrl;
-                              return (
-                                <div 
-                                  key={idx}
-                                  className="w-7 h-7 rounded-md bg-card border border-border flex items-center justify-center overflow-hidden shrink-0 shadow-2xs"
-                                  title={`${item.productName} (${item.finish})`}
-                                >
-                                  {thumb ? (
-                                    <img src={thumb} alt={item.productName} className="w-full h-full object-cover" />
-                                  ) : (
-                                    <Package className="w-3.5 h-3.5 text-muted-foreground" />
-                                  )}
-                                </div>
-                              );
-                            })}
-                            {(order.items?.length || 0) > 3 && (
-                              <div className="w-7 h-7 rounded-md bg-muted border border-border flex items-center justify-center font-mono text-[9px] font-bold text-muted-foreground shrink-0">
-                                +{(order.items?.length || 0) - 3}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-
-                        <td className="p-3.5 font-mono text-xs font-semibold text-foreground whitespace-nowrap">
-                          {storeConfig.currency}{order.total.toFixed(2)}
-                        </td>
-
-                        <td className="p-3.5 text-xs text-muted-foreground whitespace-nowrap">
-                          {new Date(order.placedAt || 0).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                        </td>
-
-                        <td className="p-3.5 text-right">
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              handleOpenInspector(order);
-                            }}
-                            className="p-1 text-muted-foreground hover:text-foreground rounded transition"
-                          >
-                            <MoreHorizontal className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Right Column: Analytics Rail (Matching Reference Screenshot 1) */}
-        <aside className="xl:col-span-4 space-y-4">
-          {/* 1. Receipt of Goods / Volume Gauge */}
-          <div className="bg-card border border-border/70 rounded-xl p-5 shadow-soft space-y-4">
-            <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-              Receipt of Goods & Volume
-            </div>
-
-            {/* Semicircular Gauge Meter */}
-            <div className="relative flex flex-col items-center justify-center pt-2">
-              <svg className="w-44 h-24 overflow-visible" viewBox="0 0 160 80">
-                <path
-                  d="M 10 80 A 70 70 0 0 1 150 80"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="12"
-                  className="text-muted/40"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M 10 80 A 70 70 0 0 1 150 80"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="12"
-                  strokeDasharray="220"
-                  strokeDashoffset={220 - (220 * Math.min(1, analytics.paidPct / 100))}
-                  className="text-emerald-600 transition-all duration-1000"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="text-center -mt-8">
-                <div className="font-display text-2xl text-oxblood-deep font-bold">
-                  {storeConfig.currency}{analytics.totalRev > 1000000 ? `${(analytics.totalRev / 1000000).toFixed(1)}M` : analytics.totalRev.toLocaleString()}
-                </div>
-                <div className="text-[11px] text-muted-foreground font-mono">
-                  {analytics.totalCount} total orders
-                </div>
-              </div>
-            </div>
-
-            {/* Split breakdown */}
-            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/60 text-xs">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-1.5 font-bold text-foreground">
-                  <span className="w-2 h-2 rounded-full bg-oxblood" />
-                  <span>{storeConfig.currency}{analytics.shipmentRev.toLocaleString()}</span>
-                </div>
-                <div className="text-[10px] text-muted-foreground pl-3.5">
-                  {analytics.shipmentCount} shipments
-                </div>
-              </div>
-
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-1.5 font-bold text-foreground">
-                  <span className="w-2 h-2 rounded-full bg-brass" />
-                  <span>{storeConfig.currency}{analytics.pickupRev.toLocaleString()}</span>
-                </div>
-                <div className="text-[10px] text-muted-foreground pl-3.5">
-                  {analytics.pickupCount} pickups
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. Orders Status Segmented Bar */}
-          <div className="bg-card border border-border/70 rounded-xl p-5 shadow-soft space-y-3">
-            <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              <span>Orders Status</span>
-              <span className="text-[10px] text-oxblood font-mono lowercase">active pipeline</span>
-            </div>
-
-            {/* Stacked Segmented Progress Bar */}
-            <div className="h-3 w-full bg-muted/40 rounded-full overflow-hidden flex">
-              <div 
-                style={{ width: `${analytics.paidPct}%` }} 
-                className="bg-emerald-600 h-full transition-all duration-500"
-                title={`Paid: ${analytics.paidPct}%`}
-              />
-              <div 
-                style={{ width: `${analytics.pendingPct}%` }} 
-                className="bg-amber-500 h-full transition-all duration-500"
-                title={`Pending: ${analytics.pendingPct}%`}
-              />
-              <div 
-                style={{ width: `${analytics.cancelledPct}%` }} 
-                className="bg-rose-500 h-full transition-all duration-500"
-                title={`Cancelled: ${analytics.cancelledPct}%`}
-              />
-            </div>
-
-            <div className="space-y-1.5 text-xs pt-1 font-mono">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" /> Paid
-                </span>
-                <span className="font-bold text-foreground">{analytics.paidPct}%</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" /> Pending Processing
-                </span>
-                <span className="font-bold text-foreground">{analytics.pendingPct}%</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full bg-rose-500" /> Cancelled
-                </span>
-                <span className="font-bold text-foreground">{analytics.cancelledPct}%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Overview Metric Tiles */}
-          <div className="bg-card border border-border/70 rounded-xl p-5 shadow-soft space-y-4">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Operational Averages
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div className="space-y-1">
-                <div className="font-display text-lg font-bold text-oxblood-deep">
-                  {storeConfig.currency}{analytics.avgOrderVal.toFixed(2)}
-                </div>
-                <div className="text-[10px] text-muted-foreground uppercase font-semibold">Average Order</div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="font-display text-lg font-bold text-foreground">
-                  {storeConfig.currency}{analytics.totalRev.toLocaleString()}
-                </div>
-                <div className="text-[10px] text-muted-foreground uppercase font-semibold">Total Revenue</div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="font-display text-lg font-bold text-brass">18 min</div>
-                <div className="text-[10px] text-muted-foreground uppercase font-semibold">CAM Processing Time</div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="font-display text-lg font-bold text-foreground">1.8</div>
-                <div className="text-[10px] text-muted-foreground uppercase font-semibold">Avg. Items/Order</div>
-              </div>
-            </div>
-          </div>
-
-          {/* 4. Top Sellers Widget */}
-          <div className="bg-card border border-border/70 rounded-xl p-5 shadow-soft space-y-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Top Catalog Pieces
-            </div>
-
-            <div className="space-y-2">
-              {analytics.topSellers.map((s, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 transition text-xs">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-8 h-8 rounded bg-muted/40 border border-border flex items-center justify-center overflow-hidden shrink-0">
-                      {s.image ? (
-                        <img src={s.image} alt={s.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Package className="w-4 h-4 text-muted-foreground" />
-                      )}
-                    </div>
-                    <span className="font-medium text-foreground truncate max-w-[140px]">{s.name}</span>
-                  </div>
-                  <span className="font-mono font-bold text-oxblood shrink-0">{s.count} units</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </aside>
+      {/* 2. TABS BAR (Vernox Luxury Aesthetic) */}
+      <div className="flex items-center gap-1 sm:gap-6 border-b border-border/70 overflow-x-auto text-xs sm:text-sm font-semibold tracking-tight scrollbar-none px-1">
+        {[
+          { id: 'all', label: 'All Orders' },
+          { id: 'open', label: 'Open' },
+          { id: 'unfulfilled', label: 'Unfulfilled' },
+          { id: 'unpaid', label: 'Unpaid' },
+          { id: 'canada', label: `From ${selectedCountry}` },
+          { id: 'paid', label: 'Paid Orders' },
+          { id: 'customers', label: 'Customers' },
+        ].map(tab => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                if (tab.id === 'customers') {
+                  if (onSelectTab) onSelectTab('customers');
+                  else setActiveTab('customers');
+                } else {
+                  setActiveTab(tab.id as any);
+                }
+              }}
+              className={`pb-3 px-2 sm:px-3 relative whitespace-nowrap transition-colors flex items-center gap-1.5 font-display ${
+                isActive 
+                  ? 'text-oxblood font-bold' 
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span>{tab.label}</span>
+              {tab.id === 'canada' && (
+                <select
+                  value={selectedCountry}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    setSelectedCountry(e.target.value);
+                    setActiveTab('canada');
+                  }}
+                  className="bg-transparent text-[11px] font-sans font-normal text-muted-foreground hover:text-foreground cursor-pointer outline-none border-b border-muted-foreground/30 ml-1"
+                >
+                  <option value="Canada">Canada</option>
+                  <option value="United States">USA</option>
+                  <option value="Germany">Germany</option>
+                  <option value="Belgium">Belgium</option>
+                  <option value="United Kingdom">UK</option>
+                  <option value="India">India</option>
+                  <option value="France">France</option>
+                </select>
+              )}
+              {isActive && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-oxblood rounded-full" />
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* FLOATING MULTI-SELECT DOCK (When 1+ rows checked) */}
-      {selectedOrderIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-card border border-border/80 rounded-xl px-5 py-3 shadow-luxe flex items-center gap-4 animate-slide-up backdrop-blur-md">
-          <button
-            onClick={() => setSelectedOrderIds(new Set())}
-            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 font-semibold"
-          >
-            <X className="w-3.5 h-3.5" />
-            <span>Clear</span>
-          </button>
-
-          <div className="h-4 w-px bg-border" />
-
-          <span className="font-mono text-xs font-bold text-oxblood">
-            Selected: {selectedOrderIds.size}
-          </span>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleBulkExportCSV}
-              className="inline-flex items-center gap-1 px-3 py-1.5 bg-muted hover:bg-border rounded-lg text-xs font-semibold transition"
-            >
-              <Download className="w-3 h-3" />
-              <span>Export CSV</span>
-            </button>
-
-            <button
-              onClick={handleBulkPrint}
-              className="inline-flex items-center gap-1 px-3 py-1.5 bg-muted hover:bg-border rounded-lg text-xs font-semibold transition"
-            >
-              <Printer className="w-3 h-3" />
-              <span>Print Invoices</span>
-            </button>
-
-            <button
-              onClick={() => {
-                selectedOrderIds.forEach(id => updateOrderStatus(id, 'Shipped'));
-                toast.success(`Marked ${selectedOrderIds.size} orders as Shipped`);
-                setSelectedOrderIds(new Set());
+      {/* 3. ORDERS TABLE CARD */}
+      <div className="bg-card border border-border/80 rounded-2xl shadow-2xs overflow-hidden">
+        {/* Table Controls Header */}
+        <div className="p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-border/60 bg-card">
+          {/* Search Here Input */}
+          <div className="relative flex-1 max-w-sm">
+            <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <input 
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setWelcomeSearch('');
               }}
-              className="inline-flex items-center gap-1 px-3 py-1.5 bg-oxblood text-ivory hover:bg-oxblood-deep rounded-lg text-xs font-semibold transition shadow-soft"
-            >
-              <Truck className="w-3 h-3" />
-              <span>Mark Shipped</span>
-            </button>
+              placeholder="Filter current view..."
+              className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-1.5 text-xs outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood transition"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
-        </div>
-      )}
 
-      {/* FLYOUT ORDER INSPECTOR WINDOW (Matching Reference Screenshots 2 & 3) */}
-      {inspectingOrder && createPortal(
-        <div 
-          className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-fade-in"
-          onClick={() => setInspectingOrder(null)}
-        >
-          <div 
-            onClick={e => e.stopPropagation()}
-            className={`bg-card border border-border rounded-2xl shadow-2xl overflow-hidden animate-scale-in flex flex-col transition-all duration-300 ${
-              isInspectorExpanded ? 'w-[98vw] h-[96vh]' : 'w-full max-w-3xl max-h-[90vh]'
-            }`}
-          >
-            {/* Inspector Window Header */}
-            <div className="p-5 border-b border-border flex items-center justify-between bg-muted/20 shrink-0">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-display text-2xl text-oxblood-deep font-bold">
-                    Order #{inspectingOrder.id.slice(-6)}
-                  </h3>
-                  {renderStatusBadge(inspectingOrder.status)}
-                </div>
-                <div className="text-xs text-muted-foreground font-mono">
-                  {inspectingOrder.id} · {new Date(inspectingOrder.placedAt || 0).toLocaleString()}
-                </div>
-              </div>
+          {/* Right Action Buttons */}
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            {/* Filters Button with Popover */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsFilterOpen(prev => !prev)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition ${
+                  isFilterOpen || filterPaymentStatus !== 'all' || filterFulfillmentStatus !== 'all' || filterDateRange !== 'all'
+                    ? 'border-oxblood text-oxblood bg-oxblood/10'
+                    : 'border-border text-foreground hover:bg-muted'
+                }`}
+              >
+                <FilterIcon className="w-3.5 h-3.5 text-brass" />
+                <span>Filters</span>
+              </button>
 
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setIsInspectorExpanded(!isInspectorExpanded)}
-                  className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition"
-                  title={isInspectorExpanded ? 'Restore' : 'Expand'}
-                >
-                  {isInspectorExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={() => setInspectingOrder(null)}
-                  className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition"
-                  title="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Top Action Buttons Bar */}
-            <div className="p-4 border-b border-border/60 bg-card flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    const blob = new Blob([JSON.stringify(inspectingOrder, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `order-${inspectingOrder.id}.json`;
-                    a.click();
-                    toast.success('Order JSON exported');
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-oxblood text-ivory hover:bg-oxblood-deep rounded-lg text-xs font-semibold transition shadow-soft"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>↑ Export</span>
-                </button>
-
-                <button
-                  onClick={() => window.print()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-border rounded-lg text-xs font-semibold text-foreground transition"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print</span>
-                </button>
-
-                <AtelierSelect
-                  value={inspectingOrder.status}
-                  onValueChange={val => {
-                    const nextStatus = val as OrderStatus;
-                    updateOrderStatus(inspectingOrder.id, nextStatus);
-                    setInspectingOrder({ ...inspectingOrder, status: nextStatus });
-                    toast.success(`Status updated to ${nextStatus}`);
-                  }}
-                  className="h-8 bg-background border border-border rounded-lg px-3 py-1 text-xs font-semibold"
-                  options={[
-                    { value: 'Pending', label: 'Pending' },
-                    { value: 'Paid', label: 'Paid' },
-                    { value: 'Designing', label: 'Designing' },
-                    { value: 'Cutting', label: 'Cutting' },
-                    { value: 'Finished', label: 'Finished' },
-                    { value: 'Shipped', label: 'Shipped' },
-                    { value: 'Delivered', label: 'Delivered' },
-                    { value: 'Cancelled', label: 'Cancelled' },
-                  ]}
-                />
-              </div>
-
-              {/* Tab Selector */}
-              {(() => {
-                const customItems = inspectingOrder.items?.filter(i => i.userUploadedImage || i.customDesignRef) || [];
-                const hasCustomArt = customItems.length > 0;
-                const tabs = hasCustomArt 
-                  ? (['items', 'artwork', 'delivery', 'docs'] as const)
-                  : (['items', 'delivery', 'docs'] as const);
-
-                return (
-                  <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg">
-                    {tabs.map(tab => (
-                      <button
-                        key={tab}
-                        onClick={() => setInspectorTab(tab)}
-                        className={`px-3 py-1 rounded-md text-xs font-semibold capitalize transition flex items-center gap-1.5 ${
-                          inspectorTab === tab 
-                            ? 'bg-card text-foreground shadow-2xs' 
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {tab === 'items' && `Order items (${inspectingOrder.items?.length || 0})`}
-                        {tab === 'artwork' && (
-                          <>
-                            <ImageIcon className="w-3 h-3 text-brass" />
-                            <span>Client Artwork ({customItems.length})</span>
-                          </>
-                        )}
-                        {tab === 'delivery' && 'Shipping & Delivery'}
-                        {tab === 'docs' && 'Documents & CAM'}
-                      </button>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Inspector Tab Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* TAB 1: ORDER ITEMS */}
-              {inspectorTab === 'items' && (
-                <div className="space-y-4">
-                  <div className="space-y-3">
-                    {inspectingOrder.items?.map(item => (
-                      <div key={item.id} className="p-4 bg-muted/20 border border-border/70 rounded-xl space-y-3">
-                        <div className="flex gap-4 items-center">
-                          <div className="w-16 h-16 rounded-lg bg-card border border-border flex items-center justify-center overflow-hidden shrink-0">
-                            {item.customDesignThumb ? (
-                              <img src={item.customDesignThumb} alt={item.productName} className="w-full h-full object-contain p-1" />
-                            ) : (
-                              <Package className="w-8 h-8 text-brass/50" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-foreground text-sm truncate">{item.productName}</div>
-                            <div className="text-xs text-muted-foreground capitalize mt-0.5">
-                              Finish: {item.finish} · Dimensions: {item.sizeLabel || `${item.widthMm}×${item.heightMm}mm`}
-                            </div>
-                            <div className="font-mono text-xs text-oxblood font-bold mt-1">
-                              {storeConfig.currency}{item.unitPrice.toFixed(2)} × {item.quantity} = {storeConfig.currency}{(item.unitPrice * item.quantity).toFixed(2)}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 1-Click CAM Production Exporters */}
-                        <div className="pt-2 border-t border-border/60 flex flex-wrap items-center gap-2">
-                          <button
-                            onClick={() => downloadCAMAsset(inspectingOrder.id, item, 'dxf')}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-950 text-slate-100 hover:bg-slate-800 border border-slate-700 rounded text-xs font-mono font-medium transition"
-                            title="Download AutoCAD 2000 AC1015 DXF Laser Cut File"
-                          >
-                            <Scissors className="w-3 h-3 text-red-400" />
-                            <span>Laser DXF</span>
-                          </button>
-
-                          <button
-                            onClick={() => downloadCAMAsset(inspectingOrder.id, item, 'svg')}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-950 text-slate-100 hover:bg-slate-800 border border-slate-700 rounded text-xs font-mono font-medium transition"
-                            title="Download 1:1 Metric Vector SVG"
-                          >
-                            <FileCode className="w-3 h-3 text-cyan-400" />
-                            <span>Vector SVG</span>
-                          </button>
-
-                          <button
-                            onClick={() => downloadCAMAsset(inspectingOrder.id, item, 'pdf')}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-950 text-slate-100 hover:bg-slate-800 border border-slate-700 rounded text-xs font-mono font-medium transition"
-                            title="Download Workshop Spec Sheet PDF Traveler"
-                          >
-                            <FileText className="w-3 h-3 text-amber-400" />
-                            <span>Spec PDF</span>
-                          </button>
-
-                          {item.customDesignRef && item.customDesignRef.startsWith('{') && (
-                            <button
-                              onClick={() => {
-                                localStorage.setItem('vernox-custom-inspect', item.customDesignRef!);
-                                setInspectingOrder(null);
-                                navigate('/customize');
-                              }}
-                              className="inline-flex items-center gap-1 bg-oxblood text-ivory px-2.5 py-1 rounded text-xs uppercase tracking-wider hover:bg-oxblood-deep transition font-semibold ml-auto"
-                            >
-                              <Layers className="w-3.5 h-3.5 text-brass" />
-                              <span>Open in CAD Studio</span>
-                            </button>
-                          )}
-                        </div>
-
-                        {/* CLIENT UPLOADED REFERENCE ARTWORK: HOW USER WANTS IT TO BE */}
-                        {item.userUploadedImage && (
-                          <div className="mt-2.5 p-3.5 rounded-lg bg-brass/5 border border-brass/30 space-y-2.5">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <ImageIcon className="w-4 h-4 text-brass" />
-                                <span className="text-xs font-bold text-foreground">
-                                  Client Uploaded Reference Artwork
-                                </span>
-                                <span className="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-brass/20 text-brass-dark font-semibold">
-                                  Crafting Studio
-                                </span>
-                              </div>
-                              <span className="text-[11px] text-muted-foreground font-mono truncate max-w-[200px]">
-                                {item.uploadedArtworkName || 'Client Reference File'}
-                              </span>
-                            </div>
-
-                            <p className="text-[11px] text-muted-foreground leading-relaxed">
-                              This is the exact image uploaded by the customer in the Crafting Studio showing how they want their laser commission to be crafted.
-                            </p>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                              {/* 1. Client Reference Image */}
-                              <div className="space-y-1.5">
-                                <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                                  <span>Client Inspiration Artwork</span>
-                                  <button
-                                    onClick={() => setLightboxImage({ url: item.userUploadedImage!, title: item.uploadedArtworkName || item.productName })}
-                                    className="text-oxblood hover:underline inline-flex items-center gap-1 font-semibold text-[10px]"
-                                  >
-                                    <ZoomIn className="w-3 h-3" /> Zoom
-                                  </button>
-                                </div>
-                                <div 
-                                  onClick={() => setLightboxImage({ url: item.userUploadedImage!, title: item.uploadedArtworkName || item.productName })}
-                                  className="h-32 rounded-md border border-border bg-card/70 p-1 flex items-center justify-center overflow-hidden cursor-zoom-in group relative shadow-2xs"
-                                >
-                                  <img 
-                                    src={item.userUploadedImage} 
-                                    alt="Customer Uploaded Artwork" 
-                                    className="max-h-full max-w-full object-contain rounded group-hover:scale-105 transition-transform duration-200" 
-                                  />
-                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5">
-                                    <ZoomIn className="w-4 h-4" /> Expand Full Artwork
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => triggerBrowserDownload(`${item.uploadedArtworkName || 'client-artwork'}.jpg`, item.userUploadedImage!, 'image/jpeg')}
-                                  className="w-full inline-flex items-center justify-center gap-1.5 py-1 text-xs font-semibold rounded bg-background border border-border hover:bg-muted text-foreground transition"
-                                >
-                                  <Download className="w-3 h-3 text-brass" />
-                                  <span>Download Original Customer Image</span>
-                                </button>
-                              </div>
-
-                              {/* 2. Generated Vector CAD Toolpath */}
-                              <div className="space-y-1.5">
-                                <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                                  <span>Generated Laser Toolpath</span>
-                                  <span className="text-emerald-600 font-semibold text-[10px]">1:1 CNC</span>
-                                </div>
-                                <div className="h-32 rounded-md border border-border bg-card/70 p-1 flex items-center justify-center overflow-hidden shadow-2xs">
-                                  {item.customDesignThumb ? (
-                                    <img 
-                                      src={item.customDesignThumb} 
-                                      alt="Laser Toolpath Vector" 
-                                      className="max-h-full max-w-full object-contain" 
-                                    />
-                                  ) : (
-                                    <div className="text-xs text-muted-foreground font-mono">1:1 Laser Contour</div>
-                                  )}
-                                </div>
-                                <div className="text-[10px] text-muted-foreground flex items-center justify-between py-1 px-1 font-mono">
-                                  <span>Plate: 3.0mm</span>
-                                  <span className="capitalize">Finish: {item.finish}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+              {/* Filters Popover Dropdown */}
+              {isFilterOpen && (
+                <div className="absolute right-0 top-full mt-2 w-72 bg-card border border-border rounded-xl p-4 shadow-xl z-30 space-y-3 animate-scale-in">
+                  <div className="flex items-center justify-between pb-2 border-b border-border text-xs font-bold text-foreground">
+                    <span>Filter Orders</span>
+                    <button onClick={() => setIsFilterOpen(false)} className="text-muted-foreground hover:text-foreground">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
-                  {/* Totals Summary Breakdown */}
-                  <div className="bg-muted/30 border border-border/70 p-4 rounded-xl space-y-2 text-xs">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Merchandise Subtotal</span>
-                      <span className="font-mono">{storeConfig.currency}{(inspectingOrder.total || 0).toFixed(2)}</span>
-                    </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-muted-foreground uppercase">Payment Status</label>
+                    <select
+                      value={filterPaymentStatus}
+                      onChange={(e) => setFilterPaymentStatus(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs outline-none"
+                    >
+                      <option value="all">All Payment Statuses</option>
+                      <option value="Authorized">Authorized</option>
+                      <option value="Paid">Paid</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Refunded">Refunded</option>
+                    </select>
+                  </div>
 
-                    {(inspectingOrder as any).couponCode && (
-                      <div className="flex justify-between text-emerald-600 font-semibold font-mono">
-                        <span>Promotional Voucher ({(inspectingOrder as any).couponCode})</span>
-                        <span>-{storeConfig.currency}{Number((inspectingOrder as any).discount || 0).toFixed(2)}</span>
-                      </div>
-                    )}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-muted-foreground uppercase">Fulfillment Status</label>
+                    <select
+                      value={filterFulfillmentStatus}
+                      onChange={(e) => setFilterFulfillmentStatus(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs outline-none"
+                    >
+                      <option value="all">All Fulfillment Statuses</option>
+                      <option value="Unfulfilled">Unfulfilled</option>
+                      <option value="Partially Fulfilled">Partially Fulfilled</option>
+                      <option value="Fulfilled">Fulfilled</option>
+                    </select>
+                  </div>
 
-                    <div className="flex justify-between font-display text-lg font-bold border-t border-border pt-2 text-oxblood-deep">
-                      <span>Total Charge</span>
-                      <span>{storeConfig.currency}{inspectingOrder.total.toFixed(2)}</span>
-                    </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-muted-foreground uppercase">Date Placed</label>
+                    <select
+                      value={filterDateRange}
+                      onChange={(e) => setFilterDateRange(e.target.value as any)}
+                      className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs outline-none"
+                    >
+                      <option value="all">All Time</option>
+                      <option value="today">Past 24 Hours</option>
+                      <option value="last7">Past 7 Days</option>
+                      <option value="last30">Past 30 Days</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterPaymentStatus('all');
+                        setFilterFulfillmentStatus('all');
+                        setFilterDateRange('all');
+                        setMinTotal('');
+                      }}
+                      className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                    >
+                      Reset all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsFilterOpen(false)}
+                      className="bg-oxblood hover:bg-oxblood-deep text-ivory px-3 py-1 rounded-lg text-xs font-semibold transition shadow-2xs"
+                    >
+                      Apply
+                    </button>
                   </div>
                 </div>
               )}
+            </div>
 
-              {/* TAB: CLIENT ARTWORK BENCH (CUSTOM ORDERS ONLY) */}
-              {inspectorTab === 'artwork' && (
-                <div className="space-y-6">
-                  <div className="p-4 rounded-xl bg-brass/10 border border-brass/30 flex items-start gap-3">
-                    <ImageIcon className="w-5 h-5 text-brass shrink-0 mt-0.5" />
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-foreground font-display">
-                        Client Reference Artwork & Custom Fabrication Bench
-                      </h4>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        The images below were uploaded by the customer in the Crafting Studio. Compare the customer's original artwork directly against the CNC laser toolpath before routing to the fiber laser cutting bed.
-                      </p>
-                    </div>
+            {/* Download CSV Button */}
+            <button 
+              onClick={() => handleExportCSV()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-medium text-foreground transition"
+              title="Download Orders CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-brass" />
+              <span>Download</span>
+            </button>
+
+            {/* Pagination Controls (< Page 1 of 2 >) */}
+            <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-1 text-xs bg-background">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="p-0.5 rounded hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-[11px] text-muted-foreground px-1">
+                Page <span className="font-semibold text-foreground font-mono">{currentPage}</span> of <span className="font-mono">{totalPages}</span>
+              </span>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="p-0.5 rounded hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Floating Bulk Actions Dock (Vernox Obsidian & Brass) */}
+        {selectedOrderIds.size > 0 && (
+          <div className="bg-[#1C1615] border-b border-brass/40 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 animate-fade-in text-xs text-[#F8F4E7]">
+            <div className="flex items-center gap-2 font-semibold">
+              <CheckSquare className="w-4 h-4 text-brass" />
+              <span>{selectedOrderIds.size} orders selected</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleBulkMarkPaid}
+                className="bg-oxblood hover:bg-oxblood-deep text-ivory px-3 py-1 rounded-md text-xs font-semibold transition border border-oxblood/50"
+              >
+                Mark as Paid
+              </button>
+              <button
+                onClick={handleBulkMarkFulfilled}
+                className="bg-[#2A211E] hover:bg-[#382D29] text-brass border border-brass/30 px-3 py-1 rounded-md text-xs font-semibold transition"
+              >
+                Mark as Fulfilled
+              </button>
+              <button
+                onClick={() => handleExportCSV(orders.filter(o => selectedOrderIds.has(o.id)))}
+                className="bg-[#120D0C] border border-[#2E2421] text-[#E8DFD3] hover:text-white px-3 py-1 rounded-md text-xs font-semibold transition"
+              >
+                Export Selected
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                className="bg-red-900/80 hover:bg-red-800 text-white px-3 py-1 rounded-md text-xs font-semibold transition"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setSelectedOrderIds(new Set())}
+                className="text-[#A8988E] hover:text-[#F8F4E7] text-xs underline ml-1"
+              >
+                Deselect
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* DATA TABLE */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-border/70 text-[11px] font-display font-bold text-muted-foreground uppercase tracking-wider bg-[#FAF8F5]/80">
+                <th className="py-3 px-4 w-10">
+                  <button 
+                    onClick={toggleSelectAllPage} 
+                    className="text-muted-foreground hover:text-foreground transition flex items-center"
+                    title={isAllCurrentPageSelected ? "Deselect all" : "Select all on page"}
+                  >
+                    {isAllCurrentPageSelected ? (
+                      <CheckSquare className="w-4 h-4 text-oxblood" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                  </button>
+                </th>
+                <th className="py-3 px-4">Order</th>
+                <th className="py-3 px-4">Date</th>
+                <th className="py-3 px-4">Customer</th>
+                <th className="py-3 px-4">Payment Status</th>
+                <th className="py-3 px-4">Fulfillment Status</th>
+                <th className="py-3 px-4 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {paginatedOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <Package className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+                    <p className="font-medium text-foreground">No orders matching your filters</p>
+                    <p className="text-[11px] mt-0.5">Try adjusting your search query or reset filter settings.</p>
+                  </td>
+                </tr>
+              ) : (
+                paginatedOrders.map(order => {
+                  const isSelected = selectedOrderIds.has(order.id);
+                  return (
+                    <tr 
+                      key={order.id} 
+                      className={`hover:bg-[#FBF9F5] transition group cursor-pointer ${
+                        isSelected ? 'bg-oxblood/[0.04]' : ''
+                      }`}
+                      onClick={() => setInspectingOrder(order)}
+                    >
+                      {/* Checkbox */}
+                      <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                        <button 
+                          onClick={() => toggleSelectOrder(order.id)}
+                          className="text-muted-foreground hover:text-foreground flex items-center"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-oxblood" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
+                      </td>
+
+                      {/* ORDER (#195867) */}
+                      <td className="py-3.5 px-4 font-mono font-semibold text-oxblood hover:text-oxblood-deep hover:underline">
+                        {order.id}
+                      </td>
+
+                      {/* DATE (04/05/2026 10:08AM) */}
+                      <td className="py-3.5 px-4 text-muted-foreground whitespace-nowrap">
+                        {formatOrderDate(order.placedAt || order.createdAt)}
+                      </td>
+
+                      {/* CUSTOMER */}
+                      <td className="py-3.5 px-4">
+                        <div className="font-medium text-foreground truncate max-w-[180px]">
+                          {order.shippingName || order.email.split('@')[0]}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground truncate max-w-[180px]">
+                          {order.email}
+                        </div>
+                      </td>
+
+                      {/* PAYMENT STATUS */}
+                      <td className="py-3.5 px-4">
+                        {renderPaymentStatusTag(order.paymentStatus)}
+                      </td>
+
+                      {/* FULFILLMENT STATUS */}
+                      <td className="py-3.5 px-4">
+                        {renderFulfillmentStatusTag(order.fulfillmentStatus)}
+                      </td>
+
+                      {/* TOTAL */}
+                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-foreground whitespace-nowrap">
+                        {currency}{order.total.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 4. ORDER INSPECTOR FLYOUT MODAL */}
+      {inspectingOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-end animate-fade-in">
+          <div className="w-full max-w-2xl h-full bg-card border-l border-border shadow-2xl flex flex-col animate-slide-in-right overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-border flex items-center justify-between bg-muted/20 shrink-0">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-display font-bold text-foreground">
+                    Order {inspectingOrder.id}
+                  </h2>
+                  <span className="text-xs text-muted-foreground">
+                    · {formatOrderDate(inspectingOrder.placedAt || inspectingOrder.createdAt)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  {renderPaymentStatusTag(inspectingOrder.paymentStatus)}
+                  <span className="text-muted-foreground">·</span>
+                  {renderFulfillmentStatusTag(inspectingOrder.fulfillmentStatus)}
+                  <span className="text-muted-foreground">·</span>
+                  <span className="text-xs text-oxblood font-semibold">
+                    Pipeline: {inspectingOrder.status}
+                  </span>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setInspectingOrder(null)}
+                className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+              
+              {/* Status Update Quick Toggles */}
+              <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-3">
+                <span className="text-[11px] font-bold text-foreground uppercase tracking-wider block">
+                  Quick Status Adjustments
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground uppercase font-semibold block mb-1">
+                      Payment Status
+                    </label>
+                    <select
+                      value={inspectingOrder.paymentStatus || 'Authorized'}
+                      onChange={(e) => {
+                        const val = e.target.value as PaymentStatus;
+                        updateOrder(inspectingOrder.id, { paymentStatus: val });
+                        setInspectingOrder(prev => prev ? { ...prev, paymentStatus: val } : null);
+                        toast.success(`Payment updated to ${val}`);
+                      }}
+                      className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs font-medium"
+                    >
+                      <option value="Authorized">Authorized</option>
+                      <option value="Paid">Paid</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Refunded">Refunded</option>
+                    </select>
                   </div>
 
-                  {inspectingOrder.items?.filter(i => i.userUploadedImage || i.customDesignRef).map((item, idx) => (
-                    <div key={item.id || idx} className="p-5 bg-card border border-border rounded-xl space-y-4 shadow-sm">
-                      <div className="flex items-center justify-between pb-3 border-b border-border">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground uppercase font-semibold block mb-1">
+                      Fulfillment Status
+                    </label>
+                    <select
+                      value={inspectingOrder.fulfillmentStatus || 'Unfulfilled'}
+                      onChange={(e) => {
+                        const val = e.target.value as FulfillmentStatus;
+                        updateOrder(inspectingOrder.id, { fulfillmentStatus: val });
+                        setInspectingOrder(prev => prev ? { ...prev, fulfillmentStatus: val } : null);
+                        toast.success(`Fulfillment updated to ${val}`);
+                      }}
+                      className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs font-medium"
+                    >
+                      <option value="Unfulfilled">Unfulfilled</option>
+                      <option value="Partially Fulfilled">Partially Fulfilled</option>
+                      <option value="Fulfilled">Fulfilled</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-muted-foreground uppercase font-semibold block mb-1">
+                      Production Pipeline
+                    </label>
+                    <select
+                      value={inspectingOrder.status}
+                      onChange={(e) => {
+                        const val = e.target.value as OrderStatus;
+                        updateOrderStatus(inspectingOrder.id, val);
+                        setInspectingOrder(prev => prev ? { ...prev, status: val } : null);
+                        toast.success(`Status updated to ${val}`);
+                      }}
+                      className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs font-medium"
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Paid">Paid</option>
+                      <option value="Designing">Designing</option>
+                      <option value="Cutting">Cutting</option>
+                      <option value="Finished">Finished</option>
+                      <option value="Shipped">Shipped</option>
+                      <option value="Delivered">Delivered</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Customer & Shipping Summary */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-card border border-border rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-1.5 text-foreground font-semibold">
+                    <Mail className="w-3.5 h-3.5 text-brass" />
+                    <span className="font-display">Patron Dossier</span>
+                  </div>
+                  <div className="text-muted-foreground space-y-1">
+                    <div className="font-medium text-foreground">{inspectingOrder.shippingName || 'Patron'}</div>
+                    <div className="font-mono text-[11px]">{inspectingOrder.email}</div>
+                  </div>
+                </div>
+
+                <div className="bg-card border border-border rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-1.5 text-foreground font-semibold">
+                    <MapPin className="w-3.5 h-3.5 text-brass" />
+                    <span className="font-display">Destination</span>
+                  </div>
+                  <div className="text-muted-foreground space-y-0.5">
+                    <div>{inspectingOrder.shippingAddress || 'Standard Delivery'}</div>
+                    <div>
+                      {[inspectingOrder.shippingCity, inspectingOrder.shippingZip, inspectingOrder.shippingCountry]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items & CAM Production Downloads */}
+              <div className="space-y-3">
+                <span className="text-[11px] font-bold text-foreground uppercase tracking-wider block font-display">
+                  Commission Works ({inspectingOrder.items?.length || 0})
+                </span>
+                
+                <div className="space-y-2.5">
+                  {inspectingOrder.items?.map((item, idx) => (
+                    <div key={idx} className="bg-card border border-border rounded-xl p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="font-semibold text-sm text-foreground">{item.productName}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            Substrate: <span className="font-medium text-foreground capitalize">{item.finish.replace(/_/g, ' ')}</span> · Dimensions: <span className="font-mono">{item.widthMm}mm × {item.heightMm}mm</span>
+                          <div className="font-semibold text-foreground text-sm font-display">
+                            {item.productName}
+                          </div>
+                          <div className="text-muted-foreground text-[11px] mt-0.5">
+                            Substrate / Finish: <span className="text-oxblood font-semibold capitalize">{item.finish?.replace(/_/g, ' ')}</span> · 
+                            Dimensions: <span className="text-foreground font-mono">{item.sizeLabel || `${item.widthMm}x${item.heightMm}mm`}</span> · 
+                            Qty: <span className="text-foreground font-mono font-bold">{item.quantity}</span>
                           </div>
                         </div>
-                        <span className="font-mono text-xs font-bold text-oxblood bg-oxblood/10 px-2.5 py-1 rounded-full border border-oxblood/20">
-                          Qty: {item.quantity}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Customer Uploaded Original */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                              <ImageIcon className="w-3.5 h-3.5 text-brass" />
-                              <span>1. Client Uploaded Artwork ("How User Wants It To Be")</span>
-                            </span>
-                            {item.userUploadedImage && (
-                              <button
-                                onClick={() => setLightboxImage({ url: item.userUploadedImage!, title: item.uploadedArtworkName || item.productName })}
-                                className="text-oxblood hover:underline text-xs font-semibold inline-flex items-center gap-1"
-                              >
-                                <ZoomIn className="w-3 h-3" /> Zoom Lightbox
-                              </button>
-                            )}
-                          </div>
-
-                          <div 
-                            onClick={() => item.userUploadedImage && setLightboxImage({ url: item.userUploadedImage, title: item.uploadedArtworkName || item.productName })}
-                            className="h-56 rounded-lg border-2 border-dashed border-border bg-muted/30 p-2 flex items-center justify-center overflow-hidden cursor-zoom-in group relative"
-                          >
-                            {item.userUploadedImage ? (
-                              <>
-                                <img 
-                                  src={item.userUploadedImage} 
-                                  alt="Client Upload" 
-                                  className="max-h-full max-w-full object-contain rounded group-hover:scale-105 transition-transform" 
-                                />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5">
-                                  <ZoomIn className="w-4 h-4" /> Click to Inspect in Full Screen Lightbox
-                                </div>
-                              </>
-                            ) : (
-                              <div className="text-center p-4 space-y-1">
-                                <Package className="w-8 h-8 text-muted-foreground mx-auto" />
-                                <div className="text-xs font-semibold text-muted-foreground">Vector-only custom geometry</div>
-                                <div className="text-[10px] text-muted-foreground">Constructed natively with CAD primitives</div>
-                              </div>
-                            )}
-                          </div>
-
-                          {item.userUploadedImage && (
-                            <button
-                              onClick={() => triggerBrowserDownload(`${item.uploadedArtworkName || 'client-reference'}.jpg`, item.userUploadedImage!, 'image/jpeg')}
-                              className="w-full py-1.5 px-3 rounded-lg bg-card border border-border hover:bg-muted text-xs font-semibold text-foreground transition inline-flex items-center justify-center gap-2"
-                            >
-                              <Download className="w-3.5 h-3.5 text-brass" />
-                              <span>Download Original Client Image ({item.uploadedArtworkName || 'Artwork File'})</span>
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Antwerp Fiber Laser CNC Toolpath */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                              <Scissors className="w-3.5 h-3.5 text-red-500" />
-                              <span>2. Generated Laser Cut Toolpath (1:1 Metric Vector)</span>
-                            </span>
-                            <span className="text-xs font-mono font-semibold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded">
-                              Kerf Compensated
-                            </span>
-                          </div>
-
-                          <div className="h-56 rounded-lg border border-border bg-slate-950 p-3 flex items-center justify-center overflow-hidden">
-                            {item.customDesignThumb ? (
-                              <img 
-                                src={item.customDesignThumb} 
-                                alt="Laser Cut Path" 
-                                className="max-h-full max-w-full object-contain" 
-                              />
-                            ) : (
-                              <div className="text-xs font-mono text-slate-400">1:1 Laser Contour</div>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              onClick={() => downloadCAMAsset(inspectingOrder.id, item, 'dxf')}
-                              className="py-1.5 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-100 border border-slate-700 text-xs font-mono font-semibold transition inline-flex items-center justify-center gap-1.5"
-                            >
-                              <Scissors className="w-3 h-3 text-red-400" />
-                              <span>Download DXF</span>
-                            </button>
-
-                            <button
-                              onClick={() => downloadCAMAsset(inspectingOrder.id, item, 'svg')}
-                              className="py-1.5 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-100 border border-slate-700 text-xs font-mono font-semibold transition inline-flex items-center justify-center gap-1.5"
-                            >
-                              <FileCode className="w-3 h-3 text-cyan-400" />
-                              <span>Download SVG</span>
-                            </button>
-                          </div>
+                        <div className="font-mono font-bold text-foreground text-sm">
+                          {currency}{(item.unitPrice * item.quantity).toFixed(2)}
                         </div>
                       </div>
 
-                      {/* Studio Action Bar */}
-                      {item.customDesignRef && item.customDesignRef.startsWith('{') && (
-                        <div className="pt-3 border-t border-border flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground font-mono">
-                            VDM v3.0 Document AST Available
-                          </span>
-                          <button
-                            onClick={() => {
-                              localStorage.setItem('vernox-custom-inspect', item.customDesignRef!);
-                              setInspectingOrder(null);
-                              navigate('/customize');
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-oxblood text-ivory rounded-lg text-xs font-semibold hover:bg-oxblood-deep transition shadow-sm"
-                          >
-                            <Layers className="w-3.5 h-3.5 text-brass" />
-                            <span>Open & Modify in CAD Crafting Studio</span>
-                          </button>
+                      {/* Custom Artwork Preview if uploaded */}
+                      {item.userUploadedImage && (
+                        <div className="flex items-center gap-3 pt-2 border-t border-border/50">
+                          <img 
+                            src={item.userUploadedImage} 
+                            alt="Artwork" 
+                            className="w-12 h-12 object-contain bg-zinc-900 rounded border border-border cursor-pointer hover:opacity-80 transition"
+                            onClick={() => setLightboxImage({ url: item.userUploadedImage!, title: item.uploadedArtworkName || 'Custom Artwork' })}
+                          />
+                          <div>
+                            <div className="font-medium text-foreground text-[11px]">Client Uploaded Architectural Vector</div>
+                            <div className="text-[10px] text-muted-foreground font-mono">{item.uploadedArtworkName || 'Vector CAD/SVG'}</div>
+                          </div>
                         </div>
                       )}
+
+                      {/* 1-Click CAM Production Downloads */}
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground mr-1">
+                          CAM Export:
+                        </span>
+                        <button
+                          onClick={() => handleDownloadCAM(inspectingOrder, item, 'svg')}
+                          className="flex items-center gap-1 bg-muted hover:bg-muted/80 text-foreground px-2.5 py-1 rounded text-[11px] font-medium transition"
+                        >
+                          <FileCode className="w-3 h-3 text-oxblood" />
+                          <span>SVG</span>
+                        </button>
+                        <button
+                          onClick={() => handleDownloadCAM(inspectingOrder, item, 'dxf')}
+                          className="flex items-center gap-1 bg-oxblood/10 hover:bg-oxblood/20 text-oxblood border border-oxblood/20 px-2.5 py-1 rounded text-[11px] font-medium transition"
+                        >
+                          <Scissors className="w-3 h-3 text-brass" />
+                          <span>Laser DXF</span>
+                        </button>
+                        <button
+                          onClick={() => handleDownloadCAM(inspectingOrder, item, 'pdf')}
+                          className="flex items-center gap-1 bg-muted hover:bg-muted/80 text-foreground px-2.5 py-1 rounded text-[11px] font-medium transition"
+                        >
+                          <FileText className="w-3 h-3 text-brass" />
+                          <span>PDF Spec</span>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
-              )}
+              </div>
 
-              {/* TAB 2: DELIVERY & SHIPPING */}
-              {inspectorTab === 'delivery' && (
-                <form onSubmit={handleSaveTracking} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recipient Name</label>
-                      <input
-                        type="text"
-                        value={trackingForm.shippingName}
-                        onChange={e => setTrackingForm({ ...trackingForm, shippingName: e.target.value })}
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs outline-none focus:border-oxblood"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Destination Country</label>
-                      <input
-                        type="text"
-                        value={trackingForm.shippingCountry}
-                        onChange={e => setTrackingForm({ ...trackingForm, shippingCountry: e.target.value })}
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs outline-none focus:border-oxblood"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Street Address</label>
-                    <input
+              {/* Shipping Tracking & Carrier */}
+              <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+                <span className="text-[11px] font-bold text-foreground uppercase tracking-wider block font-display">
+                  Atelier Logistics & Global Tracking
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground uppercase font-semibold block mb-1">
+                      Carrier
+                    </label>
+                    <input 
                       type="text"
-                      value={trackingForm.shippingAddress}
-                      onChange={e => setTrackingForm({ ...trackingForm, shippingAddress: e.target.value })}
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs outline-none focus:border-oxblood"
+                      value={trackingCarrier}
+                      onChange={(e) => setTrackingCarrier(e.target.value)}
+                      placeholder="e.g. FedEx International, DHL Express, Antwerp Freight"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-xs outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">City</label>
-                      <input
-                        type="text"
-                        value={trackingForm.shippingCity}
-                        onChange={e => setTrackingForm({ ...trackingForm, shippingCity: e.target.value })}
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs outline-none focus:border-oxblood"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">ZIP / Postal Code</label>
-                      <input
-                        type="text"
-                        value={trackingForm.shippingZip}
-                        onChange={e => setTrackingForm({ ...trackingForm, shippingZip: e.target.value })}
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs outline-none focus:border-oxblood"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3 border-t border-border pt-3">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Courier Carrier</label>
-                      <input
-                        type="text"
-                        placeholder="DHL Express / FedEx / Blue Dart"
-                        value={trackingForm.trackingCarrier}
-                        onChange={e => setTrackingForm({ ...trackingForm, trackingCarrier: e.target.value })}
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs outline-none focus:border-oxblood"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tracking Number</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 78492049102"
-                        value={trackingForm.trackingNumber}
-                        onChange={e => setTrackingForm({ ...trackingForm, trackingNumber: e.target.value })}
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-oxblood"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estimated Arrival</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Oct 14, 2026"
-                        value={trackingForm.estimatedDelivery}
-                        onChange={e => setTrackingForm({ ...trackingForm, estimatedDelivery: e.target.value })}
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs outline-none focus:border-oxblood"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-2">
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-oxblood text-ivory hover:bg-oxblood-deep rounded-lg text-xs font-semibold transition shadow-soft"
-                    >
-                      Save Shipping Details
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* TAB 3: DOCS & CAM PRODUCTION ROUTING */}
-              {inspectorTab === 'docs' && (
-                <div className="space-y-4">
-                  <div className="bg-muted/30 border border-border/70 rounded-xl p-4 space-y-3">
-                    <h4 className="font-semibold text-xs text-foreground uppercase tracking-wider">
-                      CNC Machine Export Specifications
-                    </h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      All CAD cut files are exported at precise 1:1 metric tolerances (±0.1mm) with closed LWPOLYLINE boundaries, compatible with TRUMPF, Bystronic, Amada fiber lasers, and waterjet cutters.
-                    </p>
-
-                    <div className="grid grid-cols-3 gap-3 pt-2">
-                      <button
-                        onClick={() => {
-                          inspectingOrder.items?.forEach(i => downloadCAMAsset(inspectingOrder.id, i, 'dxf'));
-                        }}
-                        className="p-3 bg-card border border-border rounded-lg hover:border-oxblood transition text-center space-y-1"
-                      >
-                        <Scissors className="w-5 h-5 text-red-500 mx-auto" />
-                        <div className="font-semibold text-xs text-foreground">Batch DXF Files</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">AutoCAD AC1015</div>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          inspectingOrder.items?.forEach(i => downloadCAMAsset(inspectingOrder.id, i, 'svg'));
-                        }}
-                        className="p-3 bg-card border border-border rounded-lg hover:border-oxblood transition text-center space-y-1"
-                      >
-                        <FileCode className="w-5 h-5 text-cyan-500 mx-auto" />
-                        <div className="font-semibold text-xs text-foreground">Batch Vector SVGs</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">1:1 Metric Vector</div>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          inspectingOrder.items?.forEach(i => downloadCAMAsset(inspectingOrder.id, i, 'pdf'));
-                        }}
-                        className="p-3 bg-card border border-border rounded-lg hover:border-oxblood transition text-center space-y-1"
-                      >
-                        <FileText className="w-5 h-5 text-amber-500 mx-auto" />
-                        <div className="font-semibold text-xs text-foreground">Spec PDF Sheets</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">Workshop Travelers</div>
-                      </button>
-                    </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground uppercase font-semibold block mb-1">
+                      Tracking Number
+                    </label>
+                    <input 
+                      type="text"
+                      value={trackingNumber}
+                      onChange={(e) => setTrackingNumber(e.target.value)}
+                      placeholder="e.g. VX-DHL-89241"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-xs outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood font-mono"
+                    />
                   </div>
                 </div>
-              )}
 
-              {/* Customer Contact Card */}
-              <div className="border-t border-border pt-4">
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Customer Contacts
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase font-semibold block mb-1">
+                    Atelier Internal Notes
+                  </label>
+                  <textarea 
+                    value={adminNotes}
+                    onChange={(e) => setAdminNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Laser calibration notes, patina stage, client liaison..."
+                    className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-xs outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood resize-none"
+                  />
                 </div>
-                <div className="grid grid-cols-3 gap-4 text-xs">
-                  <div>
-                    <span className="text-muted-foreground text-[10px] uppercase font-semibold block">Customer</span>
-                    <span className="font-semibold text-foreground">{inspectingOrder.shippingName || inspectingOrder.email.split('@')[0]}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground text-[10px] uppercase font-semibold block">Email</span>
-                    <span className="text-foreground">{inspectingOrder.email}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground text-[10px] uppercase font-semibold block">Payment Signature</span>
-                    <span className="font-mono text-[10px] text-brass truncate block">
-                      {(inspectingOrder as any).razorpayPaymentId || 'Verified Gateway'}
-                    </span>
-                  </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={() => {
+                      updateOrder(inspectingOrder.id, {
+                        trackingCarrier,
+                        trackingNumber,
+                        adminNotes
+                      });
+                      toast.success('Logistics & notes saved successfully');
+                    }}
+                    className="bg-oxblood hover:bg-oxblood-deep text-ivory px-4 py-1.5 rounded-lg text-xs font-semibold transition shadow-soft border border-oxblood/40"
+                  >
+                    Save Logistics Info
+                  </button>
                 </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-border flex items-center justify-between bg-muted/20 shrink-0">
+              <div className="font-mono text-sm font-bold text-foreground">
+                Total: {currency}{inspectingOrder.total.toFixed(2)}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    handleExportCSV([inspectingOrder]);
+                  }}
+                  className="bg-background border border-border text-foreground hover:bg-muted px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                >
+                  Export Order CSV
+                </button>
+                <button
+                  onClick={() => setInspectingOrder(null)}
+                  className="bg-foreground text-background px-4 py-1.5 rounded-lg text-xs font-semibold hover:opacity-90 transition"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
-      {/* FULL RESOLUTION CLIENT ARTWORK LIGHTBOX MODAL */}
-      {lightboxImage && createPortal(
+      {/* Lightbox Modal for Uploaded Artwork */}
+      {lightboxImage && (
         <div 
+          className="fixed inset-0 z-60 bg-black/80 flex items-center justify-center p-4 animate-fade-in"
           onClick={() => setLightboxImage(null)}
-          className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-4 sm:p-8 animate-fade-in"
         >
-          <div 
-            onClick={e => e.stopPropagation()}
-            className="max-w-4xl w-full bg-card border border-border rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] animate-scale-in"
-          >
-            {/* Lightbox Header */}
-            <div className="p-4 border-b border-border bg-muted/40 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-brass" />
-                <h3 className="text-sm font-bold text-foreground font-display">
-                  {lightboxImage.title || 'Client Uploaded Reference Artwork'}
-                </h3>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => triggerBrowserDownload(`${lightboxImage.title || 'client-artwork'}.jpg`, lightboxImage.url, 'image/jpeg')}
-                  className="px-3 py-1 rounded-lg bg-oxblood text-ivory text-xs font-semibold hover:bg-oxblood-deep transition flex items-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download Original</span>
-                </button>
-                <button
-                  onClick={() => setLightboxImage(null)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition"
-                  title="Close (Esc)"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+          <div className="max-w-3xl max-h-[90vh] bg-card rounded-2xl p-4 relative" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+              <h3 className="font-semibold text-sm text-foreground">{lightboxImage.title}</h3>
+              <button onClick={() => setLightboxImage(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
             </div>
-
-            {/* Lightbox Content Image */}
-            <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-stone-950/80">
-              <img 
-                src={lightboxImage.url} 
-                alt={lightboxImage.title}
-                className="max-h-[70vh] max-w-full object-contain rounded shadow-lg"
-              />
-            </div>
-
-            {/* Lightbox Footer */}
-            <div className="p-3 border-t border-border bg-card text-xs text-muted-foreground flex items-center justify-between shrink-0">
-              <span>Client Inspiration Image uploaded via Crafting Studio</span>
-              <kbd className="font-mono text-[10px] bg-muted px-2 py-0.5 rounded border border-border">
-                Press ESC to close
-              </kbd>
-            </div>
+            <img 
+              src={lightboxImage.url} 
+              alt={lightboxImage.title} 
+              className="max-h-[70vh] object-contain mx-auto rounded-lg"
+            />
           </div>
-        </div>,
-        document.body
+        </div>
       )}
+
     </div>
   );
 }

@@ -25,19 +25,39 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { RecentlyViewed } from '@/components/shop/RecentlyViewed';
 
+import { calculateCouponDiscount } from '@/lib/couponValidator';
+
 export default function Cart() {
-  const { storeConfig, products } = useCatalog();
-  const { items, updateQty, remove, subtotal, clear } = useCart();
+  const { storeConfig, products, coupons } = useCatalog();
+  const { items, updateQty, remove, subtotal, clear, appliedCoupon, applyCoupon, removeCoupon } = useCart();
   const navigate = useNavigate();
 
   // Promotional Code State
   const [promoCode, setPromoCode] = useState('');
-  const [appliedDiscount, setAppliedDiscount] = useState<{ code: string; percent: number } | null>(null);
   const [promoError, setPromoError] = useState('');
 
   const threshold = storeConfig.freeShippingThreshold || 5000;
   const shipping = subtotal > threshold || subtotal === 0 ? 0 : storeConfig.shippingFee;
-  const discountAmount = appliedDiscount ? (subtotal * appliedDiscount.percent) / 100 : 0;
+
+  // Real-time calculation of coupon discount against current cart items
+  const couponResult = appliedCoupon
+    ? calculateCouponDiscount({
+        code: appliedCoupon.code,
+        cartSubtotal: subtotal,
+        cartItems: items.map(i => ({
+          productId: i.productId,
+          productSlug: i.productSlug,
+          unitPrice: i.unitPrice,
+          quantity: i.quantity,
+        })),
+        currency: storeConfig.currency || '₹',
+      }, coupons)
+    : null;
+
+  const discountAmount = (couponResult && couponResult.isValid)
+    ? couponResult.discountAmount
+    : (appliedCoupon?.discountAmount || 0);
+
   const discountedSubtotal = Math.max(0, subtotal - discountAmount);
   const tax = discountedSubtotal * (storeConfig.taxRate / 100);
   const total = discountedSubtotal + shipping + tax;
@@ -51,24 +71,38 @@ export default function Cart() {
     const clean = promoCode.trim().toUpperCase();
     if (!clean) return;
 
-    if (clean === 'ATELIER10') {
-      setAppliedDiscount({ code: clean, percent: 10 });
-      toast.success('Atelier Privilege: 10% discount applied to your order.');
-    } else if (clean === 'ARCHITECT15' || clean === 'TRADE15') {
-      setAppliedDiscount({ code: clean, percent: 15 });
-      toast.success('Trade Privilege: 15% Architectural Studio discount applied.');
-    } else if (clean === 'VERNOX20') {
-      setAppliedDiscount({ code: clean, percent: 20 });
-      toast.success('VIP Collector: 20% commission privilege applied.');
+    const result = calculateCouponDiscount({
+      code: clean,
+      cartSubtotal: subtotal,
+      cartItems: items.map(i => ({
+        productId: i.productId,
+        productSlug: i.productSlug,
+        unitPrice: i.unitPrice,
+        quantity: i.quantity,
+      })),
+      currency: storeConfig.currency || '₹',
+    }, coupons);
+
+    if (result.isValid) {
+      applyCoupon({
+        code: result.couponCode || clean,
+        discountAmount: result.discountAmount,
+        discountType: result.discountType,
+        discountValue: result.discountValue,
+        description: result.description,
+      });
+      toast.success(`Coupon ${result.couponCode || clean} applied! Saved ${storeConfig.currency || '₹'}${result.discountAmount.toFixed(2)}`);
+      setPromoCode('');
     } else {
-      setPromoError('Invalid promotion or private collector code.');
-      toast.error('The entered promo code is not recognized.');
+      setPromoError(result.error || 'Invalid coupon code.');
+      toast.error(result.error || 'The entered promo code is not recognized.');
     }
   };
 
   const handleRemovePromo = () => {
-    setAppliedDiscount(null);
+    removeCoupon();
     setPromoCode('');
+    setPromoError('');
     toast.info('Promotional discount removed.');
   };
 
@@ -349,13 +383,15 @@ export default function Cart() {
                     <Tag className="w-3 h-3 text-gold" />
                     <span>Collector or Trade Voucher</span>
                   </label>
-                  {appliedDiscount ? (
+                  {appliedCoupon ? (
                     <div className="flex items-center justify-between p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-xs">
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                         <div>
-                          <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">{appliedDiscount.code}</span>
-                          <span className="text-[10px] text-muted-foreground block">{appliedDiscount.percent}% discount activated</span>
+                          <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">{appliedCoupon.code}</span>
+                          <span className="text-[10px] text-muted-foreground block">
+                            {appliedCoupon.description || `Discount Applied: -${storeConfig.currency}${discountAmount.toFixed(2)}`}
+                          </span>
                         </div>
                       </div>
                       <button 
@@ -370,7 +406,7 @@ export default function Cart() {
                     <div className="flex gap-2">
                       <input 
                         type="text" 
-                        placeholder="e.g. ATELIER10 or TRADE15" 
+                        placeholder="e.g. WELCOME10, ATELIER50, VERNOXVIP" 
                         value={promoCode}
                         onChange={e => setPromoCode(e.target.value)}
                         className="flex-1 bg-background border border-border rounded px-3 py-2 text-xs outline-none focus:border-burgundy font-mono uppercase"
@@ -397,9 +433,9 @@ export default function Cart() {
                     </span>
                   </div>
 
-                  {appliedDiscount && (
+                  {appliedCoupon && discountAmount > 0 && (
                     <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium">
-                      <span>Privilege Discount ({appliedDiscount.percent}%)</span>
+                      <span>Privilege Discount ({appliedCoupon.code})</span>
                       <span className="font-mono">-{storeConfig.currency}{discountAmount.toFixed(2)}</span>
                     </div>
                   )}

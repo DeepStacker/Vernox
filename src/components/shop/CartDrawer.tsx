@@ -7,14 +7,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
 export function CartDrawer() {
-  const { items, updateQty, remove, subtotal, isDrawerOpen, setDrawerOpen } = useCart();
+  const { items, updateQty, remove, subtotal, isDrawerOpen, setDrawerOpen, appliedCoupon } = useCart();
   const { storeConfig } = useCatalog();
   const navigate = useNavigate();
 
   const threshold = storeConfig.freeShippingThreshold || 5000;
   const shipping = subtotal > threshold || subtotal === 0 ? 0 : storeConfig.shippingFee;
-  const tax = subtotal * (storeConfig.taxRate / 100);
-  const total = subtotal + shipping + tax;
+  const discount = appliedCoupon ? appliedCoupon.discountAmount : 0;
+  const discountedSubtotal = Math.max(0, subtotal - discount);
+  const tax = discountedSubtotal * (storeConfig.taxRate / 100);
+  const total = discountedSubtotal + shipping + tax;
 
   const handleCheckoutClick = () => {
     setDrawerOpen(false);
@@ -199,6 +201,12 @@ export function CartDrawer() {
                       {shipping === 0 ? 'Complimentary' : `${storeConfig.currency}${shipping.toFixed(2)}`}
                     </span>
                   </div>
+                  {appliedCoupon && discount > 0 && (
+                    <div className="flex justify-between text-emerald-700 text-[11px] font-sans font-medium">
+                      <span>Privilege Discount ({appliedCoupon.code})</span>
+                      <span className="font-mono">-{storeConfig.currency}{discount.toFixed(2)}</span>
+                    </div>
+                  )}
 
                   <div className="flex items-baseline justify-between pt-3 border-t border-[#E8E1D5]">
                     <div className="flex flex-col">

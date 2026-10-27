@@ -393,6 +393,82 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ success: true, updates });
       }
 
+      case 'SAVE_COUPON': {
+        const { coupon } = req.body;
+        if (!coupon || !coupon.id || !coupon.code) {
+          return res.status(400).json({ error: 'Missing coupon data' });
+        }
+        await setDoc(doc(db, 'coupons', coupon.id), coupon, { merge: true });
+        await recordAuditLog({
+          adminEmail: currentUser.email,
+          adminName: currentUser.email.split('@')[0],
+          adminRole: currentUser.role,
+          action: 'COUPON_SAVED',
+          targetType: 'coupon',
+          targetId: coupon.id,
+          details: { code: coupon.code, discountValue: coupon.discountValue },
+          ip: clientIp,
+        });
+        return res.status(200).json({ success: true, coupon });
+      }
+
+      case 'DELETE_COUPON': {
+        const { couponId } = req.body;
+        if (!couponId) {
+          return res.status(400).json({ error: 'Missing couponId' });
+        }
+        await deleteDoc(doc(db, 'coupons', couponId));
+        await recordAuditLog({
+          adminEmail: currentUser.email,
+          adminName: currentUser.email.split('@')[0],
+          adminRole: currentUser.role,
+          action: 'COUPON_DELETED',
+          targetType: 'coupon',
+          targetId: couponId,
+          details: { couponId },
+          ip: clientIp,
+        });
+        return res.status(200).json({ success: true });
+      }
+
+      case 'SAVE_REVIEW': {
+        const { review } = req.body;
+        if (!review || !review.id) {
+          return res.status(400).json({ error: 'Missing review data' });
+        }
+        await setDoc(doc(db, 'reviews', review.id), review, { merge: true });
+        await recordAuditLog({
+          adminEmail: currentUser.email,
+          adminName: currentUser.email.split('@')[0],
+          adminRole: currentUser.role,
+          action: 'REVIEW_SAVED',
+          targetType: 'review',
+          targetId: review.id,
+          details: { productId: review.productId, customerName: review.customerName, rating: review.rating },
+          ip: clientIp,
+        });
+        return res.status(200).json({ success: true, review });
+      }
+
+      case 'DELETE_REVIEW': {
+        const { reviewId } = req.body;
+        if (!reviewId) {
+          return res.status(400).json({ error: 'Missing reviewId' });
+        }
+        await deleteDoc(doc(db, 'reviews', reviewId));
+        await recordAuditLog({
+          adminEmail: currentUser.email,
+          adminName: currentUser.email.split('@')[0],
+          adminRole: currentUser.role,
+          action: 'REVIEW_DELETED',
+          targetType: 'review',
+          targetId: reviewId,
+          details: { reviewId },
+          ip: clientIp,
+        });
+        return res.status(200).json({ success: true });
+      }
+
       default:
         return res.status(400).json({ error: `Unrecognized admin action: ${action}` });
     }

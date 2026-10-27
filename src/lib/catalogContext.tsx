@@ -34,6 +34,7 @@ export interface CustomerAccount {
   isGoogleUser?: boolean;
   role?: 'admin' | 'customer';
   isAdmin?: boolean;
+  createdAt?: number | string;
 }
 
 export interface Topic {
@@ -59,6 +60,18 @@ export interface Review {
   verified?: boolean;
   featured?: boolean;
   helpfulCount?: number;
+  status?: 'published' | 'pending' | 'archived';
+  conciergeResponse?: string;
+  conciergeRespondedAt?: number;
+}
+
+export interface HeroSlide {
+  id: string;
+  image: string;
+  series: string;
+  location: string;
+  featuredArtwork: string;
+  artworkLink: string;
 }
 
 export interface HomepageSettings {
@@ -72,6 +85,7 @@ export interface HomepageSettings {
   sectionsOrder: string[];
   heroShapeId?: string;
   heroFinish?: string;
+  heroSlides?: HeroSlide[];
 }
 
 export type OrderStatus = 'Pending' | 'Pending_Payment' | 'Paid' | 'Designing' | 'Cutting' | 'Finished' | 'Shipped' | 'Delivered' | 'Cancelled';
@@ -94,6 +108,9 @@ export interface OrderItem {
   uploadedArtworkName?: string;
 }
 
+export type PaymentStatus = 'Authorized' | 'Paid' | 'Pending' | 'Refunded';
+export type FulfillmentStatus = 'Unfulfilled' | 'Partially Fulfilled' | 'Fulfilled';
+
 export interface Order {
   id: string;
   total: number;
@@ -101,6 +118,8 @@ export interface Order {
   createdAt?: number | string;
   email: string;
   status: OrderStatus;
+  paymentStatus?: PaymentStatus;
+  fulfillmentStatus?: FulfillmentStatus;
   items: OrderItem[];
   shippingName?: string;
   shippingAddress?: string;
@@ -111,6 +130,13 @@ export interface Order {
   trackingNumber?: string;
   estimatedDelivery?: string;
   adminNotes?: string;
+  trafficSource?: 'Direct' | 'Search' | 'Social' | 'Referrals' | 'Email';
+  socialSource?: 'Facebook' | 'Instagram' | 'Twitter' | 'Pinterest' | 'Reddit';
+  deviceType?: 'Desktop' | 'Mobile' | 'Tablet';
+  couponCode?: string;
+  discountTotal?: number;
+  customerName?: string;
+  phone?: string;
 }
 
 export interface StoreConfig {
@@ -166,7 +192,11 @@ interface CatalogCtx {
 
   // Review Actions
   addReview: (review: Omit<Review, 'id'>) => Promise<void>;
+  updateReview: (id: string, updates: Partial<Review>) => Promise<boolean>;
   deleteReview: (id: string) => Promise<void>;
+  toggleReviewFeatured: (id: string) => Promise<boolean>;
+  toggleReviewVerified: (id: string) => Promise<boolean>;
+  replyToReview: (id: string, response: string) => Promise<boolean>;
 
   // Wishlist Actions
   toggleWishlist: (productId: string) => Promise<void>;
@@ -285,6 +315,15 @@ const OrderZSchema = z.object({
   adminNotes: z.string().optional()
 });
 
+const HeroSlideZSchema = z.object({
+  id: z.string(),
+  image: z.string(),
+  series: z.string(),
+  location: z.string(),
+  featuredArtwork: z.string(),
+  artworkLink: z.string()
+});
+
 const HomepageSettingsZSchema = z.object({
   heroTitle: z.string(),
   heroSubtitle: z.string(),
@@ -299,7 +338,8 @@ const HomepageSettingsZSchema = z.object({
   sectionsVisibility: z.record(z.boolean()),
   sectionsOrder: z.array(z.string()),
   heroShapeId: z.string().optional(),
-  heroFinish: z.string().optional()
+  heroFinish: z.string().optional(),
+  heroSlides: z.array(HeroSlideZSchema).optional()
 });
 
 const StoreConfigZSchema = z.object({
@@ -320,6 +360,41 @@ const DatabaseZSchema = z.object({
   topics: z.array(TopicZSchema).optional(),
   storeConfig: StoreConfigZSchema.optional()
 });
+
+export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
+  {
+    id: 'slide-01',
+    image: '/images/hero-nocturne-living.jpg',
+    series: 'THE NOCTURNE SERIES · 2026',
+    location: 'Antwerp Penthouse Residence',
+    featuredArtwork: 'Abstract Horizon Impasto',
+    artworkLink: '/product/abstract-horizon',
+  },
+  {
+    id: 'slide-02',
+    image: '/images/hero-art-lounge.jpg',
+    series: 'THE HORIZON SALON · 2026',
+    location: 'Milanese Gallery Lounge',
+    featuredArtwork: 'Golden Silence & Sculptural Form',
+    artworkLink: '/product/golden-silence',
+  },
+  {
+    id: 'slide-03',
+    image: '/images/hero-penthouse-brass.jpg',
+    series: 'BRUTALIST RELIEF · 2026',
+    location: 'Zurich Lakefront Atelier',
+    featuredArtwork: 'Textured Canvas & Solid Plate',
+    artworkLink: '/product/textured-canvas',
+  },
+  {
+    id: 'slide-04',
+    image: '/images/statement-piece.jpg',
+    series: 'ARCHITECTURAL MONOLITH · 2026',
+    location: 'Geneva Executive Residence',
+    featuredArtwork: 'Contemporary Bloom & Bronze Figure',
+    artworkLink: '/product/contemporary-bloom',
+  },
+];
 
 const DEFAULT_HOMEPAGE_SETTINGS: HomepageSettings = {
   heroTitle: "Metal, quietly held on the wall.",
@@ -348,7 +423,8 @@ const DEFAULT_HOMEPAGE_SETTINGS: HomepageSettings = {
   },
   sectionsOrder: ['hero', 'manifesto', 'collections', 'featured', 'installations', 'story', 'b2b-trade', 'authenticity', 'metallurgy', 'bestsellers', 'topics', 'studio-cta'],
   heroShapeId: 'starburst',
-  heroFinish: 'brass'
+  heroFinish: 'brass',
+  heroSlides: DEFAULT_HERO_SLIDES
 };
 
 const DEFAULT_TOPICS: Topic[] = [
@@ -370,77 +446,554 @@ const DEFAULT_TOPICS: Topic[] = [
   }
 ];
 
-export const DEFAULT_ATELIER_ORDERS: Order[] = [
-  {
-    id: 'VX-89241',
-    total: 485.0,
-    placedAt: Date.now() - 2 * 3600 * 1000,
-    email: 'elena.rostova@atelier-v.com',
-    status: 'Designing',
-    shippingName: 'Elena Rostova',
-    shippingAddress: '42 Avenue Louise, Penthouse 8B',
-    shippingCity: 'Brussels',
-    shippingZip: '1050',
-    shippingCountry: 'Belgium',
-    trackingCarrier: 'Antwerp White-Glove Courier',
-    adminNotes: 'Client uploaded custom heraldic crest artwork in Crafting Studio. Requires 3.0mm Brushed Antique Brass plate with flush countersunk standoffs.',
-    items: [
-      {
-        id: 'item-custom-01',
-        productId: 'custom-bespoke',
-        productName: 'Bespoke Crest (Rostova Monogram Heraldry)',
-        productSlug: 'custom-bespoke',
-        shapeId: 'arch_monolith',
-        sizeLabel: '300mm × 450mm',
-        widthMm: 300,
-        heightMm: 450,
-        finish: 'antique_brass',
-        unitPrice: 485.0,
-        quantity: 1,
-        userUploadedImage: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%231b1412" rx="12"/><path d="M 150 40 L 220 80 L 220 180 Q 150 260 150 260 Q 80 180 80 180 L 80 80 Z" fill="none" stroke="%23d4af37" stroke-width="4"/><path d="M 150 70 L 195 100 L 195 170 Q 150 230 150 230 Q 105 170 105 170 L 105 100 Z" fill="%23d4af37" fill-opacity="0.15" stroke="%23d4af37" stroke-width="2"/><text x="150" y="170" font-family="serif" font-size="70" font-weight="bold" fill="%23d4af37" text-anchor="middle">R</text><path d="M 130 90 L 170 90 M 150 75 L 150 105" stroke="%23d4af37" stroke-width="3"/></svg>',
-        uploadedArtworkName: 'Rostova_Family_Heraldic_Crest_Original.svg',
-        customDesignThumb: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><path d="M 0 50 Q 150 0 300 50 L 300 450 L 0 450 Z" fill="none" stroke="%23ef4444" stroke-width="2"/><circle cx="20" cy="65" r="4" fill="none" stroke="%23ef4444" stroke-width="1.5"/><circle cx="280" cy="65" r="4" fill="none" stroke="%23ef4444" stroke-width="1.5"/><circle cx="20" cy="430" r="4" fill="none" stroke="%23ef4444" stroke-width="1.5"/><circle cx="280" cy="430" r="4" fill="none" stroke="%23ef4444" stroke-width="1.5"/><path d="M 150 140 L 210 175 L 210 260 Q 150 330 150 330 Q 90 260 90 260 L 90 175 Z" fill="none" stroke="%23ef4444" stroke-width="2"/></svg>',
-        customDesignRef: '{"version":"3.0.0","documentId":"vdm-rostova-001","boundary":{"widthMm":300,"heightMm":450,"shapeTemplateId":"arch_monolith","pathData":"M 0 50 Q 150 0 300 50 L 300 450 L 0 450 Z"},"material":{"substrate":"brass_cz108","thicknessMm":3.0,"finish":"antique_brass"}}',
-      }
-    ]
-  },
-  {
-    id: 'VX-89218',
-    total: 320.0,
-    placedAt: Date.now() - 24 * 3600 * 1000,
-    email: 'marcus.vanderbilt@lumina-arch.com',
-    status: 'Pending',
-    shippingName: 'Marcus Vanderbilt',
-    shippingAddress: 'Studio Pickup - Antwerp Metalworks Dock 4',
-    shippingCity: 'Antwerp',
-    shippingZip: '2000',
-    shippingCountry: 'Belgium',
-    adminNotes: 'Bespoke Lumina Starburst logo uploaded via Studio Lasso crop tool. Corten weathering finish.',
-    items: [
-      {
-        id: 'item-custom-02',
-        productId: 'custom-bespoke',
-        productName: 'Bespoke Starburst Architectural Sign',
-        productSlug: 'custom-bespoke',
-        shapeId: 'circle',
-        sizeLabel: '400mm × 400mm',
-        widthMm: 400,
-        heightMm: 400,
-        finish: 'corten_rust',
-        unitPrice: 320.0,
-        quantity: 1,
-        userUploadedImage: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%23261a15" rx="12"/><polygon points="150,30 180,110 260,110 195,160 220,240 150,190 80,240 105,160 40,110 120,110" fill="%23c27ba0" stroke="%23e8c2ca" stroke-width="3"/><circle cx="150" cy="150" r="30" fill="%23261a15" stroke="%23e8c2ca" stroke-width="2"/></svg>',
-        uploadedArtworkName: 'Lumina_Studio_Starburst_Cropped.png',
-        customDesignThumb: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><circle cx="150" cy="150" r="140" fill="none" stroke="%23ef4444" stroke-width="2"/><polygon points="150,50 175,115 245,115 185,160 210,230 150,185 90,230 115,160 55,115 125,115" fill="none" stroke="%23ef4444" stroke-width="2"/></svg>',
-        customDesignRef: '{"version":"3.0.0","documentId":"vdm-starburst-002","boundary":{"widthMm":400,"heightMm":400,"shapeTemplateId":"circle","pathData":"M 150 10 A 140 140 0 1 1 149.9 10 Z"},"material":{"substrate":"corten_weathering","thicknessMm":3.0,"finish":"corten_rust"}}',
-      }
-    ]
-  }
-];
+export function buildDefaultAtelierOrders(): Order[] {
+  const now = Date.now();
+  const hour = 3600 * 1000;
+  const day = 24 * hour;
+
+  return [
+    // Today / Last 24 Hours
+    {
+      id: 'VX-89241',
+      total: 485.0,
+      placedAt: now - Math.round(2.5 * hour),
+      createdAt: new Date(now - Math.round(2.5 * hour)).toISOString(),
+      email: 'elena.rostova@atelier-v.com',
+      status: 'Designing',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Partially Fulfilled',
+      shippingName: 'Elena Rostova',
+      shippingAddress: '42 Avenue Louise, Penthouse 8B',
+      shippingCity: 'Brussels',
+      shippingZip: '1050',
+      shippingCountry: 'Belgium',
+      trackingCarrier: 'Antwerp White-Glove Courier',
+      trafficSource: 'Direct',
+      deviceType: 'Desktop',
+      adminNotes: 'Client uploaded custom heraldic crest artwork in Crafting Studio. Requires 3.0mm Brushed Antique Brass plate with flush countersunk standoffs.',
+      items: [
+        {
+          id: 'item-custom-01',
+          productId: 'custom-bespoke',
+          productName: 'Bespoke Crest (Rostova Monogram Heraldry)',
+          productSlug: 'custom-bespoke',
+          shapeId: 'arch_monolith',
+          sizeLabel: '300mm × 450mm',
+          widthMm: 300,
+          heightMm: 450,
+          finish: 'antique_brass',
+          unitPrice: 485.0,
+          quantity: 1,
+          userUploadedImage: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%231b1412" rx="12"/><path d="M 150 40 L 220 80 L 220 180 Q 150 260 150 260 Q 80 180 80 180 L 80 80 Z" fill="none" stroke="%23d4af37" stroke-width="4"/><path d="M 150 70 L 195 100 L 195 170 Q 150 230 150 230 Q 105 170 105 170 L 105 100 Z" fill="%23d4af37" fill-opacity="0.15" stroke="%23d4af37" stroke-width="2"/><text x="150" y="170" font-family="serif" font-size="70" font-weight="bold" fill="%23d4af37" text-anchor="middle">R</text><path d="M 130 90 L 170 90 M 150 75 L 150 105" stroke="%23d4af37" stroke-width="3"/></svg>',
+          uploadedArtworkName: 'Rostova_Family_Heraldic_Crest_Original.svg',
+          customDesignThumb: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><path d="M 0 50 Q 150 0 300 50 L 300 450 L 0 450 Z" fill="none" stroke="%23ef4444" stroke-width="2"/><circle cx="20" cy="65" r="4" fill="none" stroke="%23ef4444" stroke-width="1.5"/><circle cx="280" cy="65" r="4" fill="none" stroke="%23ef4444" stroke-width="1.5"/><circle cx="20" cy="430" r="4" fill="none" stroke="%23ef4444" stroke-width="1.5"/><circle cx="280" cy="430" r="4" fill="none" stroke="%23ef4444" stroke-width="1.5"/><path d="M 150 140 L 210 175 L 210 260 Q 150 330 150 330 Q 90 260 90 260 L 90 175 Z" fill="none" stroke="%23ef4444" stroke-width="2"/></svg>',
+          customDesignRef: '{"version":"3.0.0","documentId":"vdm-rostova-001","boundary":{"widthMm":300,"heightMm":450,"shapeTemplateId":"arch_monolith","pathData":"M 0 50 Q 150 0 300 50 L 300 450 L 0 450 Z"},"material":{"substrate":"brass_cz108","thicknessMm":3.0,"finish":"antique_brass"}}',
+        }
+      ]
+    },
+    {
+      id: 'VX-89240',
+      total: 620.0,
+      placedAt: now - Math.round(6.5 * hour),
+      createdAt: new Date(now - Math.round(6.5 * hour)).toISOString(),
+      email: 'julian.sterling@manhattan-penthouse.com',
+      status: 'Cutting',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Partially Fulfilled',
+      shippingName: 'Julian Alexander Sterling',
+      shippingAddress: '740 Park Avenue, Floor 18',
+      shippingCity: 'New York',
+      shippingZip: '10021',
+      shippingCountry: 'United States',
+      trackingCarrier: 'Antwerp White-Glove Courier',
+      trafficSource: 'Social',
+      socialSource: 'Instagram',
+      deviceType: 'Desktop',
+      adminNotes: 'Architectural wall installation in blackened steel. 3.0mm Belgian steel with chamfered perimeter bevel.',
+      items: [
+        {
+          id: 'item-89240-01',
+          productId: 'p-08',
+          productName: 'Metropolitan Horizon Silhouette',
+          productSlug: 'metropolitan-horizon',
+          shapeId: 'rectangle',
+          sizeLabel: '1200mm × 500mm',
+          widthMm: 1200,
+          heightMm: 500,
+          finish: 'blackened_steel',
+          unitPrice: 620.0,
+          quantity: 1,
+        }
+      ]
+    },
+    {
+      id: 'VX-89239',
+      total: 390.0,
+      placedAt: now - Math.round(10.5 * hour),
+      createdAt: new Date(now - Math.round(10.5 * hour)).toISOString(),
+      email: 'clara.vonberg@zurich-art.ch',
+      status: 'Paid',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Unfulfilled',
+      shippingName: 'Clara von Berg',
+      shippingAddress: 'Bahnhofstrasse 45',
+      shippingCity: 'Zurich',
+      shippingZip: '8001',
+      shippingCountry: 'Switzerland',
+      trafficSource: 'Search',
+      deviceType: 'Mobile',
+      adminNotes: 'Zurich residence salon project. Polished copper arch monolith with brushed brass finish highlights.',
+      items: [
+        {
+          id: 'item-89239-01',
+          productId: 'p-03',
+          productName: 'Geometric Arch Monolith',
+          productSlug: 'geometric-arch',
+          shapeId: 'arch_monolith',
+          sizeLabel: '450mm × 750mm',
+          widthMm: 450,
+          heightMm: 750,
+          finish: 'polished_copper',
+          unitPrice: 390.0,
+          quantity: 1,
+        }
+      ]
+    },
+
+    // Yesterday (24h - 48h ago)
+    {
+      id: 'VX-89218',
+      total: 320.0,
+      placedAt: now - Math.round(26 * hour),
+      createdAt: new Date(now - Math.round(26 * hour)).toISOString(),
+      email: 'marcus.vanderbilt@lumina-arch.com',
+      status: 'Pending',
+      paymentStatus: 'Authorized',
+      fulfillmentStatus: 'Unfulfilled',
+      shippingName: 'Marcus Vanderbilt',
+      shippingAddress: 'Studio Pickup - Antwerp Metalworks Dock 4',
+      shippingCity: 'Antwerp',
+      shippingZip: '2000',
+      shippingCountry: 'Belgium',
+      trafficSource: 'Search',
+      deviceType: 'Desktop',
+      adminNotes: 'Bespoke Lumina Starburst logo uploaded via Studio Lasso crop tool. Corten weathering finish.',
+      items: [
+        {
+          id: 'item-custom-02',
+          productId: 'custom-bespoke',
+          productName: 'Bespoke Starburst Architectural Sign',
+          productSlug: 'custom-bespoke',
+          shapeId: 'circle',
+          sizeLabel: '400mm × 400mm',
+          widthMm: 400,
+          heightMm: 400,
+          finish: 'corten_rust',
+          unitPrice: 320.0,
+          quantity: 1,
+          userUploadedImage: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%23261a15" rx="12"/><polygon points="150,30 180,110 260,110 195,160 220,240 150,190 80,240 105,160 40,110 120,110" fill="%23c27ba0" stroke="%23e8c2ca" stroke-width="3"/><circle cx="150" cy="150" r="30" fill="%23261a15" stroke="%23e8c2ca" stroke-width="2"/></svg>',
+          uploadedArtworkName: 'Lumina_Studio_Starburst_Cropped.png',
+          customDesignThumb: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><circle cx="150" cy="150" r="140" fill="none" stroke="%23ef4444" stroke-width="2"/><polygon points="150,50 175,115 245,115 185,160 210,230 150,185 90,230 115,160 55,115 125,115" fill="none" stroke="%23ef4444" stroke-width="2"/></svg>',
+          customDesignRef: '{"version":"3.0.0","documentId":"vdm-starburst-002","boundary":{"widthMm":400,"heightMm":400,"shapeTemplateId":"circle","pathData":"M 150 10 A 140 140 0 1 1 149.9 10 Z"},"material":{"substrate":"corten_weathering","thicknessMm":3.0,"finish":"corten_rust"}}',
+        }
+      ]
+    },
+    {
+      id: 'VX-89215',
+      total: 840.0,
+      placedAt: now - Math.round(35 * hour),
+      createdAt: new Date(now - Math.round(35 * hour)).toISOString(),
+      email: 'henri.montmirail@paris-art.fr',
+      status: 'Cutting',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Partially Fulfilled',
+      shippingName: 'Henri de Montmirail',
+      shippingAddress: '28 Boulevard Saint-Germain',
+      shippingCity: 'Paris',
+      shippingZip: '75005',
+      shippingCountry: 'France',
+      trafficSource: 'Referrals',
+      deviceType: 'Desktop',
+      adminNotes: 'Architectural twin panel installation. Requires antique brass patination with hand-burnished edge bevels.',
+      items: [
+        {
+          id: 'item-89215-01',
+          productId: 'p-01',
+          productName: 'Aura of Dawn Brass Wallpiece',
+          productSlug: 'aura-of-dawn',
+          shapeId: 'circle',
+          sizeLabel: '600mm × 600mm',
+          widthMm: 600,
+          heightMm: 600,
+          finish: 'antique_brass',
+          unitPrice: 515.0,
+          quantity: 1,
+        },
+        {
+          id: 'item-89215-02',
+          productId: 'p-04',
+          productName: 'Abstract Starburst Emblem',
+          productSlug: 'abstract-starburst',
+          shapeId: 'starburst',
+          sizeLabel: '300mm × 300mm',
+          widthMm: 300,
+          heightMm: 300,
+          finish: 'antique_brass',
+          unitPrice: 325.0,
+          quantity: 1,
+        }
+      ]
+    },
+
+    // Last 7 Days (2 - 7 days ago)
+    {
+      id: '#195867',
+      total: 515.0,
+      placedAt: now - Math.round(2.6 * day),
+      createdAt: new Date(now - Math.round(2.6 * day)).toISOString(),
+      email: 'theodore.henry@montreal-luxe.ca',
+      status: 'Shipped',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Fulfilled',
+      shippingName: 'Theodore William Henry',
+      shippingAddress: '1420 Rue Sherbrooke Ouest, Suite 902',
+      shippingCity: 'Montreal',
+      shippingZip: 'H3G 1K4',
+      shippingCountry: 'Canada',
+      trackingCarrier: 'FedEx Luxury International',
+      trackingNumber: 'FDX-882190102CA',
+      trafficSource: 'Direct',
+      deviceType: 'Desktop',
+      adminNotes: 'Large bespoke architectural statement piece. Authorized via credit payment gateway.',
+      items: [
+        {
+          id: 'item-195867-01',
+          productId: 'p-01',
+          productName: 'Aura of Dawn Brass Wallpiece',
+          productSlug: 'aura-of-dawn',
+          shapeId: 'circle',
+          sizeLabel: '600mm × 600mm',
+          widthMm: 600,
+          heightMm: 600,
+          finish: 'antique_brass',
+          unitPrice: 515.0,
+          quantity: 1,
+        }
+      ]
+    },
+    {
+      id: '#195866',
+      total: 354.06,
+      placedAt: now - Math.round(4.3 * day),
+      createdAt: new Date(now - Math.round(4.3 * day)).toISOString(),
+      email: 'persephone.jane@manhattanloft.com',
+      status: 'Shipped',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Fulfilled',
+      shippingName: 'Persephone Alexandra Jane',
+      shippingAddress: '432 Park Avenue, Apt 54A',
+      shippingCity: 'New York',
+      shippingZip: '10022',
+      shippingCountry: 'United States',
+      trackingCarrier: 'DHL Express Luxury',
+      trackingNumber: 'DHL-992102910US',
+      trafficSource: 'Social',
+      socialSource: 'Instagram',
+      deviceType: 'Mobile',
+      adminNotes: 'Precision fiber laser cutting completed at Antwerp facility. Shipped with velvet packaging.',
+      items: [
+        {
+          id: 'item-195866-01',
+          productId: 'p-06',
+          productName: 'Contemporary Bloom & Bronze Figure',
+          productSlug: 'contemporary-bloom',
+          shapeId: 'arch_monolith',
+          sizeLabel: '400mm × 650mm',
+          widthMm: 400,
+          heightMm: 650,
+          finish: 'oxblood_brass',
+          unitPrice: 354.06,
+          quantity: 1,
+        }
+      ]
+    },
+    {
+      id: '#195865',
+      total: 721.0,
+      placedAt: now - Math.round(6.1 * day),
+      createdAt: new Date(now - Math.round(6.1 * day)).toISOString(),
+      email: 'lysander.james@vancouverdesign.ca',
+      status: 'Delivered',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Fulfilled',
+      shippingName: 'Lysander Oliver James',
+      shippingAddress: '1077 West Cordova St, Penthouse 3',
+      shippingCity: 'Vancouver',
+      shippingZip: 'V6C 2C6',
+      shippingCountry: 'Canada',
+      trafficSource: 'Search',
+      deviceType: 'Desktop',
+      trackingCarrier: 'FedEx International Luxury Care',
+      trackingNumber: 'FDX-7749204192',
+      estimatedDelivery: 'Yesterday',
+      adminNotes: 'Signed proof of delivery collected. Standoff mounting hardware included.',
+      items: [
+        {
+          id: 'item-195865-01',
+          productId: 'p-08',
+          productName: 'Metropolitan Horizon Silhouette',
+          productSlug: 'metropolitan-horizon',
+          shapeId: 'rectangle',
+          sizeLabel: '1200mm × 500mm',
+          widthMm: 1200,
+          heightMm: 500,
+          finish: 'blackened_steel',
+          unitPrice: 721.0,
+          quantity: 1,
+        }
+      ]
+    },
+
+    // Last 30 Days (7 - 30 days ago)
+    {
+      id: '#195864',
+      total: 185.0,
+      placedAt: now - Math.round(11.5 * day),
+      createdAt: new Date(now - Math.round(11.5 * day)).toISOString(),
+      email: 'percival.thomas@kensington-residence.co.uk',
+      status: 'Delivered',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Fulfilled',
+      shippingName: 'Percival Benedict Thomas',
+      shippingAddress: '18 Kensington Palace Gardens',
+      shippingCity: 'London',
+      shippingZip: 'W8 4PX',
+      shippingCountry: 'United Kingdom',
+      trafficSource: 'Direct',
+      deviceType: 'Desktop',
+      trackingCarrier: 'Royal Mail Special Delivery',
+      trackingNumber: 'RM-449102830GB',
+      items: [
+        {
+          id: 'item-195864-01',
+          productId: 'p-02',
+          productName: 'Celestial Orb Mirror Frame',
+          productSlug: 'celestial-orb',
+          shapeId: 'circle',
+          sizeLabel: '350mm × 350mm',
+          widthMm: 350,
+          heightMm: 350,
+          finish: 'polished_copper',
+          unitPrice: 185.0,
+          quantity: 1,
+        }
+      ]
+    },
+    {
+      id: '#195863',
+      total: 474.0,
+      placedAt: now - Math.round(18.2 * day),
+      createdAt: new Date(now - Math.round(18.2 * day)).toISOString(),
+      email: 'leopold.edward@berlin-galerie.de',
+      status: 'Delivered',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Fulfilled',
+      shippingName: 'Leopold Percival Edward',
+      shippingAddress: 'Kurfürstendamm 194',
+      shippingCity: 'Berlin',
+      shippingZip: '10707',
+      shippingCountry: 'Germany',
+      trafficSource: 'Social',
+      socialSource: 'Facebook',
+      deviceType: 'Desktop',
+      adminNotes: 'SEPA Direct Debit verified. Handcrafted and installed in gallery foyer.',
+      items: [
+        {
+          id: 'item-195863-01',
+          productId: 'p-03',
+          productName: 'Geometric Arch Monolith',
+          productSlug: 'geometric-arch',
+          shapeId: 'arch_monolith',
+          sizeLabel: '450mm × 750mm',
+          widthMm: 450,
+          heightMm: 750,
+          finish: 'corten_rust',
+          unitPrice: 474.0,
+          quantity: 1,
+        }
+      ]
+    },
+    {
+      id: '#195862',
+      total: 136.0,
+      placedAt: now - Math.round(26.5 * day),
+      createdAt: new Date(now - Math.round(26.5 * day)).toISOString(),
+      email: 'rosalind.maeve@torontodesign.ca',
+      status: 'Delivered',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Fulfilled',
+      shippingName: 'Rosalind Clementine Maeve',
+      shippingAddress: '88 Bloor St East, Suite 2104',
+      shippingCity: 'Toronto',
+      shippingZip: 'M4W 3G9',
+      shippingCountry: 'Canada',
+      trafficSource: 'Referrals',
+      deviceType: 'Mobile',
+      items: [
+        {
+          id: 'item-195862-01',
+          productId: 'p-04',
+          productName: 'Abstract Starburst Emblem',
+          productSlug: 'abstract-starburst',
+          shapeId: 'starburst',
+          sizeLabel: '300mm × 300mm',
+          widthMm: 300,
+          heightMm: 300,
+          finish: 'antique_brass',
+          unitPrice: 136.0,
+          quantity: 1,
+        }
+      ]
+    },
+
+    // Last 90 Days (30 - 90 days ago)
+    {
+      id: '#195859',
+      total: 580.0,
+      placedAt: now - Math.round(41.5 * day),
+      createdAt: new Date(now - Math.round(41.5 * day)).toISOString(),
+      email: 'genevieve.laurent@monaco-residence.mc',
+      status: 'Delivered',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Fulfilled',
+      shippingName: 'Geneviève Laurent',
+      shippingAddress: '15 Boulevard de Suisse',
+      shippingCity: 'Monaco',
+      shippingZip: '98000',
+      shippingCountry: 'Monaco',
+      trafficSource: 'Direct',
+      deviceType: 'Desktop',
+      items: [
+        {
+          id: 'item-195859-01',
+          productId: 'p-01',
+          productName: 'Aura of Dawn Brass Wallpiece',
+          productSlug: 'aura-of-dawn',
+          shapeId: 'circle',
+          sizeLabel: '600mm × 600mm',
+          widthMm: 600,
+          heightMm: 600,
+          finish: 'antique_brass',
+          unitPrice: 580.0,
+          quantity: 1,
+        }
+      ]
+    },
+    {
+      id: '#195855',
+      total: 920.0,
+      placedAt: now - Math.round(56.0 * day),
+      createdAt: new Date(now - Math.round(56.0 * day)).toISOString(),
+      email: 'kenzo.takahashi@ginza-arch.jp',
+      status: 'Delivered',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Fulfilled',
+      shippingName: 'Kenzo Takahashi',
+      shippingAddress: 'Ginza 6-Chome, Chuo-ku',
+      shippingCity: 'Tokyo',
+      shippingZip: '104-0061',
+      shippingCountry: 'Japan',
+      trafficSource: 'Search',
+      deviceType: 'Desktop',
+      items: [
+        {
+          id: 'item-195855-01',
+          productId: 'p-08',
+          productName: 'Metropolitan Horizon Silhouette',
+          productSlug: 'metropolitan-horizon',
+          shapeId: 'rectangle',
+          sizeLabel: '1200mm × 500mm',
+          widthMm: 1200,
+          heightMm: 500,
+          finish: 'blackened_steel',
+          unitPrice: 920.0,
+          quantity: 1,
+        }
+      ]
+    },
+    {
+      id: '#195851',
+      total: 410.0,
+      placedAt: now - Math.round(72.5 * day),
+      createdAt: new Date(now - Math.round(72.5 * day)).toISOString(),
+      email: 'astrid.lindholm@stockholm-design.se',
+      status: 'Delivered',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Fulfilled',
+      shippingName: 'Astrid Lindholm',
+      shippingAddress: 'Strandvägen 17',
+      shippingCity: 'Stockholm',
+      shippingZip: '114 56',
+      shippingCountry: 'Sweden',
+      trafficSource: 'Social',
+      socialSource: 'Pinterest',
+      deviceType: 'Mobile',
+      items: [
+        {
+          id: 'item-195851-01',
+          productId: 'p-06',
+          productName: 'Contemporary Bloom & Bronze Figure',
+          productSlug: 'contemporary-bloom',
+          shapeId: 'arch_monolith',
+          sizeLabel: '400mm × 650mm',
+          widthMm: 400,
+          heightMm: 650,
+          finish: 'oxblood_brass',
+          unitPrice: 410.0,
+          quantity: 1,
+        }
+      ]
+    },
+    {
+      id: '#195846',
+      total: 675.0,
+      placedAt: now - Math.round(84.0 * day),
+      createdAt: new Date(now - Math.round(84.0 * day)).toISOString(),
+      email: 'matteo.rossi@milan-design.it',
+      status: 'Delivered',
+      paymentStatus: 'Paid',
+      fulfillmentStatus: 'Fulfilled',
+      shippingName: 'Matteo Rossi',
+      shippingAddress: 'Via Montenapoleone 8',
+      shippingCity: 'Milan',
+      shippingZip: '20121',
+      shippingCountry: 'Italy',
+      trafficSource: 'Direct',
+      deviceType: 'Desktop',
+      items: [
+        {
+          id: 'item-195846-01',
+          productId: 'p-03',
+          productName: 'Geometric Arch Monolith',
+          productSlug: 'geometric-arch',
+          shapeId: 'arch_monolith',
+          sizeLabel: '450mm × 750mm',
+          widthMm: 450,
+          heightMm: 750,
+          finish: 'corten_rust',
+          unitPrice: 675.0,
+          quantity: 1,
+        }
+      ]
+    }
+  ];
+}
+
+export const DEFAULT_ATELIER_ORDERS: Order[] = buildDefaultAtelierOrders();
 
 const DEFAULT_STORE_CONFIG: StoreConfig = {
   storeName: "Vernox Atelier",
-  currency: "$",
+  currency: "₹",
   taxRate: 18,
   freeShippingThreshold: 150,
   shippingFee: 40,
@@ -514,7 +1067,8 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
           ...DEFAULT_HOMEPAGE_SETTINGS,
           ...parsed,
           sectionsVisibility: { ...DEFAULT_HOMEPAGE_SETTINGS.sectionsVisibility, ...(parsed.sectionsVisibility || {}) },
-          sectionsOrder: mergedOrder
+          sectionsOrder: mergedOrder,
+          heroSlides: (Array.isArray(parsed.heroSlides) && parsed.heroSlides.length > 0) ? parsed.heroSlides : DEFAULT_HERO_SLIDES
         };
       }
       return DEFAULT_HOMEPAGE_SETTINGS;
@@ -529,10 +1083,24 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       if (saved) {
         const rawOrders = JSON.parse(saved);
         if (Array.isArray(rawOrders) && rawOrders.length > 0) {
-          return rawOrders.map((o: any) => ({
-            ...o,
-            status: o.status || 'Pending'
-          }));
+          const now = Date.now();
+          // Check if cached orders contain recent orders (within 48 hours)
+          const hasRecent = rawOrders.some((o: any) => {
+            const t = o.placedAt || new Date(o.createdAt || 0).getTime();
+            return (now - t) < 48 * 3600 * 1000;
+          });
+
+          if (hasRecent) {
+            const existingIds = new Set(rawOrders.map((o: any) => o.id));
+            const missingDefaults = DEFAULT_ATELIER_ORDERS.filter(d => !existingIds.has(d.id));
+            const combined = [...rawOrders, ...missingDefaults];
+            return combined.map((o: any) => ({
+              ...o,
+              status: o.status || 'Pending',
+              paymentStatus: o.paymentStatus || (['Paid', 'Designing', 'Cutting', 'Finished', 'Shipped', 'Delivered'].includes(o.status) ? 'Paid' : o.status === 'Cancelled' ? 'Refunded' : 'Authorized'),
+              fulfillmentStatus: o.fulfillmentStatus || (['Shipped', 'Delivered'].includes(o.status) ? 'Fulfilled' : ['Designing', 'Cutting', 'Finished'].includes(o.status) ? 'Partially Fulfilled' : 'Unfulfilled')
+            }));
+          }
         }
       }
       return DEFAULT_ATELIER_ORDERS;
@@ -557,6 +1125,10 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         const parsed = JSON.parse(saved);
         if (parsed.taxRate === 8) parsed.taxRate = 18;
         if (parsed.shippingFee === 15) parsed.shippingFee = 40;
+        if (!parsed.currency || parsed.currency === '$') {
+          parsed.currency = '₹';
+          localStorage.setItem('vernox-store-config', JSON.stringify({ ...DEFAULT_STORE_CONFIG, ...parsed }));
+        }
         return { ...DEFAULT_STORE_CONFIG, ...parsed };
       }
       return DEFAULT_STORE_CONFIG;
@@ -600,7 +1172,38 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  const [customers, setCustomers] = useState<CustomerAccount[]>([]);
+  const [customers, setCustomers] = useState<CustomerAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem('vernox-customers');
+      const list: CustomerAccount[] = saved ? JSON.parse(saved) : [];
+      const emailMap = new Map<string, CustomerAccount>();
+      list.forEach(c => {
+        if (c.email) emailMap.set(c.email.toLowerCase(), c);
+      });
+
+      // Populate from bespoke commission orders
+      DEFAULT_ATELIER_ORDERS.forEach(o => {
+        if (o.email && !emailMap.has(o.email.toLowerCase())) {
+          emailMap.set(o.email.toLowerCase(), {
+            email: o.email,
+            name: o.shippingName || o.customerName || 'Atelier Patron',
+            phone: o.phone || '+1 555-0192',
+            address: typeof o.shippingAddress === 'string' ? o.shippingAddress : 'Private Atelier Residence',
+            city: o.shippingCity || 'Mayfair',
+            country: o.shippingCountry || 'United Kingdom',
+            role: 'customer',
+            createdAt: o.placedAt || Date.now(),
+          });
+        }
+      });
+
+      const result = Array.from(emailMap.values());
+      try { localStorage.setItem('vernox-customers', JSON.stringify(result)); } catch {}
+      return result;
+    } catch {
+      return [];
+    }
+  });
   const [reviews, setReviews] = useState<Review[]>(() => {
     try {
       const saved = localStorage.getItem('vernox-reviews');
@@ -783,7 +1386,11 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
             setDoc(doc(db, 'settings', 'homepage'), DEFAULT_HOMEPAGE_SETTINGS).catch(() => {});
             setHomepageSettings(DEFAULT_HOMEPAGE_SETTINGS);
           } else {
-            setHomepageSettings(homepageDoc.data() as HomepageSettings);
+            const data = homepageDoc.data() as HomepageSettings;
+            if (!data.heroSlides || !Array.isArray(data.heroSlides) || data.heroSlides.length === 0) {
+              data.heroSlides = DEFAULT_HERO_SLIDES;
+            }
+            setHomepageSettings(data);
           }
         }
 
@@ -803,13 +1410,26 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
           const configDoc = configRes.value;
           if (!configDoc.exists()) {
             setDoc(doc(db, 'config', 'store'), DEFAULT_STORE_CONFIG).catch(() => {});
-            setStoreConfig(prev => ({ ...DEFAULT_STORE_CONFIG, ...prev }));
+            setStoreConfig(prev => ({
+              ...DEFAULT_STORE_CONFIG,
+              ...prev,
+              currency: (prev.currency && prev.currency !== '$') ? prev.currency : '₹'
+            }));
           } else {
             const loaded = configDoc.data() as StoreConfig;
             if (loaded.taxRate === 8) loaded.taxRate = 18;
             if (loaded.shippingFee === 15) loaded.shippingFee = 40;
+            if (!loaded.currency || loaded.currency === '$') {
+              loaded.currency = '₹';
+              setDoc(doc(db, 'config', 'store'), { currency: '₹' }, { merge: true }).catch(() => {});
+            }
             setStoreConfig(prev => {
-              const merged = { ...DEFAULT_STORE_CONFIG, ...loaded, ...prev };
+              const finalCurrency = (prev.currency && prev.currency !== '$')
+                ? prev.currency
+                : (loaded.currency && loaded.currency !== '$')
+                  ? loaded.currency
+                  : '₹';
+              const merged = { ...DEFAULT_STORE_CONFIG, ...loaded, ...prev, currency: finalCurrency };
               try { localStorage.setItem('vernox-store-config', JSON.stringify(merged)); } catch {}
               return merged;
             });
@@ -1046,6 +1666,9 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
     const nextSettings = { ...homepageSettings, ...updates };
     setHomepageSettings(nextSettings);
     try {
+      localStorage.setItem('vernox-homepage', JSON.stringify(nextSettings));
+    } catch {}
+    try {
       await setDoc(doc(db, 'settings', 'homepage'), nextSettings);
     } catch (e) {
       console.error("Firestore update homepage error:", e);
@@ -1054,23 +1677,66 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
 
   // Order Actions
   const addOrder = async (order: Omit<Order, 'status'> & { status?: OrderStatus }) => {
+    const status = order.status || 'Pending';
     const completeOrder: Order = {
       ...order,
-      status: order.status || 'Pending'
+      status,
+      paymentStatus: order.paymentStatus || (['Paid', 'Designing', 'Cutting', 'Finished', 'Shipped', 'Delivered'].includes(status) ? 'Paid' : 'Authorized'),
+      fulfillmentStatus: order.fulfillmentStatus || (['Shipped', 'Delivered'].includes(status) ? 'Fulfilled' : ['Designing', 'Cutting', 'Finished'].includes(status) ? 'Partially Fulfilled' : 'Unfulfilled'),
+      placedAt: order.placedAt || Date.now(),
+      createdAt: order.createdAt || new Date().toISOString()
     };
-    setOrders(prev => [...prev, completeOrder]);
-    try {
-      await setDoc(doc(db, 'orders', completeOrder.id), {
-        ...completeOrder,
-        placedAt: Date.now()
+    setOrders(prev => {
+      const next = [completeOrder, ...prev];
+      try { localStorage.setItem('vernox-orders', JSON.stringify(next)); } catch {}
+      return next;
+    });
+
+    if (completeOrder.email) {
+      setCustomers(prev => {
+        const em = completeOrder.email.toLowerCase().trim();
+        const exists = prev.some(c => (c.email || '').toLowerCase().trim() === em);
+        if (exists) return prev;
+        const newCustomer: CustomerAccount = {
+          email: completeOrder.email,
+          name: completeOrder.shippingName || completeOrder.customerName || 'Atelier Patron',
+          phone: completeOrder.phone || '',
+          address: typeof completeOrder.shippingAddress === 'string' ? completeOrder.shippingAddress : '',
+          city: completeOrder.shippingCity || '',
+          country: completeOrder.shippingCountry || '',
+          role: 'customer',
+          createdAt: completeOrder.placedAt || Date.now(),
+        };
+        const nextCustomers = [newCustomer, ...prev];
+        try { localStorage.setItem('vernox-customers', JSON.stringify(nextCustomers)); } catch {}
+        return nextCustomers;
       });
+    }
+
+    try {
+      await setDoc(doc(db, 'orders', completeOrder.id), completeOrder);
     } catch (e) {
       console.error("Firestore order save error:", e);
     }
   };
 
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    setOrders(prev => {
+      const next = prev.map(o => {
+        if (o.id !== orderId) return o;
+        const autoPayment: PaymentStatus = ['Paid', 'Designing', 'Cutting', 'Finished', 'Shipped', 'Delivered'].includes(status) 
+          ? 'Paid' 
+          : status === 'Cancelled' ? 'Refunded' : (o.paymentStatus || 'Authorized');
+        const autoFulfillment: FulfillmentStatus = ['Shipped', 'Delivered'].includes(status) 
+          ? 'Fulfilled' 
+          : ['Designing', 'Cutting', 'Finished'].includes(status) 
+            ? 'Partially Fulfilled' 
+            : (o.fulfillmentStatus || 'Unfulfilled');
+        return { ...o, status, paymentStatus: autoPayment, fulfillmentStatus: autoFulfillment };
+      });
+      try { localStorage.setItem('vernox-orders', JSON.stringify(next)); } catch {}
+      return next;
+    });
     try {
       await updateDoc(doc(db, 'orders', orderId), { status });
     } catch (e) {
@@ -1079,7 +1745,11 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   };
 
   const updateOrder = async (orderId: string, updates: Partial<Order>) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
+    setOrders(prev => {
+      const next = prev.map(o => o.id === orderId ? { ...o, ...updates } : o);
+      try { localStorage.setItem('vernox-orders', JSON.stringify(next)); } catch {}
+      return next;
+    });
     try {
       await updateDoc(doc(db, 'orders', orderId), updates);
     } catch (e) {
@@ -1129,6 +1799,9 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   // Store Configuration Actions
   const updateStoreConfig = async (updates: Partial<StoreConfig>) => {
     const nextConfig = { ...storeConfig, ...updates };
+    if (!nextConfig.currency || nextConfig.currency === '$') {
+      nextConfig.currency = '₹';
+    }
     setStoreConfig(nextConfig);
     try {
       localStorage.setItem('vernox-store-config', JSON.stringify(nextConfig));
@@ -1248,47 +1921,132 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    setCoupons(prev => [newCoupon, ...prev]);
-    try {
-      localStorage.setItem('vernox-coupons', JSON.stringify([newCoupon, ...coupons]));
-      await setDoc(doc(db, 'coupons', newId), newCoupon);
-      await logAdminAudit('COUPON_CREATED', 'coupon', newId, { code, discountValue: newCoupon.discountValue });
-      return true;
-    } catch (err) {
-      console.error("Create coupon error:", err);
-      return false;
+    
+    setCoupons(prev => {
+      const next = [newCoupon, ...prev.filter(c => c.id !== newId && c.code !== code)];
+      try {
+        localStorage.setItem('vernox-coupons', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    const token = sessionStorage.getItem('vernox-admin-token');
+    if (token) {
+      try {
+        await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'SAVE_COUPON',
+            coupon: newCoupon
+          })
+        });
+      } catch (err) {
+        console.warn("Notice: /api/admin coupon sync skipped:", err);
+      }
+    } else {
+      try {
+        await setDoc(doc(db, 'coupons', newId), newCoupon).catch(err => {
+          console.warn("Firestore coupon write notice (saved in local store):", err?.message || err);
+        });
+        await logAdminAudit('COUPON_CREATED', 'coupon', newId, { code, discountValue: newCoupon.discountValue }).catch(() => {});
+      } catch (err) {
+        console.warn("Coupon audit/sync notice:", err);
+      }
     }
+    return true;
   };
 
   const updateCoupon = async (id: string, updates: Partial<Coupon>) => {
     const cleanUpdates = { ...updates, updatedAt: Date.now() };
     if (cleanUpdates.code) cleanUpdates.code = cleanUpdates.code.trim().toUpperCase();
-    const updated = coupons.map(c => c.id === id ? { ...c, ...cleanUpdates } : c);
-    setCoupons(updated);
-    try {
-      localStorage.setItem('vernox-coupons', JSON.stringify(updated));
-      await updateDoc(doc(db, 'coupons', id), cleanUpdates);
-      await logAdminAudit('COUPON_UPDATED', 'coupon', id, cleanUpdates);
-      return true;
-    } catch (err) {
-      console.error("Update coupon error:", err);
-      return false;
+    
+    let targetCoupon: Coupon | undefined;
+    setCoupons(prev => {
+      const next = prev.map(c => {
+        if (c.id === id) {
+          targetCoupon = { ...c, ...cleanUpdates };
+          return targetCoupon;
+        }
+        return c;
+      });
+      try {
+        localStorage.setItem('vernox-coupons', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    const token = sessionStorage.getItem('vernox-admin-token');
+    if (token && targetCoupon) {
+      try {
+        await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'SAVE_COUPON',
+            coupon: targetCoupon
+          })
+        });
+      } catch (err) {
+        console.warn("Notice: /api/admin coupon update skipped:", err);
+      }
+    } else {
+      try {
+        await updateDoc(doc(db, 'coupons', id), cleanUpdates).catch(err => {
+          console.warn("Firestore coupon update notice (saved in local store):", err?.message || err);
+        });
+        await logAdminAudit('COUPON_UPDATED', 'coupon', id, cleanUpdates).catch(() => {});
+      } catch (err) {
+        console.warn("Coupon audit/sync notice:", err);
+      }
     }
+    return true;
   };
 
   const deleteCoupon = async (id: string) => {
     const target = coupons.find(c => c.id === id);
-    const filtered = coupons.filter(c => c.id !== id);
-    setCoupons(filtered);
-    try {
-      localStorage.setItem('vernox-coupons', JSON.stringify(filtered));
-      await deleteDoc(doc(db, 'coupons', id));
-      await logAdminAudit('COUPON_DELETED', 'coupon', id, { code: target?.code });
-      return true;
-    } catch (err) {
-      console.error("Delete coupon error:", err);
-      return false;
+    setCoupons(prev => {
+      const next = prev.filter(c => c.id !== id);
+      try {
+        localStorage.setItem('vernox-coupons', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    const token = sessionStorage.getItem('vernox-admin-token');
+    if (token) {
+      try {
+        await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'DELETE_COUPON',
+            couponId: id
+          })
+        });
+      } catch (err) {
+        console.warn("Notice: /api/admin coupon delete skipped:", err);
+      }
+    } else {
+      try {
+        await deleteDoc(doc(db, 'coupons', id)).catch(err => {
+          console.warn("Firestore coupon delete notice (removed from local store):", err?.message || err);
+        });
+        await logAdminAudit('COUPON_DELETED', 'coupon', id, { code: target?.code }).catch(() => {});
+      } catch (err) {
+        console.warn("Coupon audit/sync notice:", err);
+      }
     }
+    return true;
   };
 
   const toggleCouponStatus = async (id: string, isActive: boolean) => {
@@ -1407,22 +2165,128 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   // Review Actions
   const addReview = async (r: Omit<Review, 'id'>) => {
     const newId = `r-${Date.now()}`;
-    const newReview = { ...r, id: newId };
-    setReviews(prev => [...prev, newReview]);
-    try {
-      await setDoc(doc(db, 'reviews', newId), newReview);
-    } catch (e) {
-      console.error("Firestore add review error:", e);
+    const newReview: Review = {
+      ...r,
+      id: newId,
+      status: r.status || 'published',
+      placedAt: r.placedAt || Date.now(),
+    };
+    setReviews(prev => [newReview, ...prev]);
+
+    const token = sessionStorage.getItem('vernox-admin-token');
+    if (token) {
+      try {
+        await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'SAVE_REVIEW',
+            review: newReview
+          })
+        });
+      } catch (err) {
+        console.warn("Notice: /api/admin review sync skipped:", err);
+      }
+    } else {
+      try {
+        await setDoc(doc(db, 'reviews', newId), newReview).catch(err => {
+          console.warn("Firestore review write notice (saved in local store):", err?.message || err);
+        });
+      } catch (e) {
+        console.warn("Review sync notice:", e);
+      }
     }
+  };
+
+  const updateReview = async (id: string, updates: Partial<Review>): Promise<boolean> => {
+    let targetReview: Review | undefined;
+    setReviews(prev => prev.map(r => {
+      if (r.id === id) {
+        targetReview = { ...r, ...updates };
+        return targetReview;
+      }
+      return r;
+    }));
+
+    const token = sessionStorage.getItem('vernox-admin-token');
+    if (token && targetReview) {
+      try {
+        await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'SAVE_REVIEW',
+            review: targetReview
+          })
+        });
+      } catch (err) {
+        console.warn("Notice: /api/admin review update skipped:", err);
+      }
+    } else if (targetReview) {
+      try {
+        await updateDoc(doc(db, 'reviews', id), updates).catch(err => {
+          console.warn("Firestore review update notice (saved in local store):", err?.message || err);
+        });
+      } catch (e) {
+        console.warn("Review update notice:", e);
+      }
+    }
+    return true;
   };
 
   const deleteReview = async (id: string) => {
     setReviews(prev => prev.filter(r => r.id !== id));
-    try {
-      await deleteDoc(doc(db, 'reviews', id));
-    } catch (e) {
-      console.error("Firestore delete review error:", e);
+    const token = sessionStorage.getItem('vernox-admin-token');
+    if (token) {
+      try {
+        await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'DELETE_REVIEW',
+            reviewId: id
+          })
+        });
+      } catch (err) {
+        console.warn("Notice: /api/admin review delete skipped:", err);
+      }
+    } else {
+      try {
+        await deleteDoc(doc(db, 'reviews', id)).catch(err => {
+          console.warn("Firestore review delete notice (removed from local store):", err?.message || err);
+        });
+      } catch (e) {
+        console.warn("Review delete notice:", e);
+      }
     }
+  };
+
+  const toggleReviewFeatured = async (id: string): Promise<boolean> => {
+    const target = reviews.find(r => r.id === id);
+    if (!target) return false;
+    return updateReview(id, { featured: !target.featured });
+  };
+
+  const toggleReviewVerified = async (id: string): Promise<boolean> => {
+    const target = reviews.find(r => r.id === id);
+    if (!target) return false;
+    return updateReview(id, { verified: !target.verified });
+  };
+
+  const replyToReview = async (id: string, response: string): Promise<boolean> => {
+    return updateReview(id, {
+      conciergeResponse: response.trim(),
+      conciergeRespondedAt: Date.now()
+    });
   };
 
   // Wishlist Actions
@@ -1465,7 +2329,13 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       if (valid.homepageSettings) setHomepageSettings(valid.homepageSettings as HomepageSettings);
       if (valid.orders) setOrders(valid.orders as Order[]);
       if (valid.topics) setTopics(valid.topics as Topic[]);
-      if (valid.storeConfig) setStoreConfig(valid.storeConfig as StoreConfig);
+      if (valid.storeConfig) {
+        const importedConfig = {
+          ...(valid.storeConfig as StoreConfig),
+          currency: (valid.storeConfig.currency && valid.storeConfig.currency !== '$') ? valid.storeConfig.currency : '₹'
+        };
+        setStoreConfig(importedConfig);
+      }
       
       return { success: true };
     } catch (e: any) {
@@ -1586,7 +2456,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       topics,
       storeConfig: {
         ...storeConfig,
-        currency: storeConfig.currency || '$'
+        currency: (storeConfig.currency && storeConfig.currency !== '$') ? storeConfig.currency : '₹'
       },
       reviews,
       wishlist,
@@ -1618,7 +2488,11 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       logoutCustomer,
       updateCustomerProfile,
       addReview,
+      updateReview,
       deleteReview,
+      toggleReviewFeatured,
+      toggleReviewVerified,
+      replyToReview,
       toggleWishlist,
       isInWishlist,
       resetAll,

@@ -25,7 +25,8 @@ export type AuditTargetType =
   | 'auth' 
   | 'admin' 
   | 'review'
-  | 'inventory';
+  | 'inventory'
+  | 'config';
 
 export interface AuditLog {
   id: string;

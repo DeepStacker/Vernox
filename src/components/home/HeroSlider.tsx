@@ -3,70 +3,35 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-interface Slide {
-  id: string;
-  image: string;
-  series: string;
-  location: string;
-  featuredArtwork: string;
-  artworkLink: string;
-}
-
-const SLIDES: Slide[] = [
-  {
-    id: 'slide-01',
-    image: '/images/hero-nocturne-living.jpg',
-    series: 'THE NOCTURNE SERIES · 2026',
-    location: 'Antwerp Penthouse Residence',
-    featuredArtwork: 'Abstract Horizon Impasto',
-    artworkLink: '/product/abstract-horizon',
-  },
-  {
-    id: 'slide-02',
-    image: '/images/hero-art-lounge.jpg',
-    series: 'THE HORIZON SALON · 2026',
-    location: 'Milanese Gallery Lounge',
-    featuredArtwork: 'Golden Silence & Sculptural Form',
-    artworkLink: '/product/golden-silence',
-  },
-  {
-    id: 'slide-03',
-    image: '/images/hero-penthouse-brass.jpg',
-    series: 'BRUTALIST RELIEF · 2026',
-    location: 'Zurich Lakefront Atelier',
-    featuredArtwork: 'Textured Canvas & Solid Plate',
-    artworkLink: '/product/textured-canvas',
-  },
-  {
-    id: 'slide-04',
-    image: '/images/statement-piece.jpg',
-    series: 'ARCHITECTURAL MONOLITH · 2026',
-    location: 'Geneva Executive Residence',
-    featuredArtwork: 'Contemporary Bloom & Bronze Figure',
-    artworkLink: '/product/contemporary-bloom',
-  },
-];
+import { useCatalog, DEFAULT_HERO_SLIDES } from '@/lib/catalogContext';
 
 const AUTOPLAY_INTERVAL = 6000; // 6 seconds
 
 export function HeroSlider() {
+  const { homepageSettings } = useCatalog();
+  const slides = (homepageSettings?.heroSlides && homepageSettings.heroSlides.length > 0)
+    ? homepageSettings.heroSlides
+    : DEFAULT_HERO_SLIDES;
+
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const requestRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
 
+  const safeIdx = currentIdx < slides.length ? currentIdx : 0;
+
   const nextSlide = useCallback(() => {
-    setCurrentIdx(prev => (prev + 1) % SLIDES.length);
+    setCurrentIdx(prev => (prev + 1) % slides.length);
     setProgress(0);
     startTimeRef.current = null;
-  }, []);
+  }, [slides.length]);
 
   const prevSlide = useCallback(() => {
-    setCurrentIdx(prev => (prev - 1 + SLIDES.length) % SLIDES.length);
+    setCurrentIdx(prev => (prev - 1 + slides.length) % slides.length);
     setProgress(0);
     startTimeRef.current = null;
-  }, []);
+  }, [slides.length]);
 
   // Smooth 60fps progress bar animation & timer
   useEffect(() => {
@@ -93,9 +58,9 @@ export function HeroSlider() {
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [currentIdx, isPaused, nextSlide]);
+  }, [safeIdx, isPaused, nextSlide]);
 
-  const activeSlide = SLIDES[currentIdx];
+  const activeSlide = slides[safeIdx] || slides[0] || DEFAULT_HERO_SLIDES[0];
 
   return (
     <section 
@@ -158,7 +123,7 @@ export function HeroSlider() {
                 </span>
                 <span className="text-dark-brown/40">·</span>
                 <span className="text-dark-brown/50">
-                  {String(SLIDES.length).padStart(2, '0')}
+                  {String(slides.length).padStart(2, '0')}
                 </span>
               </div>
 
@@ -239,7 +204,7 @@ export function HeroSlider() {
 
           {/* Subtle Slide Indicators at Top-Right */}
           <div className="absolute top-5 right-5 z-20 hidden sm:flex items-center gap-1.5">
-            {SLIDES.map((s, idx) => (
+            {slides.map((s, idx) => (
               <button
                 key={s.id}
                 type="button"
@@ -249,7 +214,7 @@ export function HeroSlider() {
                   startTimeRef.current = null;
                 }}
                 className={`transition-all duration-300 cursor-pointer rounded-full ${
-                  currentIdx === idx
+                  safeIdx === idx
                     ? 'w-6 h-1.5 bg-gold'
                     : 'w-1.5 h-1.5 bg-white/60 hover:bg-white'
                 }`}

@@ -49,6 +49,14 @@ export async function validateAndCalculateCoupon(
     console.warn('Firestore coupon query notice:', err);
   }
 
+  // Fallback to clientCoupons (e.g. newly created admin coupons in browser storage)
+  if (!coupon && Array.isArray(params.clientCoupons)) {
+    const matched = params.clientCoupons.find(c => c.code?.trim().toUpperCase() === rawCode);
+    if (matched) {
+      coupon = matched;
+    }
+  }
+
   // Fallback to launch static coupons if not found in Firestore
   if (!coupon && LAUNCH_COUPONS[rawCode]) {
     const launchDef = LAUNCH_COUPONS[rawCode];

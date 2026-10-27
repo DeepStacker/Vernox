@@ -1,0 +1,67 @@
+services:
+  # 1. Vernox Database: Cloud Firestore Emulator
+  database:
+    image: mtlynch/firestore-emulator:latest
+    container_name: vernox-database
+    restart: unless-stopped
+    environment:
+      - FIRESTORE_PROJECT_ID=vernox-1b5d5
+      - PORT=8085
+    ports:
+      - "8085:8085"
+    volumes:
+      - firestore_data:/opt/data
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks:
+      - vernox-network
+
+  # 2. Vernox Backend: Node.js API Server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: vernox-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - FIRESTORE_EMULATOR_HOST=database:8085
+      - GCLOUD_PROJECT=vernox-1b5d5
+    depends_on:
+      - database
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks:
+      - vernox-network
+
+  # 3. Vernox Frontend: Production Nginx SPA & API Reverse Proxy
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: vernox-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - vernox-network
+
+networks:
+  vernox-network:
+    driver: bridge
+
+volumes:
+  firestore_data:

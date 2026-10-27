@@ -15,6 +15,7 @@ function setSecurityAndCorsHeaders(req: http.IncomingMessage, res: http.ServerRe
     'http://localhost:5173',
     'http://localhost:3000',
     'http://localhost:3001',
+    'http://localhost:8080',
     'https://vernox.com',
     'https://www.vernox.com',
     'https://vernox-atelier.vercel.app'

@@ -18,12 +18,25 @@ This project includes a multi-service Docker Compose configuration that runs the
 
 ## 🚀 Quick Start Commands
 
-### 1. Start all containers in the background
+### 1. Start all containers in Live Mode (Default)
 ```bash
 docker compose up -d
 ```
+> 🔥 **Live Hot Reload Enabled**: Your source files (`src/`, `api/`, `server/`) are mounted directly into the Docker containers. Any file you edit and save in your IDE updates **instantly** in your browser at `http://localhost:8080` without restarting or rebuilding containers!
 
-### 2. View live service logs
+### 2. First-time switch or dependency updates
+When switching to live mode for the first time or updating `package.json`:
+```bash
+docker compose up -d --build
+```
+
+### 3. Production Build (Nginx Static Bundle)
+If you want to run the hardened, static production Nginx build instead of the live development server:
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### 3. View live service logs
 ```bash
 docker compose logs -f
 ```
