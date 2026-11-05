@@ -1,189 +1,63 @@
+/**
+ * POST /api/verify-payment — Razorpay Checkout success callback.
+ * Body: { razorpay_order_id, razorpay_payment_id, razorpay_signature } — nothing else is read.
+ * Verifies the HMAC signature and transitions the order to Paid in one transaction
+ * (stock committed, coupon redeemed). Returns failure if any write fails.
+ */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import crypto from 'crypto';
-import { db } from '../src/lib/firebase';
-import { doc, getDoc, updateDoc, setDoc, collection, addDoc, increment, query, where, getDocs } from 'firebase/firestore';
+import { z } from 'zod';
+import { getRazorpayCredentials } from './_lib/config';
+import { ApiError, sendError } from './_lib/errors';
+import { getStore } from './_lib/firebaseAdmin';
+import { assertMethod, parseBody } from './_lib/http';
+import { confirmPayment, findOrderIdByRazorpayOrderId } from './_lib/payments';
+import { verifyPaymentSignature } from './_lib/razorpay';
+
+const bodySchema = z.object({
+  razorpay_order_id: z.string().trim().min(1).max(64),
+  razorpay_payment_id: z.string().trim().min(1).max(64),
+  razorpay_signature: z.string().trim().min(1).max(256),
+});
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  const { 
-    razorpay_order_id, 
-    razorpay_payment_id, 
-    razorpay_signature,
-    orderData 
-  } = req.body || {};
-
-  // 1. Validate required signature verification fields
-  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-    return res.status(400).json({ 
-      error: 'Missing required validation fields (razorpay_order_id, razorpay_payment_id, razorpay_signature)' 
-    });
-  }
-
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  if (!keySecret) {
-    return res.status(500).json({ error: 'Server configuration error: Missing Razorpay Key Secret' });
-  }
-
   try {
-    // 2. Cryptographic HMAC-SHA256 signature verification
-    const isDevOrder = 
-      process.env.NODE_ENV !== 'production' && 
-      typeof razorpay_order_id === 'string' && 
-      razorpay_order_id.startsWith('order_dev_');
+    assertMethod(req, res, ['POST']);
+    const body = parseBody(req, bodySchema);
+    const { keySecret } = getRazorpayCredentials();
 
-    if (!isDevOrder) {
-      const expectedSignature = crypto
-        .createHmac('sha256', keySecret)
-        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-        .digest('hex');
+    const signatureValid = verifyPaymentSignature(
+      { razorpayOrderId: body.razorpay_order_id, razorpayPaymentId: body.razorpay_payment_id, signature: body.razorpay_signature },
+      keySecret,
+    );
+    if (!signatureValid) throw new ApiError(400, 'SIGNATURE_INVALID', 'Payment signature could not be verified.');
 
-      const sigBuffer = Buffer.from(razorpay_signature, 'utf8');
-      const expBuffer = Buffer.from(expectedSignature, 'utf8');
-      const isValid = sigBuffer.length === expBuffer.length && crypto.timingSafeEqual(sigBuffer, expBuffer);
-
-      if (!isValid) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Signature verification mismatch. Untrusted payment transaction.' 
-        });
-      }
+    const store = getStore();
+    const orderId = await findOrderIdByRazorpayOrderId(store, body.razorpay_order_id);
+    if (!orderId) {
+      throw new ApiError(404, 'NOT_FOUND', 'Order not found for this payment.', `razorpay order ${body.razorpay_order_id}`);
     }
 
-    // 3. Retrieve Server-Authoritative Order Record from Firestore
-    let orderSnap: any = null;
-    const orderRef = doc(db, 'orders', razorpay_order_id);
-    try {
-      orderSnap = await getDoc(orderRef);
-    } catch (readErr: any) {
-      console.warn('Firestore order lookup notice:', readErr?.message || readErr);
-    }
-
-    if (orderSnap && orderSnap.exists()) {
-      const existingOrder = orderSnap.data();
-
-      // Idempotency: If this payment or webhook was already processed, return success without duplicate side-effects
-      if (existingOrder.status === 'Paid') {
-        return res.status(200).json({
-          success: true,
-          message: 'Payment already verified and order confirmed (idempotent response)',
-          order_id: razorpay_order_id,
-          payment_id: razorpay_payment_id,
-          orderId: razorpay_order_id,
-          orderNumber: existingOrder.orderNumber,
-          isDuplicate: true
-        });
-      }
-
-      // Transition order status to 'Paid' using authoritative server pricing
-      const updates: Record<string, any> = {
+    const result = await confirmPayment(store, {
+      orderId,
+      razorpayPaymentId: body.razorpay_payment_id,
+      source: 'checkout_callback',
+    });
+    if (result.outcome === 'paid' || result.outcome === 'duplicate') {
+      return res.status(200).json({
+        success: true,
+        orderId: result.order.id,
+        orderNumber: result.order.orderNumber,
         status: 'Paid',
-        razorpayPaymentId: razorpay_payment_id,
-        paymentSignature: razorpay_signature,
-        verifiedAt: Date.now(),
-        updatedAt: new Date().toISOString()
-      };
-
-      // Optional customer shipping updates if not already captured
-      if (orderData?.shippingAddress && !existingOrder.shippingAddress) {
-        updates.shippingAddress = orderData.shippingAddress;
-        updates.shippingCity = orderData.shippingCity || '';
-        updates.shippingZip = orderData.shippingZip || '';
-        updates.shippingCountry = orderData.shippingCountry || '';
-      }
-
-      try {
-        await updateDoc(orderRef, updates);
-
-        // Record coupon usage if coupon was applied
-        if (existingOrder.couponCode) {
-          try {
-            await addDoc(collection(db, 'coupon_usages'), {
-              couponId: existingOrder.couponId || '',
-              couponCode: existingOrder.couponCode,
-              orderId: razorpay_order_id,
-              customerEmail: existingOrder.email || '',
-              discountAmount: existingOrder.discount || 0,
-              orderTotal: existingOrder.total || 0,
-              usedAt: Date.now(),
-            });
-
-            // Increment coupon usedCount
-            if (existingOrder.couponId && !existingOrder.couponId.startsWith('launch-')) {
-              await updateDoc(doc(db, 'coupons', existingOrder.couponId), {
-                usedCount: increment(1),
-                updatedAt: Date.now()
-              });
-            } else {
-              // Try finding coupon by code
-              const cSnap = await getDocs(query(collection(db, 'coupons'), where('code', '==', existingOrder.couponCode)));
-              if (!cSnap.empty) {
-                await updateDoc(doc(db, 'coupons', cSnap.docs[0].id), {
-                  usedCount: increment(1),
-                  updatedAt: Date.now()
-                });
-              }
-            }
-          } catch (couponUsageErr) {
-            console.warn('Coupon usage tracking notice:', couponUsageErr);
-          }
-        }
-      } catch (updateErr: any) {
-        console.warn('Notice: Firestore updateDoc notice in verify-payment:', updateErr?.message || updateErr);
-      }
-
-      return res.status(200).json({ 
-        success: true, 
-        message: 'Payment verified and order confirmed successfully',
-        order_id: razorpay_order_id,
-        payment_id: razorpay_payment_id,
-        orderId: razorpay_order_id,
-        orderNumber: existingOrder.orderNumber || `VX-${new Date().getFullYear()}-${razorpay_order_id.slice(-6).toUpperCase()}`,
-      });
-    } else {
-      // Fallback: order document was not pre-created; create it now with sanitized order data
-      const orderId = razorpay_order_id;
-      const orderNumber = `VX-${new Date().getFullYear()}-${orderId.slice(-6).toUpperCase()}`;
-      const fallbackRecord = {
-        id: orderId,
-        orderNumber,
-        razorpayOrderId: razorpay_order_id,
-        razorpayPaymentId: razorpay_payment_id,
-        status: 'Paid',
-        paymentGateway: 'razorpay',
-        total: orderData?.total || 0,
-        currency: orderData?.currency || 'INR',
-        items: orderData?.items || [],
-        email: (orderData?.email || '').toLowerCase(),
-        shippingName: orderData?.shippingName || '',
-        shippingAddress: orderData?.shippingAddress || '',
-        shippingCity: orderData?.shippingCity || '',
-        shippingZip: orderData?.shippingZip || '',
-        shippingCountry: orderData?.shippingCountry || '',
-        placedAt: Date.now(),
-        createdAt: new Date().toISOString(),
-      };
-
-      try {
-        await setDoc(orderRef, fallbackRecord);
-      } catch (setErr: any) {
-        console.warn('Notice: Firestore setDoc notice in verify-payment:', setErr?.message || setErr);
-      }
-
-      return res.status(200).json({ 
-        success: true, 
-        message: 'Payment verified and order recorded successfully',
-        order_id: razorpay_order_id,
-        payment_id: razorpay_payment_id,
-        orderId,
-        orderNumber,
+        isDuplicate: result.outcome === 'duplicate',
       });
     }
-  } catch (error: any) {
-    console.error('Payment Verification Error:', error);
-    return res.status(500).json({ error: error.message || 'Payment Verification Failed' });
+    throw new ApiError(
+      409,
+      'CONFLICT',
+      'Your payment was received but the order needs review. Our team will contact you.',
+      `order ${result.order.id} outcome ${result.outcome}`,
+    );
+  } catch (err) {
+    return sendError(res, err, 'verify-payment');
   }
 }

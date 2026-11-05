@@ -35,6 +35,10 @@ export interface CouponUsage {
   usedAt: number;
 }
 
+/**
+ * Input of the client-side display estimate (src/lib/couponValidator.ts). The server
+ * never accepts this shape: /api/validate-coupon takes cart items and prices them itself.
+ */
 export interface CouponValidationRequest {
   code: string;
   cartSubtotal: number;
@@ -47,7 +51,6 @@ export interface CouponValidationRequest {
   }>;
   customerEmail?: string;
   currency?: string;
-  clientCoupons?: Coupon[];
 }
 
 export interface CouponValidationResult {
@@ -68,10 +71,16 @@ export interface CouponValidationResult {
     | 'CUSTOMER_LIMIT_EXCEEDED' 
     | 'MIN_ORDER_NOT_MET' 
     | 'NO_APPLICABLE_ITEMS' 
-    | 'INVALID_CODE';
+    | 'INVALID_CODE'
+    | 'RATE_LIMITED'
+    | 'SERVER_ERROR';
 }
 
-// Default Launch Master Coupons
+/**
+ * Launch coupon definitions. SEED DATA ONLY: scripts/seed-firestore.ts writes them to
+ * the `coupons` collection. The server evaluates coupons exclusively from Firestore,
+ * so these are never honoured unless seeded (and then usage is tracked there).
+ */
 export const LAUNCH_COUPONS: Record<string, Omit<Coupon, 'id' | 'createdAt' | 'updatedAt'>> = {
   'WELCOME10': {
     code: 'WELCOME10',

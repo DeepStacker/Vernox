@@ -70,7 +70,9 @@ docker compose down -v
 
 - **Web Application**: [`http://localhost:8080`](http://localhost:8080)
 - **API Health Check**: [`http://localhost:8080/api/health`](http://localhost:8080/api/health) or [`http://localhost:3001/api/health`](http://localhost:3001/api/health)
-- **Order Creation**: `POST /api/create-order`
 - **Checkout Intent**: `POST /api/checkout-intent`
 - **Payment Verification**: `POST /api/verify-payment`
+- **Order Status**: `GET /api/order-status`
+- **Webhook**: `POST /api/razorpay-webhook`
+- Server env vars: see `.env.example` (the backend needs Razorpay test keys; with the bundled emulator it needs no Firebase credentials)
 - **Firestore Emulator**: [`http://localhost:8085`](http://localhost:8085)
