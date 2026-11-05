@@ -118,7 +118,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
-    .reveal { opacity: 1; transform: none; transition: none; }
+    .reveal, .reveal[data-pending] { opacity: 1; transform: none; transition: none; }
     .sheen-text { animation: none; color: hsl(var(--brass)); background: none; }
     .metal-sheen { display: none; }
     *, *::before, *::after {
@@ -165,15 +165,14 @@
     .lift:hover { transform: translateY(-4px); box-shadow: 0 14px 28px -14px rgb(43 37 34 / 0.35); }
   }
 
-  /* Scroll reveal: <Reveal> sets data-in once when the element enters the viewport. */
+  /* Scroll reveal: <Reveal> marks below-the-fold content data-pending and clears it on first view. */
   .reveal {
-    opacity: 0;
-    transform: translateY(18px);
     transition: opacity var(--dur-3) var(--ease-out) calc(var(--i, 0) * var(--stagger)),
       transform var(--dur-3) var(--ease-out) calc(var(--i, 0) * var(--stagger));
   }
-  .reveal[data-in] { opacity: 1; transform: none; }
-  @media (max-width: 767px) { .reveal { transform: translateY(10px); } }
+  .reveal[data-pending] { opacity: 0; transform: translateY(18px); }
+  @media (max-width: 767px) { .reveal[data-pending] { transform: translateY(10px); } }
+  @media print { .reveal[data-pending] { opacity: 1; transform: none; } }
 
   .skeleton { @apply animate-pulse rounded-lg bg-secondary; }
 

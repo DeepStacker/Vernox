@@ -12,21 +12,21 @@ interface Props {
 /**
  * Fades and lifts its child into place the first time it scrolls into view (CSS in index.css: `.reveal`).
  * Transform/opacity only, runs once, and is skipped under prefers-reduced-motion. Content that is already
- * on screen (or already scrolled past) is shown immediately by the observer, so nothing waits on this.
+ * on screen at mount is never hidden, and content is visible by default without JavaScript.
  */
 export function Reveal({ as: Tag = 'div', index = 0, className, children }: Props) {
   const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    if (typeof IntersectionObserver === 'undefined') {
-      el.setAttribute('data-in', '');
-      return;
-    }
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    // Only content that starts below the fold is hidden and animated; everything else stays visible,
+    // so a slow or failed script never leaves sections blank.
+    if (el.getBoundingClientRect().top < window.innerHeight) return;
+    el.setAttribute('data-pending', '');
     const io = new IntersectionObserver(entries => {
       if (entries.some(e => e.isIntersecting)) {
-        el.setAttribute('data-in', '');
+        el.removeAttribute('data-pending');
         io.disconnect();
       }
     }, { rootMargin: '100000px 0px -8% 0px' });
