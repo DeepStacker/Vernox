@@ -104,9 +104,19 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
    delivery estimate, room view and trust, SEO and performance.
 5. **UAT:** scripted end-to-end scenarios per role (see `UAT.md` once written) on a staging project.
 
-## Decisions needed from the owner
+## Owner decisions (2026-11-05)
 
-- Real catalogue, photographs and price list; brand story (India-based or keep the European framing).
+- **Catalogue:** a placeholder laser-cut metal wall-art catalogue with India pricing for UAT,
+  clearly marked as sample data; the owner replaces it with real products, photos and prices
+  before launch.
+- **Brand story:** Made in India: Indian workshop, INR, GST, delivery across India. The
+  Belgian/Antwerp framing is removed.
+- **Courier:** Shiprocket (pincode serviceability, AWB, labels, tracking webhooks, COD remittance).
+- **COD:** offered on catalogue items only, with a COD fee; custom studio designs are prepaid only.
+
+## Still needed from the owner
+
 - Firebase service-account credentials for the server, and a staging Firebase project for UAT.
-- Courier aggregator (Shiprocket recommended), notification providers (email, SMS/WhatsApp), COD policy.
+- Shiprocket account API credentials; email and SMS/WhatsApp notification providers.
 - Business GSTIN, state of registration and HSN codes for the products.
+- Real catalogue, photographs and price list before launch.
