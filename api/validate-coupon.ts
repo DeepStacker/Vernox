@@ -1,77 +1,52 @@
 /**
- * POST /api/validate-coupon
- * Public-facing serverless endpoint for real-time coupon verification.
- * Recalculates discounts authoritatively without trusting client numbers.
+ * POST /api/validate-coupon — coupon preview.
+ * Body: { code, items: CheckoutItem[], customerEmail? }. Lines are priced on the
+ * server (same engine as checkout); client prices, categories and coupon
+ * definitions are not accepted. Advisory only: checkout-intent re-evaluates.
  */
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { validateAndCalculateCoupon } from './couponEngine';
-
-// In-memory rate limiting map (IP -> timestamp[])
-const rateLimitMap = new Map<string, number[]>();
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 30; // 30 requests per minute per IP
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const timestamps = rateLimitMap.get(ip) || [];
-  const validTimestamps = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
-  
-  if (validTimestamps.length >= MAX_REQUESTS_PER_WINDOW) {
-    return true;
-  }
-  
-  validTimestamps.push(now);
-  rateLimitMap.set(ip, validTimestamps);
-  return false;
-}
+import type { CouponValidationResult } from '../src/types/coupon';
+import { couponPreviewSchema, previewCoupon } from './_lib/checkout';
+import { sendError } from './_lib/errors';
+import { getStore } from './_lib/firebaseAdmin';
+import { assertMethod, parseBody } from './_lib/http';
+import { paiseToRupees } from './_lib/money';
+import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
+import { loadStoreConfig } from './_lib/storeConfig';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enforce proper HTTP method
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  // Rate Limiting Protection against coupon brute-force attacks
-  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket?.remoteAddress || 'unknown';
-  if (isRateLimited(clientIp)) {
-    return res.status(429).json({ 
-      error: 'Too many coupon validation attempts. Please try again in a minute.',
-      errorCode: 'RATE_LIMIT_EXCEEDED' 
-    });
-  }
-
-  const { code, cartSubtotal, cartItems, customerEmail, currency, clientCoupons } = req.body || {};
-
-  if (!code || typeof code !== 'string') {
-    return res.status(400).json({ 
-      error: 'Coupon code is required',
-      errorCode: 'INVALID_CODE' 
-    });
-  }
-
   try {
-    const result = await validateAndCalculateCoupon({
-      code: code.trim(),
-      cartSubtotal: Number(cartSubtotal) || 0,
-      cartItems: Array.isArray(cartItems) ? cartItems : undefined,
-      customerEmail: customerEmail && typeof customerEmail === 'string' ? customerEmail.trim() : undefined,
-      currency: currency && typeof currency === 'string' ? currency : 'INR',
-      clientCoupons: Array.isArray(clientCoupons) ? clientCoupons : undefined,
-    });
+    assertMethod(req, res, ['POST']);
+    const body = parseBody(req, couponPreviewSchema);
+    const store = getStore();
+    await enforceRateLimit(store, req, RATE_LIMITS.validateCoupon);
 
-    if (!result.isValid) {
-      return res.status(200).json(result);
-    }
+    const { evaluation, totals } = await previewCoupon(store, await loadStoreConfig(store), body);
+    const pricing = {
+      subtotal: paiseToRupees(totals.subtotalPaise),
+      discount: paiseToRupees(totals.discountPaise),
+      shipping: paiseToRupees(totals.shippingPaise),
+      tax: paiseToRupees(totals.taxPaise),
+      total: paiseToRupees(totals.totalPaise),
+    };
 
+    const result: CouponValidationResult & { pricing: typeof pricing } = 'coupon' in evaluation
+      ? {
+          isValid: true,
+          couponId: evaluation.coupon.id,
+          couponCode: evaluation.coupon.code,
+          discountType: evaluation.coupon.discountType,
+          discountValue:
+            evaluation.coupon.discountType === 'fixed'
+              ? paiseToRupees(evaluation.coupon.discountValue)
+              : evaluation.coupon.discountValue,
+          discountAmount: paiseToRupees(evaluation.discountPaise),
+          description: evaluation.coupon.description,
+          pricing,
+        }
+      : { isValid: false, discountAmount: 0, errorCode: evaluation.errorCode, error: evaluation.message, pricing };
     return res.status(200).json(result);
-  } catch (err: any) {
-    console.error('Coupon validation handler error:', err);
-    return res.status(500).json({ 
-      isValid: false,
-      error: 'An internal error occurred while validating the coupon. Please try again.',
-      errorCode: 'SERVER_ERROR' 
-    });
+  } catch (err) {
+    return sendError(res, err, 'validate-coupon');
   }
 }

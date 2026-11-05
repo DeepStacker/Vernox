@@ -86,10 +86,10 @@ export function normalizeOrder(id: string, raw: Raw): Order {
     placedAt: toMillis(raw.placedAt ?? raw.createdAt),
     updatedAt: toMillis(raw.updatedAt) || undefined,
     items,
-    subtotal: Number(pricing.subtotal) || items.reduce((s, i) => s + i.lineTotal, 0),
-    discountTotal: Number(pricing.discount ?? raw.discountTotal) || 0,
-    shippingTotal: Number(pricing.shipping) || 0,
-    taxTotal: Number(pricing.tax) || 0,
+    subtotal: Number(pricing.subtotal ?? raw.subtotal) || items.reduce((s, i) => s + i.lineTotal, 0),
+    discountTotal: Number(pricing.discount ?? raw.discount ?? raw.discountTotal) || 0,
+    shippingTotal: Number(pricing.shipping ?? raw.shipping) || 0,
+    taxTotal: Number(pricing.tax ?? raw.tax) || 0,
     total,
     couponCode: raw.couponCode,
     customerName: customer.name ?? raw.customerName ?? raw.shippingName,
@@ -101,7 +101,8 @@ export function normalizeOrder(id: string, raw: Raw): Order {
     shippingCountry: customer.country ?? raw.shippingCountry,
     tracking: {
       carrier: tracking.carrier ?? raw.trackingCarrier,
-      number: tracking.number ?? raw.trackingNumber,
+      trackingNumber: tracking.trackingNumber ?? tracking.number ?? raw.trackingNumber,
+      url: tracking.url,
       estimatedDelivery: tracking.estimatedDelivery ?? raw.estimatedDelivery,
     },
     assignedTo: raw.assignedTo,
@@ -152,6 +153,8 @@ export async function fetchPublicOrderStatus(orderId: string, email: string): Pr
     throw new Error(msg);
   }
   const order = (body.order ?? body) as Raw;
+  // /api/order-status returns `timeline` and `shipTo`; the other names cover the owner-read shape.
+  const timeline = order.timeline ?? order.statusHistory;
   return {
     orderId: String(order.orderId ?? order.id ?? orderId),
     orderNumber: String(order.orderNumber ?? ''),
@@ -163,10 +166,10 @@ export async function fetchPublicOrderStatus(orderId: string, email: string): Pr
       ? order.items.map((i: Raw) => ({ productId: i.productId, name: i.name ?? i.productName ?? 'Item', quantity: Number(i.quantity) || 1, lineTotal: i.lineTotal }))
       : undefined,
     tracking: order.tracking as OrderTracking | undefined,
-    statusHistory: Array.isArray(order.statusHistory)
-      ? order.statusHistory.map((h: Raw) => ({ status: normalizeOrderStatus(h.status), at: toMillis(h.at) }))
+    statusHistory: Array.isArray(timeline)
+      ? timeline.map((h: Raw) => ({ status: normalizeOrderStatus(h.status), at: toMillis(h.at) }))
       : undefined,
-    shippingCity: order.shippingCity ?? order.city,
+    shippingCity: order.shipTo?.city ?? order.shippingCity ?? order.city,
     shippingState: order.shippingState ?? order.state,
   };
 }

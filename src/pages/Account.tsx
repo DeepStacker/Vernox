@@ -790,10 +790,10 @@ export default function Account() {
                                     Live Telemetry &rarr;
                                   </Link>
                                 </div>
-                                {o.tracking?.number ? (
+                                {o.tracking?.trackingNumber ? (
                                   <div className="text-muted-foreground leading-relaxed pl-5 space-y-1">
                                     <p>Carrier: <span className="font-semibold text-foreground capitalize">{o.tracking?.carrier || 'Courier'}</span></p>
-                                    <p>Code: <span className="font-mono text-foreground font-semibold">{o.tracking?.number}</span></p>
+                                    <p>Code: <span className="font-mono text-foreground font-semibold">{o.tracking?.trackingNumber}</span></p>
                                     {o.tracking?.estimatedDelivery && (
                                       <p className="flex items-center gap-1 text-emerald-600 mt-1">
                                         <Calendar className="w-3 h-3" /> Delivery: {o.tracking?.estimatedDelivery}

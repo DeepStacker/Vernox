@@ -81,7 +81,7 @@ export interface HomepageSettings {
 export interface StoreConfig {
   storeName: string;
   currency: string;
-  taxRate: number;
+  gstRatePercent: number;
   freeShippingThreshold: number;
   shippingFee: number;
   adminEmail?: string;
@@ -117,7 +117,8 @@ export interface StatusHistoryEntry {
 
 export interface OrderTracking {
   carrier?: string;
-  number?: string;
+  trackingNumber?: string;
+  url?: string;
   estimatedDelivery?: string;
 }
 

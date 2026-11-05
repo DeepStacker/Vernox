@@ -21,7 +21,7 @@ export function AdminSettings() {
   const [form, setForm] = useState({
     storeName: storeConfig.storeName,
     currency: storeConfig.currency || '₹',
-    taxRate: storeConfig.taxRate,
+    gstRatePercent: storeConfig.gstRatePercent,
     freeShippingThreshold: storeConfig.freeShippingThreshold,
     shippingFee: storeConfig.shippingFee,
   });
@@ -32,7 +32,7 @@ export function AdminSettings() {
     setForm({
       storeName: storeConfig.storeName,
       currency: storeConfig.currency || '₹',
-      taxRate: storeConfig.taxRate,
+      gstRatePercent: storeConfig.gstRatePercent,
       freeShippingThreshold: storeConfig.freeShippingThreshold,
       shippingFee: storeConfig.shippingFee,
     });
@@ -44,7 +44,7 @@ export function AdminSettings() {
     const saved = await updateStoreConfig({
       storeName: form.storeName.trim(),
       currency: form.currency,
-      taxRate: Number(form.taxRate),
+      gstRatePercent: Number(form.gstRatePercent),
       freeShippingThreshold: Number(form.freeShippingThreshold),
       shippingFee: Number(form.shippingFee),
     });
@@ -92,8 +92,8 @@ export function AdminSettings() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:col-span-2 pt-2">
             <div className="space-y-1.5 p-3.5 rounded-lg bg-muted/20 border border-border/60">
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">GST rate (%)</label>
-              <input type="number" required min={0} max={100} step={0.1} value={form.taxRate}
-                onChange={e => setForm({ ...form, taxRate: Number(e.target.value) })} className={numberInputClass} />
+              <input type="number" required min={0} max={100} step={0.1} value={form.gstRatePercent}
+                onChange={e => setForm({ ...form, gstRatePercent: Number(e.target.value) })} className={numberInputClass} />
             </div>
             <div className="space-y-1.5 p-3.5 rounded-lg bg-muted/20 border border-border/60">
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Free shipping above</label>

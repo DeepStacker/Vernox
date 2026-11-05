@@ -72,7 +72,7 @@ export const DEFAULT_HOMEPAGE_SETTINGS: HomepageSettings = {
 export const DEFAULT_STORE_CONFIG: StoreConfig = {
   storeName: 'Vernox',
   currency: '₹',
-  taxRate: 18,
+  gstRatePercent: 18,
   freeShippingThreshold: 5000,
   shippingFee: 150,
 };

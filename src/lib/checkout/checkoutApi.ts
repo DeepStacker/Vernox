@@ -78,6 +78,19 @@ async function postJson(url: string, body: unknown): Promise<Record<string, any>
   return data;
 }
 
+/** Cart lines in the shape every pricing endpoint accepts; prices are never sent. */
+export function toCheckoutItems(items: CartItem[]) {
+  return items.map(i => ({
+    productId: i.productId,
+    sizeLabel: i.sizeLabel || undefined,
+    widthMm: i.widthMm || undefined,
+    heightMm: i.heightMm || undefined,
+    finish: i.finish,
+    quantity: i.quantity,
+    customDesignRef: i.customDesignRef,
+  }));
+}
+
 export async function createCheckoutIntent(params: {
   items: CartItem[];
   couponCode?: string;
@@ -85,15 +98,7 @@ export async function createCheckoutIntent(params: {
   customer: CheckoutCustomer;
 }): Promise<CheckoutIntent> {
   const data = await postJson('/api/checkout-intent', {
-    items: params.items.map(i => ({
-      productId: i.productId,
-      sizeLabel: i.sizeLabel || undefined,
-      widthMm: i.widthMm || undefined,
-      heightMm: i.heightMm || undefined,
-      finish: i.finish,
-      quantity: i.quantity,
-      customDesignRef: i.customDesignRef,
-    })),
+    items: toCheckoutItems(params.items),
     couponCode: params.couponCode,
     idempotencyKey: params.idempotencyKey,
     customer: params.customer,

@@ -12,10 +12,10 @@ export function CartDrawer() {
   const navigate = useNavigate();
 
   const threshold = storeConfig.freeShippingThreshold || 5000;
-  const shipping = subtotal > threshold || subtotal === 0 ? 0 : storeConfig.shippingFee;
+  const shipping = subtotal >= threshold || subtotal === 0 ? 0 : storeConfig.shippingFee;
   const discount = appliedCoupon ? appliedCoupon.discountAmount : 0;
   const discountedSubtotal = Math.max(0, subtotal - discount);
-  const tax = discountedSubtotal * (storeConfig.taxRate / 100);
+  const tax = discountedSubtotal * (storeConfig.gstRatePercent / 100);
   const total = discountedSubtotal + shipping + tax;
 
   const handleCheckoutClick = () => {

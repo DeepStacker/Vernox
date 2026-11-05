@@ -74,7 +74,7 @@ export default function Checkout() {
     if (!code) return;
     setCheckingCoupon(true);
     try {
-      const result = await previewCoupon({ code, subtotal, items, email: form.email.trim() });
+      const result = await previewCoupon({ code, items, email: form.email.trim() });
       if (result.isValid && result.couponCode) {
         cartApplyCoupon({
           code: result.couponCode,

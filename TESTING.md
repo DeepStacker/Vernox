@@ -1,19 +1,20 @@
-# VERNOX AUTOMATED TESTING & CONCURRENCY VERIFICATION SPECIFICATION
+# Vernox Testing
 
-## 1. Automated Test Suite Architecture
-The test suite ensures correctness across three mission-critical domains:
-1. **Authoritative Pricing Engine**: Verifies base prices, dimensional area rates, finish markups, tax percentages, and shipping thresholds.
-2. **Concurrency & Inventory Invariants**: Simulates peak traffic drops with 100 simultaneous purchase requests hitting limited stock.
-3. **Idempotency & Webhook Resilience**: Simulates browser double-clicks and repeated payment provider webhook calls.
-
-## 2. Test Execution
-Execute the automated test suite with:
+## Commands
 ```bash
-node --experimental-strip-types src/test/runAllVerifications.ts
+npm test                     # vitest: unit tests (browser + server)
+npm run typecheck:api        # strict typecheck of api/, server/, scripts/
+npm run test:rules           # Firestore security rules against the emulator (Firebase CLI + Java)
 ```
 
-## 3. Verified Invariants
-- **Inventory Invariant**: $\text{Stock} \ge 0$. Stock can never drop below zero under any concurrency condition.
-- **Overselling Prevention**: When 100 users buy a product with stock = 10 simultaneously, exactly 10 orders succeed and 90 are safely rejected with `INSUFFICIENT_STOCK`.
-- **Checkout Idempotency**: 10 duplicate checkout clicks with the same `idempotencyKey` create exactly 1 order in the database and decrement inventory only once.
-- **Webhook Idempotency**: 5 duplicate webhook calls for the same payment transaction transition the order state to `Paid` once, and subsequent calls return `200 OK` with `isDuplicate: true`.
+## Server tests (`src/test/*.test.ts`, node environment)
+Business logic in `api/_lib` runs against `src/test/support/memoryStore.ts`, an in-memory `DocStore` with Firestore's
+transaction semantics (serialised, atomic, reads-before-writes enforced, `create` fails on existing docs).
+- `pricing.test.ts` — catalog/size/finish pricing, custom-piece formula, client prices ignored, GST/shipping (`>=` threshold), config overrides.
+- `coupons.test.ts` — eligibility, limits, IST dates, category/product restriction using server data.
+- `razorpaySignature.test.ts` — checkout and webhook HMAC (raw body vs re-serialised).
+- `checkoutIntent.test.ts` — reservation, idempotency (sequential and concurrent), no overselling, provider-failure compensation, coupons.
+- `paymentLifecycle.test.ts` — Paid transition + coupon redemption, idempotent confirmations, failed writes surface, webhook
+  events (captured, discrepancy, failed, late payment, partial/full refund, unknown order, duplicates), reservation expiry.
+- `staffAuth.test.ts` — role claim / verified email / permission checks.
+- `firestore.rules.test.ts` — skipped unless `FIRESTORE_EMULATOR_HOST` is set (use `npm run test:rules`).

@@ -21,7 +21,7 @@ export default function Shipping() {
   useSeo({ title: 'Shipping', description: 'Production time, delivery across India and shipping charges for Vernox metal wall art.', canonicalPath: '/shipping' });
   const { storeConfig } = useCatalog();
   const currencySymbol = (storeConfig?.currency && storeConfig.currency !== '$') ? storeConfig.currency : '₹';
-  const threshold = storeConfig?.freeShippingThreshold || 150;
+  const threshold = storeConfig?.freeShippingThreshold || 5000;
   return (
     <div className="min-h-screen flex flex-col bg-cream text-dark-brown selection:bg-burgundy selection:text-cream">
       <SiteHeader />

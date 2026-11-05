@@ -79,7 +79,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
   useEffect(() => {
     if (inspectingOrder) {
       setTrackingCarrier(inspectingOrder.tracking?.carrier || '');
-      setTrackingNumber(inspectingOrder.tracking?.number || '');
+      setTrackingNumber(inspectingOrder.tracking?.trackingNumber || '');
       setEstimatedDelivery(inspectingOrder.tracking?.estimatedDelivery || '');
       setAssignedTo(inspectingOrder.assignedTo || '');
       setAdminNotes(inspectingOrder.adminNotes || '');
@@ -225,7 +225,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
       `"${o.shippingCity || ''}"`,
       `"${o.shippingState || ''}"`,
       `"${o.tracking?.carrier || ''}"`,
-      `"${o.tracking?.number || ''}"`
+      `"${o.tracking?.trackingNumber || ''}"`
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -861,7 +861,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
                     disabled={!canEdit}
                     onClick={async () => {
                       const saved = await persist(inspectingOrder, {
-                        tracking: { carrier: trackingCarrier, number: trackingNumber, estimatedDelivery },
+                        tracking: { carrier: trackingCarrier, trackingNumber, estimatedDelivery },
                         assignedTo,
                         notes: adminNotes,
                       });

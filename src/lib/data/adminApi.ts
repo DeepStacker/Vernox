@@ -10,6 +10,14 @@ export type AdminAction =
   | 'SET_STAFF_ROLE' | 'LIST_STAFF'
   | 'GET_AUDIT_LOGS' | 'LOG_AUDIT';
 
+const READ_ACTIONS: ReadonlySet<AdminAction> = new Set(['LIST_STAFF', 'GET_AUDIT_LOGS']);
+
+function stringParams(payload: Record<string, unknown>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([, v]) => v !== undefined && v !== null).map(([k, v]) => [k, String(v)]),
+  );
+}
+
 export class AdminApiError extends Error {
   constructor(message: string, readonly status: number) {
     super(message);
@@ -25,11 +33,15 @@ export async function adminAction<T = Record<string, unknown>>(
   if (!user) throw new AdminApiError('You are signed out. Please sign in again.', 401);
 
   const token = await user.getIdToken();
-  const res = await fetch('/api/admin', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ action, payload }),
-  });
+  const headers = { Authorization: `Bearer ${token}` };
+  // The server reads `{ action, ...params }` from the query for GET actions and from the body otherwise.
+  const res = READ_ACTIONS.has(action)
+    ? await fetch(`/api/admin?${new URLSearchParams({ action, ...stringParams(payload) })}`, { headers })
+    : await fetch('/api/admin', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, action }),
+      });
 
   let body: Record<string, unknown> | null = null;
   try {

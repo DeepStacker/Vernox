@@ -1,77 +1,70 @@
-# VERNOX DATABASE ARCHITECTURE & INDEXING SPECIFICATION
+# Vernox Firestore Data Model
 
-## 1. Database Model: Google Cloud Firestore
-Vernox utilizes Cloud Firestore, a document database offering horizontal scaling, multi-region high availability, and document-level ACID transactions.
+Rules: `firestore.rules`. Indexes: `firestore.indexes.json` (deploy with `firebase deploy --only firestore`).
+Seed an empty project or emulator with `npm run seed` (catalog from `src/lib/catalog.ts`, `settings/store`, launch coupons) —
+the static definitions are seed data only; the API prices exclusively from Firestore.
 
-## 2. Collections & Schemas
+Money convention: documents edited by staff (`products`, `coupons`, `settings/store`) hold **rupees**; documents written by the
+server hold authoritative **paise** (`*Paise` fields).
 
-### `products`
-- **Document ID**: `productId` (e.g. `p-01`, `p-02`).
-- **Fields**:
-  - `id`: string (Unique identifier)
-  - `slug`: string (URL slug)
-  - `name`: string
-  - `tagline`: string
-  - `description`: string
-  - `category`: string (Category ID)
-  - `price`: number (Authoritative base price in INR)
-  - `shapeId`: string (CAD shape template identifier)
-  - `finishes`: string[]
-  - `sizes`: Array<{ label: string; widthMm: number; heightMm: number; priceDelta: number }>
-  - `stock`: number (Authoritative inventory count)
-  - `trackInventory`: boolean (Enforces stock checks when true)
-  - `updatedAt`: number (Timestamp of last modification)
+## Collections
 
-### `orders`
-- **Document ID**: `razorpayOrderId` or generated order identifier.
-- **Fields**:
-  - `id`: string (Unique order ID)
-  - `orderNumber`: string (Formatted human-readable identifier, e.g. `VX-2026-AB12CD`)
-  - `razorpayOrderId`: string
-  - `razorpayPaymentId`: string (populated upon verification)
-  - `status`: `'Pending_Payment' | 'Paid' | 'Designing' | 'Cutting' | 'Finished' | 'Shipped' | 'Delivered' | 'Cancelled'`
-  - `idempotencyKey`: string | null (Guarantees at-most-once order creation)
-  - `total`: number (Authoritative total in INR)
-  - `subtotal`: number
-  - `shipping`: number
-  - `tax`: number
-  - `currency`: string (`INR`)
-  - `items`: OrderItem[] (Frozen product snapshot with dimensions, finish, and purchase price)
-  - `email`: string (Customer email)
-  - `shippingName`: string
-  - `shippingAddress`: string
-  - `shippingCity`: string
-  - `shippingZip`: string
-  - `shippingCountry`: string
-  - `reservationExpiresAt`: number (15-minute reservation hold timestamp)
-  - `placedAt`: number
-  - `createdAt`: string
+### `products/{productId}` — public read, catalog roles write
+`name`, `slug`, `category`, `price` (₹, required — a product without a valid price cannot be bought), `sizes[{ label, widthMm,
+heightMm, priceDelta (₹) }]`, `finishes` (lower-case finish ids; empty = any), `stock` (integer; missing = 0), `trackInventory`
+(default true), `status` (`archived`/`draft` = not purchasable), `isActive` (false = not purchasable), display fields.
+Stock is changed only by the API with atomic increments.
 
-### `users`
-- **Document ID**: Firebase Auth UID.
-- **Fields**:
-  - `email`: string
-  - `name`: string
-  - `phone`: string
-  - `role`: `'customer' | 'admin'`
-  - `isAdmin`: boolean
-  - `address`: string
-  - `city`: string
-  - `zip`: string
-  - `country`: string
+### `settings/store` — public read, `settings.write`
+`gstRatePercent`, `shippingFee` (₹), `freeShippingThreshold` (₹, free when subtotal ≥ it),
+`customPieces: { [finishId]: { label, setupFee (₹), ratePerCm2 (₹), minimum (₹) } }` merged over the built-in defaults
+(`api/_lib/storeConfig.ts`). Env vars `STORE_*` are used for absent fields.
 
-### `wishlists`
-- **Document ID**: Firebase Auth UID.
-- **Fields**:
-  - `productIds`: string[]
+### `orders/{orderId}` — written only by the API (`api/_lib/orders.ts`)
+`id`, `orderNumber` (`VX-YYYYMMDD-XXXXXX`, also the Razorpay receipt), `status` (see lifecycle), `statusHistory[{ status, at, by,
+note? }]`, `userId` (Firebase uid or null for guests), `email` (lower-case), `customer{ email, name, phone, address, city, state,
+pincode, country }`, `items[{ productId, name, category, sizeLabel, widthMm, heightMm, finish, quantity, unitPricePaise,
+lineTotalPaise, isCustom, customDesignRef }]` (frozen snapshot), `amounts{ subtotalPaise, discountPaise, shippingPaise, taxPaise,
+totalPaise, gstRateBps }`, `coupon{ id, code, discountPaise } | null`, `stockReservation{ status: held|released|committed|none,
+items[{ productId, quantity }] }`, `reservationExpiresAt` (ms, placed + 15 min), `idempotencyKey`, `razorpayOrderId`,
+`razorpayPaymentId`, `paidAt`, `refunds[{ refundId, amountPaise, at }]`, `refundedPaise`, `flags[]` (e.g. `AMOUNT_MISMATCH`,
+`STOCK_SHORTFALL_AFTER_LATE_PAYMENT`, `COUPON_LIMIT_EXCEEDED_AT_PAYMENT`, `DUPLICATE_PAYMENT`), `placedAt`/`createdAt`/`updatedAt` (ms).
+Staff-editable (rules): `status` (fulfilment moves only), `statusHistory`, `assignedTo`, `tracking{ carrier, trackingNumber, url }`,
+`notes`, `updatedAt`.
+Display copies written once at creation for the existing admin UI (do not use for money logic): `subtotal`, `discount`,
+`shipping`, `tax`, `total` (₹), `items[].unitPrice/lineTotal/productName`, `shippingName/Address/City/State/Zip/Country`, `phone`, `couponCode`.
 
-## 3. Indexes & Query Patterns
-1. **Orders by Idempotency Key**:
-   - Query: `collection('orders').where('idempotencyKey', '==', key)`
-   - Used by `/api/checkout-intent` to ensure duplicate clicks return the same order.
-2. **Orders by Customer Email & Placed Date**:
-   - Query: `collection('orders').where('email', '==', email).orderBy('placedAt', 'desc')`
-   - Powers the Customer Account Order History.
-3. **Products by Category**:
-   - Query: `collection('products').where('category', '==', categoryId)`
-   - Powers filtered catalog navigation.
+Lifecycle (`api/_lib/orderLifecycle.ts`): `Pending_Payment → Paid → Designing → Cutting → Finished → Shipped → Delivered`;
+`Pending_Payment → Payment_Failed | Expired | Cancelled | Payment_Discrepancy`; `Payment_Failed | Expired → Paid` (late payment);
+paid states → `Partially_Refunded → Refunded`.
+
+### `coupons/{couponId}` — read `coupons.read`, write `coupons.write` (normally via `SAVE_COUPON`)
+`code` (unique, upper-case), `description`, `discountType` (`percentage`|`fixed`), `discountValue` (% or ₹), `maxDiscountLimit` (₹),
+`minOrderValue` (₹), `maxUsageCount`, `usedCount` (server-maintained), `maxUsagePerCustomer`, `startDate`/`expiryDate`
+(`YYYY-MM-DD` = whole day IST, or ISO timestamp), `isActive`, `applicableCategories[]`, `applicableProductIds[]`.
+Subcollection `customer_usage/{sha256(email)}`: `{ count }` (server only).
+
+### Server-only collections (no client access)
+- `coupon_usages/{orderId}` — redemption record written when the order is paid.
+- `idempotency/{key}` — `{ orderId, requestHash, createdAt, expiresAt }`.
+- `webhook_events/{eventId}` — `{ event, outcome, orderId, razorpayOrderId, razorpayPaymentId, razorpayRefundId, amountPaise,
+  receivedAt, expiresAt }`; outcome `unmatched` = needs reconciliation.
+- `rate_limits/{scope_hash_window}` — `{ count, scope, windowStart, expiresAt }`.
+- `audit_logs/{id}` — `AuditLog` (`src/types/admin.ts`); readable by `super_admin`.
+- `staff/{uid}` — `StaffMember` mirror of the role claim; readable by the member and `staff.read` roles.
+
+### Client collections
+- `users/{uid}` — owner read/write; `role`/`isAdmin` cannot be set by clients (roles are claims). Readable by `customers.read`.
+- `wishlists/{uid}` — owner only.
+- `reviews/{id}` — public read when `status == 'published'`; signed-in users create with `userId == uid`, `status: 'pending'`;
+  moderation by `reviews.moderate` roles. List queries from the storefront must filter `status == 'published'`.
+- `b2b_inquiries/{id}` — validated public create (shape of `B2BTradeModal`), read by `b2b.read` roles.
+- `admin_users` — legacy, closed.
+
+## Indexes
+`orders`: (userId, placedAt desc), (status, placedAt desc), (email, placedAt desc), (status, reservationExpiresAt) for the cron;
+`audit_logs`: (targetType, timestamp desc). Single-field indexes cover `orders.razorpayOrderId`, `orders.razorpayPaymentId`,
+`coupons.code`. `orders.items` and `orders.customer` are exempt from indexing.
+
+## TTL policies (configure once in the console / gcloud)
+`rate_limits.expiresAt`, `idempotency.expiresAt`, `webhook_events.expiresAt`.

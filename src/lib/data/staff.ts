@@ -9,8 +9,8 @@ export const STAFF_KEY = ['admin', 'staff'] as const;
 export const AUDIT_KEY = ['admin', 'audit'] as const;
 
 export async function fetchStaff(): Promise<StaffMember[]> {
-  const res = await adminAction<{ staff?: StaffMember[]; admins?: StaffMember[] }>('LIST_STAFF');
-  return res.staff ?? res.admins ?? [];
+  const res = await adminAction<{ staff?: StaffMember[] }>('LIST_STAFF');
+  return res.staff ?? [];
 }
 
 export async function fetchAuditLogs(targetType?: string): Promise<AuditEntry[]> {

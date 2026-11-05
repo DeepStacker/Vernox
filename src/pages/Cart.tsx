@@ -39,13 +39,13 @@ export default function Cart() {
   const [promoError, setPromoError] = useState('');
 
   const threshold = storeConfig.freeShippingThreshold || 5000;
-  const shipping = subtotal > threshold || subtotal === 0 ? 0 : storeConfig.shippingFee;
+  const shipping = subtotal >= threshold || subtotal === 0 ? 0 : storeConfig.shippingFee;
 
   // The server decides the discount; the cart shows the amount from the last validation.
   const discountAmount = appliedCoupon?.discountAmount || 0;
 
   const discountedSubtotal = Math.max(0, subtotal - discountAmount);
-  const tax = discountedSubtotal * (storeConfig.taxRate / 100);
+  const tax = discountedSubtotal * (storeConfig.gstRatePercent / 100);
   const total = discountedSubtotal + shipping + tax;
 
   const progressPercent = Math.min(100, Math.round((subtotal / threshold) * 100));
@@ -58,7 +58,7 @@ export default function Cart() {
     if (!clean) return;
 
     try {
-      const result = await previewCoupon({ code: clean, subtotal, items });
+      const result = await previewCoupon({ code: clean, items });
       if (result.isValid) {
         applyCoupon({
           code: result.couponCode || clean,
@@ -435,7 +435,7 @@ export default function Cart() {
                   </div>
 
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Estimated Sales Tax / VAT ({storeConfig.taxRate}%)</span>
+                    <span>GST ({storeConfig.gstRatePercent}%)</span>
                     <span className="font-mono">{storeConfig.currency}{tax.toFixed(2)}</span>
                   </div>
 

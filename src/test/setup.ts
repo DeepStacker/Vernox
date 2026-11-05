@@ -14,13 +14,16 @@ class MemoryStorage implements Storage {
   setItem(key: string, value: string) { this.store.set(key, String(value)); }
 }
 
-for (const name of ["localStorage", "sessionStorage"] as const) {
-  const storage = new MemoryStorage();
-  Object.defineProperty(window, name, { configurable: true, value: storage });
-  Object.defineProperty(globalThis, name, { configurable: true, value: storage });
+// Server tests run in the node environment (`// @vitest-environment node`), which has no window.
+if (typeof window !== "undefined") {
+  for (const name of ["localStorage", "sessionStorage"] as const) {
+    const storage = new MemoryStorage();
+    Object.defineProperty(window, name, { configurable: true, value: storage });
+    Object.defineProperty(globalThis, name, { configurable: true, value: storage });
+  }
 }
 
-Object.defineProperty(window, "matchMedia", {
+if (typeof window !== "undefined") Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({
     matches: false,

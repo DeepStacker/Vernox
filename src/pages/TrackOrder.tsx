@@ -234,7 +234,7 @@ export default function TrackOrder() {
                 )}
 
                 {/* Courier / Shipping Dispatch Details - Shown ONLY when real carrier/tracking data exists */}
-                {matchedOrder.tracking?.number && (
+                {matchedOrder.tracking?.trackingNumber && (
                   <div className="bg-cream/50 rounded-sm border border-[#E0D7C6] p-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-sans">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full bg-burgundy/10 text-burgundy flex items-center justify-center">
@@ -253,7 +253,7 @@ export default function TrackOrder() {
                         <span className="text-[10px] uppercase tracking-[0.16em] text-dark-brown/60 block">
                           Tracking Reference
                         </span>
-                        <span className="font-mono font-bold text-burgundy">{matchedOrder.tracking?.number}</span>
+                        <span className="font-mono font-bold text-burgundy">{matchedOrder.tracking?.trackingNumber}</span>
                       </div>
                     </div>
                   </div>

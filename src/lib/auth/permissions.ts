@@ -1,19 +1,15 @@
 /**
- * Staff roles and the permission map.
+ * UI view of staff permissions.
  *
- * TEMPORARY COPY: the backend branch is extending src/types/admin.ts with the same
- * `StaffRole` and `ROLE_PERMISSIONS` exports. At merge, delete the definitions below and
- * re-export them from '@/types/admin' so there is a single source of truth.
+ * The authoritative role -> permission map is STAFF_ROLE_PERMISSIONS in src/types/admin.ts,
+ * enforced by /api/admin and mirrored in firestore.rules. The flags below are derived from it
+ * so navigation can never offer more than the server allows. The server authorises any
+ * fulfilment move with `orders.update_status`; the production/shipping flags only narrow which
+ * stage buttons each role sees, to keep the workshop and dispatch views focused.
  */
-export type StaffRole =
-  | 'super_admin'
-  | 'admin'
-  | 'catalog_manager'
-  | 'order_manager'
-  | 'production'
-  | 'shipping'
-  | 'finance'
-  | 'support';
+import { STAFF_ROLES, isStaffRole, roleHasPermission, type StaffRole } from '@/types/admin';
+
+export { STAFF_ROLES, isStaffRole, type StaffRole };
 
 export interface RolePermissions {
   canManageProducts: boolean;
@@ -29,46 +25,29 @@ export interface RolePermissions {
   canManageSupport: boolean;
 }
 
-const NONE: RolePermissions = {
-  canManageProducts: false,
-  canManageOrders: false,
-  canManageProduction: false,
-  canManageShipping: false,
-  canManageFinance: false,
-  canManageCoupons: false,
-  canModerateReviews: false,
-  canManageStaff: false,
-  canViewAuditLogs: false,
-  canManageSettings: false,
-  canManageSupport: false,
-};
-
-export const ROLE_PERMISSIONS: Record<StaffRole, RolePermissions> = {
-  super_admin: {
-    canManageProducts: true, canManageOrders: true, canManageProduction: true,
-    canManageShipping: true, canManageFinance: true, canManageCoupons: true,
-    canModerateReviews: true, canManageStaff: true, canViewAuditLogs: true,
-    canManageSettings: true, canManageSupport: true,
-  },
-  admin: {
-    canManageProducts: true, canManageOrders: true, canManageProduction: true,
-    canManageShipping: true, canManageFinance: true, canManageCoupons: true,
-    canModerateReviews: true, canManageStaff: false, canViewAuditLogs: false,
-    canManageSettings: true, canManageSupport: true,
-  },
-  catalog_manager: { ...NONE, canManageProducts: true, canModerateReviews: true },
-  order_manager: { ...NONE, canManageOrders: true, canManageSupport: true },
-  production: { ...NONE, canManageProduction: true },
-  shipping: { ...NONE, canManageShipping: true },
-  finance: { ...NONE, canManageFinance: true, canManageCoupons: true },
-  support: { ...NONE, canManageSupport: true, canModerateReviews: true },
-};
-
-export const STAFF_ROLES = Object.keys(ROLE_PERMISSIONS) as StaffRole[];
-
-export function isStaffRole(value: unknown): value is StaffRole {
-  return typeof value === 'string' && value in ROLE_PERMISSIONS;
+function derivePermissions(role: StaffRole): RolePermissions {
+  const has = (permission: Parameters<typeof roleHasPermission>[1]) => roleHasPermission(role, permission);
+  const updatesStatus = has('orders.update_status');
+  const handlesTracking = has('orders.tracking');
+  const seesCustomers = has('customers.read');
+  return {
+    canManageProducts: has('catalog.write'),
+    canManageOrders: updatesStatus && seesCustomers,
+    canManageProduction: updatesStatus && (seesCustomers || !handlesTracking),
+    canManageShipping: updatesStatus && handlesTracking,
+    canManageFinance: has('orders.refund') || has('reports.export'),
+    canManageCoupons: has('coupons.write'),
+    canModerateReviews: has('reviews.moderate'),
+    canManageStaff: has('staff.manage'),
+    canViewAuditLogs: has('audit.read'),
+    canManageSettings: has('settings.write'),
+    canManageSupport: seesCustomers,
+  };
 }
+
+export const ROLE_PERMISSIONS = Object.fromEntries(
+  STAFF_ROLES.map(role => [role, derivePermissions(role)]),
+) as Record<StaffRole, RolePermissions>;
 
 export function formatRole(role: StaffRole): string {
   return role.replace(/_/g, ' ');

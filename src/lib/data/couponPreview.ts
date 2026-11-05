@@ -4,11 +4,11 @@
  * again by /api/checkout-intent; this is only a display estimate.
  */
 import type { CartItem } from '@/lib/cartContext';
+import { toCheckoutItems } from '@/lib/checkout/checkoutApi';
 import type { CouponValidationResult } from '@/types/coupon';
 
 export async function previewCoupon(params: {
   code: string;
-  subtotal: number;
   items: CartItem[];
   email?: string;
 }): Promise<CouponValidationResult> {
@@ -17,12 +17,8 @@ export async function previewCoupon(params: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       code: params.code,
-      cartSubtotal: params.subtotal,
-      cartItems: params.items.map(i => ({
-        productId: i.productId, productSlug: i.productSlug, unitPrice: i.unitPrice, quantity: i.quantity,
-      })),
+      items: toCheckoutItems(params.items),
       customerEmail: params.email || undefined,
-      currency: 'INR',
     }),
   });
   const data = (await res.json().catch(() => null)) as CouponValidationResult | null;

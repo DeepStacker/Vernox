@@ -102,9 +102,9 @@ export default function OrderConfirmation() {
                 <div className="text-muted-foreground leading-relaxed">
                   {[order.shippingCity, order.shippingState].filter(Boolean).join(', ') || 'Address on file'}
                 </div>
-                {order.tracking?.number && (
+                {order.tracking?.trackingNumber && (
                   <div className="mt-2 text-muted-foreground">
-                    Tracking: <span className="font-mono text-foreground">{order.tracking.carrier ? `${order.tracking.carrier} ` : ''}{order.tracking.number}</span>
+                    Tracking: <span className="font-mono text-foreground">{order.tracking.carrier ? `${order.tracking.carrier} ` : ''}{order.tracking.trackingNumber}</span>
                   </div>
                 )}
               </div>
