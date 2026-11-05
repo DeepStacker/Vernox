@@ -5,9 +5,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useCatalog, Order, Product } from '@/lib/catalogContext';
+import { useAdminData } from '@/lib/data/adminData';
+import type { Order, Product } from '@/types/store';
 import type { Coupon } from '@/types/coupon';
-import type { CustomerAccount } from '@/lib/catalogContext';
 import { 
   Search, ShoppingCart, Package, Tag, Users, 
   ArrowRight, X, Clock, ExternalLink, Palette, Image as ImageIcon 
@@ -18,7 +18,7 @@ interface AdminCommandPaletteProps {
   onClose: () => void;
   onSelectOrder?: (order: Order) => void;
   onSelectProduct?: (product: Product) => void;
-  onSelectTab: (tab: any) => void;
+  onSelectTab: (tab: string) => void;
 }
 
 export function AdminCommandPalette({
@@ -28,7 +28,7 @@ export function AdminCommandPalette({
   onSelectProduct,
   onSelectTab,
 }: AdminCommandPaletteProps) {
-  const { orders, products, coupons, customers, storeConfig } = useCatalog();
+  const { orders, products, coupons, customers, storeConfig } = useAdminData();
   const [query, setQuery] = useState('');
 
   // Keyboard shortcut listener for Esc
@@ -66,7 +66,7 @@ export function AdminCommandPalette({
     const matchedOrders = orders.filter(o => 
       o.id.toLowerCase().includes(q) ||
       o.email.toLowerCase().includes(q) ||
-      (o.shippingName && o.shippingName.toLowerCase().includes(q)) ||
+      (o.customerName && o.customerName.toLowerCase().includes(q)) ||
       (o.items && o.items.some(i => 
         (i.productName && i.productName.toLowerCase().includes(q)) ||
         (i.uploadedArtworkName && i.uploadedArtworkName.toLowerCase().includes(q)) ||
@@ -226,7 +226,7 @@ export function AdminCommandPalette({
                             )}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {o.shippingName || o.email} · {o.items?.length || 0} items
+                            {o.customerName || o.email} · {o.items?.length || 0} items
                             {o.items?.find(i => i.uploadedArtworkName)?.uploadedArtworkName && (
                               <span className="text-foreground/80 font-medium"> · "{o.items.find(i => i.uploadedArtworkName)?.uploadedArtworkName}"</span>
                             )}

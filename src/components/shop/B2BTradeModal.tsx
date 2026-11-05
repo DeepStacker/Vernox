@@ -63,19 +63,12 @@ export function B2BTradeModal({ open, onOpenChange, defaultProjectType }: Props)
     };
 
     try {
-      // 1. Save to Firestore b2b_inquiries collection
       await addDoc(collection(db, 'b2b_inquiries'), payload);
     } catch (err) {
-      console.warn('Firestore B2B inquiry save fallback to local state:', err);
-    }
-
-    // 2. Backup to localStorage
-    try {
-      const existing = JSON.parse(localStorage.getItem('vernox-b2b-inquiries') || '[]');
-      existing.unshift(payload);
-      localStorage.setItem('vernox-b2b-inquiries', JSON.stringify(existing));
-    } catch (e) {
-      // ignore local storage errors
+      console.error('B2B inquiry could not be saved:', err);
+      setSubmitting(false);
+      toast.error('Your inquiry could not be sent. Please try again or email us directly.');
+      return;
     }
 
     setSubmitting(false);

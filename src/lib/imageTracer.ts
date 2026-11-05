@@ -190,6 +190,29 @@ export function traceContours(
 
   const totalImageArea = width * height;
 
+  // Background connected to the image border is the exterior, not a hole. Without this, the
+  // right-hand edge of every solid shape (a 1 -> 0 transition) was traced as a bogus "hole" loop.
+  const exterior = new Uint8Array(width * height);
+  const pending: number[] = [];
+  const seedExterior = (x: number, y: number) => {
+    const i = y * width + x;
+    if (binary[i] === 0 && exterior[i] === 0) {
+      exterior[i] = 1;
+      pending.push(i);
+    }
+  };
+  for (let x = 0; x < width; x++) { seedExterior(x, 0); seedExterior(x, height - 1); }
+  for (let y = 0; y < height; y++) { seedExterior(0, y); seedExterior(width - 1, y); }
+  while (pending.length > 0) {
+    const i = pending.pop() as number;
+    const px = i % width;
+    const py = (i - px) / width;
+    if (px > 0) seedExterior(px - 1, py);
+    if (px < width - 1) seedExterior(px + 1, py);
+    if (py > 0) seedExterior(px, py - 1);
+    if (py < height - 1) seedExterior(px, py + 1);
+  }
+
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const idx = y * width + x;
@@ -198,7 +221,7 @@ export function traceContours(
       // Outer boundary: 0 -> 1 transition
       const isOuterStart = isPixel === 1 && visited[idx] === 0 && getPixel(x - 1, y) === 0;
       // Hole boundary: 1 -> 0 transition
-      const isHoleStart = isPixel === 0 && visited[idx] === 0 && getPixel(x - 1, y) === 1;
+      const isHoleStart = isPixel === 0 && exterior[idx] === 0 && visited[idx] === 0 && getPixel(x - 1, y) === 1;
 
       if (isOuterStart || isHoleStart) {
         const loop: Point2D[] = [];

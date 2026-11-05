@@ -35,7 +35,8 @@ describe('Image-to-Vector Pipeline', () => {
       0, 0, 255, 255,   // Blue -> Y ~ 29
       0, 0, 0, 0        // Transparent -> 255 (background)
     ]);
-    const gray = rgbaToGrayscale({ data: rgba, width: 2, height: 2 });
+    // Auto-contrast is disabled here to assert the raw BT.601 luma weights.
+    const gray = rgbaToGrayscale({ data: rgba, width: 2, height: 2 }, false);
     expect(gray.length).toBe(4);
     expect(gray[0]).toBeCloseTo(76, 0);
     expect(gray[1]).toBeCloseTo(150, 0);

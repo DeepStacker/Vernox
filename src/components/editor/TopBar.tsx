@@ -1,3 +1,4 @@
+import { safeLocal } from '@/lib/safeStorage';
 import { useRef, useCallback, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useEditor } from '@/hooks/useEditor';
@@ -62,17 +63,18 @@ export function TopBar({ onClose }: TopBarProps = {}) {
     const designJson = JSON.stringify(doc);
 
     // Check if user uploaded any custom reference artwork
-    const customRasterLayer = doc.layers.find(l => (l as any).tracedFromRaster && (l as any).sourceImagePreview);
+    type RasterLayerInfo = { tracedFromRaster?: boolean; sourceImagePreview?: string };
+    const customRasterLayer = doc.layers.find(l => (l as RasterLayerInfo).tracedFromRaster && (l as RasterLayerInfo).sourceImagePreview);
     const userUploadedImage = 
       doc.userUploadedImage || 
-      (customRasterLayer as any)?.sourceImagePreview || 
-      localStorage.getItem('vernox-studio-artwork') || 
+      (customRasterLayer as RasterLayerInfo | undefined)?.sourceImagePreview || 
+      safeLocal.get('vernox-studio-artwork') || 
       undefined;
 
     const uploadedArtworkName = 
       doc.uploadedArtworkName || 
       customRasterLayer?.name || 
-      localStorage.getItem('vernox-studio-artwork-name') || 
+      safeLocal.get('vernox-studio-artwork-name') || 
       (userUploadedImage ? 'Client Custom Logo Artwork' : undefined);
 
     add({
@@ -99,7 +101,12 @@ export function TopBar({ onClose }: TopBarProps = {}) {
 
   const handleSave = () => {
     const name = projectName.trim() || `Project ${new Date().toLocaleString()}`;
-    saveProject(name, state);
+    try {
+      saveProject(name, state);
+    } catch (err) {
+      toast({ title: 'Project not saved', description: err instanceof Error ? err.message : 'Storage is unavailable.', variant: 'destructive' });
+      return;
+    }
     toast({ title: 'Project saved', description: name });
     setSaveOpen(false);
     setProjectName('');

@@ -8,7 +8,9 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
-import { useCatalog, Order } from '@/lib/catalogContext';
+import { useAdminData } from '@/lib/data/adminData';
+import { isRevenueStatus } from '@/lib/orders/orderStateMachine';
+import type { Order } from '@/types/store';
 import { computeOverviewMetrics, OverviewMetrics } from '@/lib/storeAnalytics';
 import { 
   ResponsiveContainer, LineChart, Line, AreaChart, Area, BarChart, Bar,
@@ -23,7 +25,7 @@ import {
 } from 'lucide-react';
 
 interface AdminOverviewProps {
-  onSelectTab: (tab: any) => void;
+  onSelectTab: (tab: string) => void;
   onSelectOrder?: (order: Order) => void;
   initialViewMode?: AnalyticsViewMode;
 }
@@ -50,7 +52,8 @@ interface MetricDetailConfig {
 }
 
 export function AdminOverview({ onSelectTab, initialViewMode = 'financials' }: AdminOverviewProps) {
-  const { orders, products, customers, storeConfig } = useCatalog();
+  const { orders: allOrders, products, customers, storeConfig, hasMoreOrders, loadMoreOrders, isLoadingMoreOrders, ordersError } = useAdminData();
+  const orders = useMemo(() => allOrders.filter(o => isRevenueStatus(o.status)), [allOrders]);
 
   const [dateRange, setDateRange] = useState<DateRangeKey>('today');
   const [viewMode, setViewMode] = useState<AnalyticsViewMode>(initialViewMode);
@@ -318,8 +321,8 @@ export function AdminOverview({ onSelectTab, initialViewMode = 'financials' }: A
   const modalChartData = useMemo(() => {
     if (!activeMetricConfig) return [];
     return metrics.timeSeries.map(item => {
-      const cur = Number((item as any)[activeMetricConfig.currentSeriesKey] || 0);
-      const prev = Number((item as any)[activeMetricConfig.previousSeriesKey] || 0);
+      const cur = Number((item as unknown as Record<string, number>)[activeMetricConfig.currentSeriesKey] || 0);
+      const prev = Number((item as unknown as Record<string, number>)[activeMetricConfig.previousSeriesKey] || 0);
       const delta = cur - prev;
       const deltaPercent = prev > 0 ? Math.round((delta / prev) * 100 * 10) / 10 : (cur > 0 ? 100 : 0);
       return {
@@ -413,6 +416,20 @@ export function AdminOverview({ onSelectTab, initialViewMode = 'financials' }: A
 
   return (
     <div className="space-y-6 pb-12 animate-fade-in max-w-[1440px] mx-auto">
+      {ordersError && (
+        <div role="alert" className="border border-destructive/30 bg-destructive/5 text-destructive text-xs rounded p-3">
+          Orders could not be loaded, so these figures are incomplete: {ordersError.message}
+        </div>
+      )}
+      {hasMoreOrders && (
+        <div className="flex items-center justify-between gap-3 border border-border/60 bg-muted/30 text-xs rounded p-3">
+          <span className="text-muted-foreground">Figures cover the {allOrders.length} most recent orders loaded so far.</span>
+          <button onClick={() => loadMoreOrders()} disabled={isLoadingMoreOrders}
+            className="font-semibold text-oxblood hover:underline disabled:opacity-50">
+            {isLoadingMoreOrders ? 'Loading…' : 'Load older orders'}
+          </button>
+        </div>
+      )}
       {/* Top Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/60 pb-5">
         <div>
@@ -467,7 +484,7 @@ export function AdminOverview({ onSelectTab, initialViewMode = 'financials' }: A
               <Calendar className="w-3.5 h-3.5 text-brass" />
               <select 
                 value={dateRange}
-                onChange={(e) => setDateRange(e.target.value as any)}
+                onChange={(e) => setDateRange(e.target.value as DateRangeKey)}
                 className="bg-transparent outline-none cursor-pointer pr-1 font-semibold text-foreground font-display text-xs"
               >
                 {filterOptions.map(o => (
@@ -1161,7 +1178,7 @@ export function AdminOverview({ onSelectTab, initialViewMode = 'financials' }: A
                   <LineChart data={metrics.timeSeries}>
                     <XAxis dataKey="timeLabel" stroke="#9ca3af" fontSize={9} tickLine={false} axisLine={false} />
                     <ChartTooltip 
-                      formatter={(v: any) => [`${currency}${v}`, 'Sales']}
+                      formatter={(v: number | string) => [`${currency}${v}`, 'Sales']}
                       contentStyle={{ fontSize: '11px', borderRadius: '8px', border: '1px solid #2E2421', backgroundColor: '#1C1615', color: '#F8F4E7' }}
                     />
                     <Line type="monotone" dataKey="previousSales" stroke="#C6A15B" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
@@ -1209,7 +1226,7 @@ export function AdminOverview({ onSelectTab, initialViewMode = 'financials' }: A
                   <LineChart data={metrics.timeSeries}>
                     <XAxis dataKey="timeLabel" stroke="#9ca3af" fontSize={9} tickLine={false} axisLine={false} />
                     <ChartTooltip 
-                      formatter={(v: any) => [v, 'Patrons']}
+                      formatter={(v: number | string) => [v, 'Patrons']}
                       contentStyle={{ fontSize: '11px', borderRadius: '8px', border: '1px solid #2E2421', backgroundColor: '#1C1615', color: '#F8F4E7' }}
                     />
                     <Line type="monotone" dataKey="previousVisitors" stroke="#C6A15B" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
@@ -1430,7 +1447,7 @@ export function AdminOverview({ onSelectTab, initialViewMode = 'financials' }: A
                   <LineChart data={metrics.timeSeries}>
                     <XAxis dataKey="timeLabel" stroke="#9ca3af" fontSize={9} tickLine={false} axisLine={false} />
                     <ChartTooltip 
-                      formatter={(v: any) => [`${currency}${v}`, 'AOV']}
+                      formatter={(v: number | string) => [`${currency}${v}`, 'AOV']}
                       contentStyle={{ fontSize: '11px', borderRadius: '8px', border: '1px solid #2E2421', backgroundColor: '#1C1615', color: '#F8F4E7' }}
                     />
                     <Line type="monotone" dataKey="previousAOV" stroke="#C6A15B" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
@@ -1552,7 +1569,7 @@ export function AdminOverview({ onSelectTab, initialViewMode = 'financials' }: A
                   <LineChart data={metrics.timeSeries}>
                     <XAxis dataKey="timeLabel" stroke="#9ca3af" fontSize={9} tickLine={false} axisLine={false} />
                     <ChartTooltip 
-                      formatter={(v: any) => [`${currency}${v}`, 'Campaign']}
+                      formatter={(v: number | string) => [`${currency}${v}`, 'Campaign']}
                       contentStyle={{ fontSize: '11px', borderRadius: '8px', border: '1px solid #2E2421', backgroundColor: '#1C1615', color: '#F8F4E7' }}
                     />
                     <Line type="monotone" dataKey="previousSales" stroke="#C6A15B" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
@@ -1975,7 +1992,7 @@ export function AdminOverview({ onSelectTab, initialViewMode = 'financials' }: A
                         <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => typeof v === 'number' && v >= 1000 ? `${(v/1000).toFixed(1)}k` : `${v}`} />
                         <ChartTooltip
                           contentStyle={{ fontSize: '12px', borderRadius: '10px', border: '1px solid #5B262C', backgroundColor: '#140E0D', color: '#FAF7F2' }}
-                          formatter={(v: any, name: any) => [
+                          formatter={(v: number | string, name: string) => [
                             activeMetricConfig.valueFormatter(Number(v)),
                             name === 'current' ? activeMetricConfig.currentSeriesName : activeMetricConfig.previousSeriesName
                           ]}
@@ -1990,7 +2007,7 @@ export function AdminOverview({ onSelectTab, initialViewMode = 'financials' }: A
                         <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => typeof v === 'number' && v >= 1000 ? `${(v/1000).toFixed(1)}k` : `${v}`} />
                         <ChartTooltip
                           contentStyle={{ fontSize: '12px', borderRadius: '10px', border: '1px solid #5B262C', backgroundColor: '#140E0D', color: '#FAF7F2' }}
-                          formatter={(v: any, name: any) => [
+                          formatter={(v: number | string, name: string) => [
                             activeMetricConfig.valueFormatter(Number(v)),
                             name === 'current' ? activeMetricConfig.currentSeriesName : activeMetricConfig.previousSeriesName
                           ]}
@@ -2005,7 +2022,7 @@ export function AdminOverview({ onSelectTab, initialViewMode = 'financials' }: A
                         <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => typeof v === 'number' && v >= 1000 ? `${(v/1000).toFixed(1)}k` : `${v}`} />
                         <ChartTooltip
                           contentStyle={{ fontSize: '12px', borderRadius: '10px', border: '1px solid #5B262C', backgroundColor: '#140E0D', color: '#FAF7F2' }}
-                          formatter={(v: any, name: any) => [
+                          formatter={(v: number | string, name: string) => [
                             activeMetricConfig.valueFormatter(Number(v)),
                             name === 'current' ? activeMetricConfig.currentSeriesName : activeMetricConfig.previousSeriesName
                           ]}

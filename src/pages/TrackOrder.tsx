@@ -1,8 +1,16 @@
+import { useSeo } from '@/lib/seo';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SiteHeader } from '@/components/shop/SiteHeader';
 import { SiteFooter } from '@/components/shop/SiteFooter';
-import { useCatalog } from '@/lib/catalogContext';
+import { useAuth } from '@/lib/auth/AuthProvider';
+import { fetchPublicOrderStatus } from '@/lib/data/orders';
+import { lookupOrder } from '@/lib/data/orderLookup';
+import { OrderProgress } from '@/components/shop/OrderProgress';
+import { ORDER_STATUS_LABELS } from '@/lib/orders/orderStateMachine';
+import { isOffPathStatus } from '@/lib/orders/fulfilmentStages';
+import { safeSession } from '@/lib/safeStorage';
+import type { PublicOrderSummary } from '@/types/store';
 import { 
   Package, 
   Search, 
@@ -23,141 +31,73 @@ const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
 function getRateLimitState(): { count: number; lockedUntil: number } {
-  try {
-    const raw = sessionStorage.getItem('vnx_track_rl');
-    if (!raw) return { count: 0, lockedUntil: 0 };
-    return JSON.parse(raw);
-  } catch {
-    return { count: 0, lockedUntil: 0 };
-  }
+  return safeSession.getJson('vnx_track_rl', { count: 0, lockedUntil: 0 });
 }
 
-function recordFailedAttempt(): { nextCount: number; lockedUntil: number } {
-  const current = getRateLimitState();
-  const nextCount = current.count + 1;
-  const now = Date.now();
-  const lockedUntil = nextCount >= MAX_FAILED_ATTEMPTS ? now + LOCKOUT_WINDOW_MS : 0;
-  try {
-    sessionStorage.setItem('vnx_track_rl', JSON.stringify({ count: nextCount, lockedUntil }));
-  } catch {}
-  return { nextCount, lockedUntil };
+function recordFailedAttempt(): void {
+  const nextCount = getRateLimitState().count + 1;
+  const lockedUntil = nextCount >= MAX_FAILED_ATTEMPTS ? Date.now() + LOCKOUT_WINDOW_MS : 0;
+  safeSession.setJson('vnx_track_rl', { count: nextCount, lockedUntil });
 }
 
 function resetRateLimit(): void {
-  try {
-    sessionStorage.removeItem('vnx_track_rl');
-  } catch {}
+  safeSession.remove('vnx_track_rl');
 }
 
 export default function TrackOrder() {
-  const { orders, storeConfig, currentCustomer } = useCatalog();
+  useSeo({ title: 'Track your order', noindex: true });
+  const { user, profile } = useAuth();
   const [searchParams] = useSearchParams();
   
   // Only accept order reference ID from URL; never accept or encourage email in query params
   const initialOrderId = searchParams.get('id') || '';
 
   const [orderInput, setOrderInput] = useState(initialOrderId);
-  const [emailInput, setEmailInput] = useState(currentCustomer?.email || '');
+  const [emailInput, setEmailInput] = useState(profile?.email || '');
   const [isSearching, setIsSearching] = useState(false);
-  const [matchedOrder, setMatchedOrder] = useState<any | null>(null);
+  const [matchedOrder, setMatchedOrder] = useState<PublicOrderSummary | null>(null);
 
-  const handleTrackSubmit = (e: React.FormEvent) => {
+  const handleTrackSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanId = orderInput.trim().toUpperCase();
+    const cleanId = orderInput.trim();
     const cleanEmail = emailInput.trim().toLowerCase();
 
     if (!cleanId) {
       toast.error('Please enter your order reference.');
       return;
     }
-
     if (!cleanEmail) {
       toast.error('Please enter the email address associated with this order.');
       return;
     }
 
-    // Check rate limit status
+    // Client-side throttle; the server enforces its own limits as well.
     const { lockedUntil } = getRateLimitState();
     if (lockedUntil > Date.now()) {
       const remainingSecs = Math.ceil((lockedUntil - Date.now()) / 1000);
-      toast.error(`Verification temporarily paused due to repeated attempts. Please wait ${remainingSecs}s or contact concierge.`);
+      toast.error(`Verification temporarily paused due to repeated attempts. Please wait ${remainingSecs}s or contact support.`);
       return;
     }
 
     setIsSearching(true);
-
-    // Uniform timing to resist side-channel timing analysis
-    setTimeout(() => {
-      // Authoritative lookup against active order database
-      const found = orders.find(o => {
-        const id = (o.id || '').toUpperCase();
-        const num = (o.orderNumber || '').toUpperCase();
-        const idMatches = id === cleanId || num === cleanId || (cleanId.startsWith('VNX-') && id === cleanId.replace('VNX-', ''));
-        const emailMatches = (o.email || '').trim().toLowerCase() === cleanEmail;
-        return idMatches && emailMatches;
-      });
-
-      if (found) {
-        resetRateLimit();
-        setMatchedOrder(found);
-        toast.success('Order located. Live workshop status retrieved.');
-      } else {
-        recordFailedAttempt();
-        setMatchedOrder(null);
-        // Uniform error response prevents order ID enumeration
-        toast.error('Unable to verify order details with the provided information. Please verify your Order Reference and Email address.');
-      }
+    try {
+      const found = user ? await lookupOrder(cleanId, cleanEmail, user.uid) : await fetchPublicOrderStatus(cleanId, cleanEmail);
+      resetRateLimit();
+      setMatchedOrder(found);
+      toast.success('Order located.');
+    } catch (err) {
+      recordFailedAttempt();
+      setMatchedOrder(null);
+      // Same wording for "no such order" and "wrong email" so order IDs cannot be enumerated.
+      toast.error(err instanceof Error && !/match|found|verify/i.test(err.message)
+        ? err.message
+        : 'Unable to verify order details with the provided information. Please check your order reference and email address.');
+    } finally {
       setIsSearching(false);
-    }, 450);
+    }
   };
 
-  const getMilestones = (status: string) => {
-    const isPaid = ['Paid', 'Designing', 'In_Production', 'Cutting', 'Finished', 'Shipped', 'Delivered'].includes(status);
-    const isProducing = ['In_Production', 'Cutting', 'Finished', 'Shipped', 'Delivered'].includes(status);
-    const isFinished = ['Finished', 'Shipped', 'Delivered'].includes(status);
-    const isShipped = ['Shipped', 'Delivered'].includes(status);
-    const isDelivered = status === 'Delivered';
-
-    return [
-      {
-        step: 1,
-        title: 'Order Confirmed',
-        desc: 'Order received and scheduled for production',
-        done: isPaid,
-        current: status === 'Pending' || status === 'Paid',
-      },
-      {
-        step: 2,
-        title: 'In Production',
-        desc: 'Precision cutting and surface finishing',
-        done: isProducing,
-        current: ['Designing', 'In_Production', 'Cutting'].includes(status),
-      },
-      {
-        step: 3,
-        title: 'Quality Inspection',
-        desc: 'Inspection and protective crating',
-        done: isFinished,
-        current: status === 'Finished',
-      },
-      {
-        step: 4,
-        title: 'Dispatched',
-        desc: 'En route with shipping partner',
-        done: isShipped,
-        current: status === 'Shipped',
-      },
-      {
-        step: 5,
-        title: 'Delivered',
-        desc: 'Delivered to installation address',
-        done: isDelivered,
-        current: status === 'Delivered',
-      }
-    ];
-  };
-
-  const isCancelledOrRefunded = matchedOrder && (matchedOrder.status === 'Cancelled' || matchedOrder.status === 'Refunded');
+  const isOffPath = matchedOrder ? isOffPathStatus(matchedOrder.status) : false;
 
   return (
     <div className="min-h-screen flex flex-col bg-cream text-dark-brown selection:bg-burgundy selection:text-cream">
@@ -253,7 +193,7 @@ export default function TrackOrder() {
                       Verified Order
                     </span>
                     <h2 className="font-editorial text-2xl sm:text-3xl text-dark-brown mt-1">
-                      Order: {matchedOrder.orderNumber || matchedOrder.id}
+                      Order: {matchedOrder.orderNumber || matchedOrder.orderId}
                     </h2>
                     {matchedOrder.placedAt && (
                       <p className="text-xs text-dark-brown/60 font-sans mt-0.5">
@@ -265,22 +205,22 @@ export default function TrackOrder() {
                   <div className="text-left sm:text-right">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-burgundy/10 text-burgundy text-xs font-semibold uppercase tracking-[0.18em]">
                       <span className="w-2 h-2 rounded-full bg-gold" />
-                      {matchedOrder.status?.replace('_', ' ') || 'In Production'}
+                      {ORDER_STATUS_LABELS[matchedOrder.status]}
                     </span>
-                    {matchedOrder.estimatedDelivery && (
+                    {matchedOrder.tracking?.estimatedDelivery && (
                       <p className="text-xs text-dark-brown/70 font-sans mt-2">
-                        Estimated Delivery: <strong className="text-dark-brown">{matchedOrder.estimatedDelivery}</strong>
+                        Estimated Delivery: <strong className="text-dark-brown">{matchedOrder.tracking.estimatedDelivery}</strong>
                       </p>
                     )}
                   </div>
                 </div>
 
-                {isCancelledOrRefunded ? (
+                {isOffPath && matchedOrder ? (
                   <div className="bg-red-50 border border-red-200 rounded-sm p-4 text-xs text-red-800 flex items-center gap-3">
                     <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
                     <div>
-                      <p className="font-semibold">Order Status: {matchedOrder.status}</p>
-                      <p className="text-[11px] mt-0.5 text-red-700">This order has been {matchedOrder.status.toLowerCase()}. Please contact concierge@vernoxatelier.com for support.</p>
+                      <p className="font-semibold">Order status: {ORDER_STATUS_LABELS[matchedOrder.status]}</p>
+                      <p className="text-[11px] mt-0.5 text-red-700">Please contact concierge@vernoxatelier.com if you have questions about this order.</p>
                     </div>
                   </div>
                 ) : (
@@ -289,38 +229,12 @@ export default function TrackOrder() {
                     <h3 className="text-xs uppercase tracking-[0.22em] text-dark-brown/80 font-sans font-semibold mb-6">
                       Fulfillment Progress
                     </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                      {getMilestones(matchedOrder.status).map(m => (
-                        <div
-                          key={m.step}
-                          className={`p-4 rounded-sm border transition-all ${
-                            m.done
-                              ? 'bg-cream/60 border-burgundy/30 text-dark-brown'
-                              : m.current
-                              ? 'bg-burgundy/5 border-burgundy text-burgundy ring-1 ring-burgundy/20'
-                              : 'bg-cream/20 border-[#E8E1D3] text-dark-brown/40'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-mono font-bold">0{m.step}</span>
-                            {m.done ? (
-                              <CheckCircle2 className="w-4 h-4 text-burgundy" />
-                            ) : m.current ? (
-                              <Clock className="w-4 h-4 text-gold" />
-                            ) : (
-                              <div className="w-2 h-2 rounded-full bg-[#E0D7C6]" />
-                            )}
-                          </div>
-                          <h4 className="text-xs font-semibold leading-snug font-sans">{m.title}</h4>
-                          <p className="text-[10px] mt-1 leading-relaxed opacity-80 font-sans">{m.desc}</p>
-                        </div>
-                      ))}
-                    </div>
+                    <OrderProgress status={matchedOrder.status} />
                   </div>
                 )}
 
                 {/* Courier / Shipping Dispatch Details - Shown ONLY when real carrier/tracking data exists */}
-                {matchedOrder.trackingNumber && (
+                {matchedOrder.tracking?.number && (
                   <div className="bg-cream/50 rounded-sm border border-[#E0D7C6] p-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-sans">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full bg-burgundy/10 text-burgundy flex items-center justify-center">
@@ -330,7 +244,7 @@ export default function TrackOrder() {
                         <span className="text-[10px] uppercase tracking-[0.16em] text-dark-brown/60 block">
                           Carrier
                         </span>
-                        <span className="font-semibold text-dark-brown">{matchedOrder.trackingCarrier || matchedOrder.carrier || 'Standard Freight'}</span>
+                        <span className="font-semibold text-dark-brown">{matchedOrder.tracking?.carrier || 'Courier'}</span>
                       </div>
                     </div>
 
@@ -339,19 +253,8 @@ export default function TrackOrder() {
                         <span className="text-[10px] uppercase tracking-[0.16em] text-dark-brown/60 block">
                           Tracking Reference
                         </span>
-                        <span className="font-mono font-bold text-burgundy">{matchedOrder.trackingNumber}</span>
+                        <span className="font-mono font-bold text-burgundy">{matchedOrder.tracking?.number}</span>
                       </div>
-                      {matchedOrder.trackingUrl && typeof matchedOrder.trackingUrl === 'string' && /^https?:\/\//i.test(matchedOrder.trackingUrl) && (
-                        <a
-                          href={matchedOrder.trackingUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xs bg-white border border-[#D5CBB8] text-[11px] font-semibold text-dark-brown hover:text-burgundy transition-colors shadow-2xs"
-                        >
-                          <span>Track with Carrier</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
                     </div>
                   </div>
                 )}
@@ -360,37 +263,24 @@ export default function TrackOrder() {
               {/* Items in this Order */}
               <div className="bg-white border border-[#E8E1D3] rounded-md p-6 sm:p-8 shadow-xs">
                 <h3 className="text-xs uppercase tracking-[0.22em] text-dark-brown/80 font-sans font-semibold mb-6 border-b border-[#EBE4D6] pb-3">
-                  Ordered Items ({matchedOrder.items?.length || 1})
+                  Ordered Items ({matchedOrder.items?.length ?? 0})
                 </h3>
 
                 <div className="divide-y divide-[#EBE4D6]">
-                  {(matchedOrder.items || []).map((item: any, idx: number) => (
-                    <div key={idx} className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  {(matchedOrder.items || []).map((item, idx) => (
+                    <div key={`${item.productId ?? item.name}-${idx}`} className="py-4 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
                       <div className="flex items-center gap-4">
                         <div className="w-14 h-14 bg-cream rounded-xs border border-[#E0D7C6] flex items-center justify-center shrink-0">
                           <Layers className="w-6 h-6 text-burgundy" />
                         </div>
                         <div>
-                          <h4 className="font-editorial text-lg text-dark-brown font-medium leading-snug">
-                            {item.productName || item.name || 'Architectural Piece'}
-                          </h4>
-                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-dark-brown/60 font-sans mt-0.5">
-                            {item.sizeLabel && <span>{item.sizeLabel}</span>}
-                            {item.finish && (
-                              <>
-                                <span>·</span>
-                                <span className="capitalize">{item.finish.replace('_', ' ')} Finish</span>
-                              </>
-                            )}
-                            <span>·</span>
-                            <span>Qty: {item.quantity || 1}</span>
-                          </div>
+                          <h4 className="font-editorial text-lg text-dark-brown font-medium leading-snug">{item.name}</h4>
+                          <div className="text-[11px] text-dark-brown/60 font-sans mt-0.5">Qty: {item.quantity}</div>
                         </div>
                       </div>
-
-                      <div className="text-right sm:text-right font-mono text-xs font-semibold text-dark-brown">
-                        {storeConfig.currency} {((item.unitPrice || 0) * (item.quantity || 1)).toLocaleString()}
-                      </div>
+                      {typeof item.lineTotal === 'number' && (
+                        <div className="text-right font-mono text-xs font-semibold text-dark-brown">₹{item.lineTotal.toLocaleString('en-IN')}</div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -402,7 +292,7 @@ export default function TrackOrder() {
                       <MapPin className="w-4 h-4 text-burgundy shrink-0 mt-0.5" />
                       <div>
                         <span className="font-semibold text-dark-brown block">Destination</span>
-                        <span>{matchedOrder.shippingCity}, {matchedOrder.shippingCountry || ''}</span>
+                        <span>{[matchedOrder.shippingCity, matchedOrder.shippingState].filter(Boolean).join(', ')}</span>
                       </div>
                     </div>
 

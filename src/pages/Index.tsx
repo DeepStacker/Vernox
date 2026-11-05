@@ -1,3 +1,4 @@
+import { safeLocal } from '@/lib/safeStorage';
 import { useState, useCallback, useEffect } from 'react';
 import { EditorProvider } from '@/components/editor/EditorContext';
 import { useEditor } from '@/hooks/useEditor';
@@ -23,7 +24,7 @@ function EditorLayout() {
 
   // Load custom inspection project if clicked by admin
   useEffect(() => {
-    const inspectJson = localStorage.getItem('vernox-custom-inspect');
+    const inspectJson = safeLocal.get('vernox-custom-inspect');
     if (inspectJson) {
       try {
         const parsed = JSON.parse(inspectJson);
@@ -31,7 +32,7 @@ function EditorLayout() {
       } catch (e) {
         console.error('Failed to parse inspection design project', e);
       }
-      localStorage.removeItem('vernox-custom-inspect');
+      safeLocal.remove('vernox-custom-inspect');
     }
   }, [dispatch]);
 
