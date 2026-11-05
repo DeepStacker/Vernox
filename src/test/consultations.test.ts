@@ -181,6 +181,31 @@ describe('payment confirmation', () => {
   });
 });
 
+describe('GST invoice for the consultation (a service: invoiced on payment, not at dispatch)', () => {
+  it('issues the invoice with the SAC code when the seller is configured', async () => {
+    const store = seededStore();
+    store.seed('settings/store', { seller: SELLER_CONFIG.seller });
+    seedSpace(store);
+    const { res } = await buy(store);
+    const order = store.read(`orders/${res.orderId}`)!;
+    expect(order.status).toBe('Paid');
+    expect(order.invoiceNumber).toMatch(/^VX\/\d{2}-\d{2}\/\d{6}$/);
+    const invoice = store.read(`invoices/${res.orderId}`) as { lines: Array<{ hsnCode: string }> } | undefined;
+    expect(invoice?.lines.map(l => l.hsnCode)).toEqual([config().consultation.sacCode]);
+  });
+
+  it('still confirms the payment when seller details are missing, and flags the invoice for finance', async () => {
+    const store = seededStore();
+    seedSpace(store);
+    const { res } = await buy(store);
+    const order = store.read(`orders/${res.orderId}`)!;
+    expect(order.status).toBe('Paid');
+    expect(order.invoiceNumber ?? null).toBeNull();
+    expect(order.flags).toContain('INVOICE_PENDING_SELLER_SETTINGS');
+    expect(store.read(`invoices/${res.orderId}`) ?? null).toBeNull();
+  });
+});
+
 describe('credit coupon', () => {
   const frame = [{ productId: 'p-01', sizeLabel: 'Medium · 50cm', finish: 'brass', quantity: 6 }]; // ₹1,614, above the ₹999 credit
 

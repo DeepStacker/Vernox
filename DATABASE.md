@@ -114,8 +114,10 @@ Phase 2 (India commerce):
 - `invoices/{orderId}` — immutable GST tax invoice (`TaxDocument`, `api/_lib/gst/invoice.ts`): `number`, `financialYear`,
   `issuedAt`, `seller`, `buyer`, `placeOfSupply{ state, stateCode }`, `supplyType` (`intra_state` = CGST+SGST, `inter_state` =
   IGST), `lines[{ description, hsnCode, quantity, unitPricePaise, grossPaise, discountPaise, taxablePaise, gstRateBps, cgstPaise,
-  sgstPaise, igstPaise, totalPaise }]`, `totals`, `taxInclusive: false`, `paymentMethod`. Issued once per order when the shipment
-  is created (time of supply = removal of goods); never for replacement orders.
+  sgstPaise, igstPaise, totalPaise }]`, `totals`, `taxInclusive: false`, `paymentMethod`. Issued once per order: goods when the shipment
+  is created (time of supply = removal of goods); services (`kind: 'service'`, design consultations) on payment
+  confirmation, with the SAC code on the line. If seller settings are incomplete at payment, the service order is still
+  marked Paid and flagged `INVOICE_PENDING_SELLER_SETTINGS`. Never for replacement orders.
 - `credit_notes/{refundId}` — same shape, `type: 'credit_note'`, `againstInvoice{ id, number }`, `refundId`, `reason`. One per
   refund on an invoiced order (and `cancel_{orderId}` for an invoiced COD order that is cancelled after RTO).
 - `counters/{invoice|credit_note}_{YYYY-YY}` — `{ last }`, incremented in the issuing transaction. Numbers: `VX/26-27/000123`

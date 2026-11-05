@@ -171,9 +171,10 @@ Owner decisions needed before launch:
   buyer's email. Alternatives: no credit, or a shorter/longer validity (Settings).
 - **SAC code**: default 998391 (specialty design services). Confirm with the CA; it is stored on the service line and printed
   nowhere yet.
-- **GST invoice for the service**: the existing invoice is issued at dispatch and consultation orders never dispatch, so no tax
-  invoice is generated for a consultation yet. A service invoice (time of supply = payment) is a follow-up once the CA confirms
-  the SAC and the treatment of the credit.
+- **GST invoice for the service**: issued on payment confirmation (time of supply for services) with the SAC code on the
+  line; if seller settings are incomplete the payment is still confirmed and the order is flagged
+  `INVOICE_PENDING_SELLER_SETTINGS`. Follow-up: a Finance action to issue pending invoices once settings are complete, and
+  the CA to confirm the SAC and the GST treatment of the credit coupon.
 - **Turnaround**: default 3 days (Settings); it is shown to customers and drives the designer queue's deadline.
 - Designers need the `designer` role (Team screen). Production needs the Storage bucket CORS entry for the site origin
   (DEPLOYMENT.md) so wall photos can be read for the preview.

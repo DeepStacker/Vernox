@@ -8,7 +8,7 @@ import { copyConsultationPhotos, consultationPath, creditCouponId, generateCredi
 import { auditInTransaction, buildAuditEntry, SYSTEM_ACTOR } from './audit';
 import { couponFromDoc, couponPath, customerUsagePath, writeCouponRedemption } from './coupons';
 import { ApiError } from './errors';
-import { applyCreditNote, planCreditNote } from './gst/invoice';
+import { applyCreditNote, applyInvoice, planCreditNote, planInvoice, type InvoicePlan } from './gst/invoice';
 import { applyStockDelta, planRecommit, planRelease } from './inventory';
 import { enqueueNotification, payloadFromOrder } from './notifications/outbox';
 import { canTransition, isPaidStatus, refundStatus, type OrderStatus, type StatusHistoryEntry } from './orderLifecycle';
@@ -16,6 +16,7 @@ import { applyStatusChange, planEvent, planStatusChange } from './orderTransitio
 import { asOrder, orderPath, type OrderDoc } from './orders';
 import { refundPath, type RefundDoc } from './refundRecords';
 import { arrayUnion, increment, type DocStore } from './store';
+import { loadStoreConfig } from './storeConfig';
 
 export type PaymentSource = 'checkout_callback' | 'webhook';
 
@@ -66,6 +67,9 @@ export async function confirmPayment(
   const now = params.now ?? Date.now();
   const by = params.source === 'webhook' ? 'razorpay' : 'customer';
   const creditCode = generateCreditCode(); // only used when the order is a consultation
+  // Services have no dispatch, so their GST invoice is issued on payment (time of supply);
+  // goods are invoiced at CREATE_SHIPMENT. Seller details come from settings/store.
+  const { seller } = await loadStoreConfig(store);
 
   const outcome = await store.runTransaction(async (tx): Promise<ConfirmOutcome> => {
     const order = asOrder(await tx.get(orderPath(params.orderId)));
@@ -144,13 +148,26 @@ export async function confirmPayment(
     }
 
     const consultation = planConsultationOnPayment(order, creditCode, now);
+    let invoicePlan: InvoicePlan | null = null;
+    if (order.kind === 'service') {
+      try {
+        invoicePlan = await planInvoice(tx, order, seller, now);
+      } catch (err) {
+        // A missing GSTIN must never fail a customer's payment: confirm it and flag the invoice for finance.
+        if (!(err instanceof ApiError && err.code === 'CONFIG_ERROR')) throw err;
+        console.error(`[payments] service order ${order.id} paid but not invoiced: ${err.message}`);
+        flags.push('INVOICE_PENDING_SELLER_SETTINGS');
+      }
+    }
 
     // ---- writes ----
+    const invoiceFields = invoicePlan ? applyInvoice(tx, invoicePlan, order, seller, now) : {};
     applyStockDelta(tx, recommit, -1, now);
     applyStatusChange(tx, transition, order, now, {
       razorpayPaymentId: params.razorpayPaymentId,
       paidAt: now,
       paymentConfirmedVia: params.source,
+      ...invoiceFields,
       ...(order.stockReservation?.status === 'none' ? {} : { stockReservation: { ...order.stockReservation, status: 'committed' } }),
       ...(flags.length > 0 ? { flags: arrayUnion(...flags) } : {}),
     }, consultation?.notificationExtra);
