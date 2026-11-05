@@ -5,12 +5,14 @@ import { SiteFooter } from '@/components/shop/SiteFooter';
 import { Shield, FileText, Truck, ArrowLeft, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+import { useSeo } from '@/lib/seo';
 interface LegalProps {
   defaultTab?: 'privacy' | 'terms' | 'shipping';
 }
 
 export default function Legal({ defaultTab = 'privacy' }: LegalProps) {
   const [activeTab, setActiveTab] = useState<'privacy' | 'terms' | 'shipping'>(defaultTab);
+  useSeo({ title: activeTab === 'terms' ? 'Terms of Service' : activeTab === 'shipping' ? 'Shipping Policy' : 'Privacy Policy', description: 'Legal information for Vernox customers: privacy, terms and shipping policies.' });
   const location = useLocation();
 
   useEffect(() => {

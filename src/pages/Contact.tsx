@@ -18,7 +18,9 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { AtelierSelect } from '@/components/ui/select';
 
+import { useSeo } from '@/lib/seo';
 export default function Contact() {
+  useSeo({ title: 'Contact', description: 'Get in touch with Vernox for order help, custom laser-cut commissions and trade enquiries.' });
   const [formData, setFormData] = useState({
     name: '',
     email: '',

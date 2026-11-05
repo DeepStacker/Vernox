@@ -42,6 +42,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
+import { useSeo, productJsonLd } from '@/lib/seo';
 type ViewMode = 'photo' | 'lifestyle' | 'preview' | 'wall';
 
 interface FinishDescription {
@@ -62,6 +63,7 @@ export default function ProductDetail() {
   const { getProductBySlug, products, reviews, wishlist, toggleWishlist, storeConfig, coupons } = useCatalog();
   const { slug } = useParams<{ slug: string }>();
   const product = slug ? getProductBySlug(slug) : undefined;
+  useSeo(product ? { title: product.name, description: product.tagline || product.description, canonicalPath: `/product/${product.slug}`, image: product.imageUrl, ogType: 'product', jsonLd: productJsonLd(product) } : { title: 'Product', noindex: true });
   
   const isWishlisted = product ? wishlist.includes(product.id) : false;
   const navigate = useNavigate();

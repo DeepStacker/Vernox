@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { useSeo } from '@/lib/seo';
 interface FaqItem {
   q: string;
   a: string;
@@ -111,6 +112,7 @@ const FAQ_DATA: FaqItem[] = [
 ];
 
 export default function Faqs() {
+  useSeo({ title: 'FAQs', description: 'Answers on materials, finishes, custom designs, delivery, payments and returns for Vernox metal wall art.' });
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [openIndex, setOpenIndex] = useState<number | null>(0);

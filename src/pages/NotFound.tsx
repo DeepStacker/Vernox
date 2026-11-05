@@ -7,6 +7,7 @@ import { SiteFooter } from "@/components/shop/SiteFooter";
 import { InlineStudio } from "@/components/experience/InlineStudio";
 import { ShapeThumb } from "@/components/shop/ShapeThumb";
 
+import { useSeo } from '@/lib/seo';
 const suggestions = [
   { to: "/shop", label: "The atelier shop", desc: "Finished pieces, ready to ship", icon: Compass },
   { to: "/shop/monograms", label: "Monograms", desc: "Cut to your initials", icon: Layers },
@@ -16,6 +17,7 @@ const suggestions = [
 const driftShapes = ["hexagon", "arch", "circle", "star6", "octagon"];
 
 const NotFound = () => {
+  useSeo({ title: 'Page not found', noindex: true });
   const location = useLocation();
   const navigate = useNavigate();
   const [studioOpen, setStudioOpen] = useState(false);

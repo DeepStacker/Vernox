@@ -16,7 +16,9 @@ import {
   Compass
 } from 'lucide-react';
 
+import { useSeo } from '@/lib/seo';
 export default function Shipping() {
+  useSeo({ title: 'Shipping', description: 'Production time, delivery across India and shipping charges for Vernox metal wall art.', canonicalPath: '/shipping' });
   const { storeConfig } = useCatalog();
   const currencySymbol = (storeConfig?.currency && storeConfig.currency !== '$') ? storeConfig.currency : '₹';
   const threshold = storeConfig?.freeShippingThreshold || 150;

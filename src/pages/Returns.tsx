@@ -13,7 +13,9 @@ import {
   ArrowRight
 } from 'lucide-react';
 
+import { useSeo } from '@/lib/seo';
 export default function Returns() {
+  useSeo({ title: 'Returns & Refunds', description: 'Vernox returns, replacement and refund policy for made-to-order metal wall art.', canonicalPath: '/returns' });
   return (
     <div className="min-h-screen flex flex-col bg-cream text-dark-brown selection:bg-burgundy selection:text-cream">
       <SiteHeader />

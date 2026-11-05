@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { useSeo } from '@/lib/seo';
 export type AdminTab = 
   | 'home'
   | 'orders' 
@@ -46,6 +47,7 @@ export type AdminTab =
   | 'settings';
 
 export default function Admin() {
+  useSeo({ title: 'Admin', noindex: true });
   const { 
     isAdmin, loginAdmin, logoutAdmin, currentAdmin, adminRole,
     orders, products 

@@ -25,9 +25,24 @@ Vernox is a professional web-based tool for designing and visualizing custom met
 2. Install dependencies: `npm install`
 3. Start the dev server: `npm run dev`
 
+### Package manager
+npm is the only supported package manager (`package-lock.json` is the single lockfile; Dockerfiles use `npm ci`). Do not commit `bun.lock`, `bun.lockb` or `yarn.lock`.
+
+### Configuration
+Copy `.env.example` to `.env`. `VITE_SITE_URL` is the canonical public origin (default `https://vernox.in`); it feeds canonical and Open Graph URLs, `index.html` and the sitemap. Also update the `Sitemap:` line in `public/robots.txt` when the domain changes.
+
 ### Building for Production
-1. Run `npm run build`
+1. Run `npm run build`. The `prebuild` step runs `npm run sitemap` (`scripts/generate-sitemap.ts`), which regenerates `public/sitemap.xml` from static routes and product slugs in `src/lib/catalog.ts`.
 2. The production-ready files will be in the `dist` directory.
+
+### Images
+`npm run optimize-images` (`scripts/optimize-images.mjs`, uses `sharp`) downsizes the JPGs in `public/images` and writes `.webp` siblings. It is idempotent; run it after adding new images.
+
+### SEO
+Pages set their title, description, canonical, Open Graph and JSON-LD through `useSeo` from `src/lib/seo`. Admin, cart and 404 pages are `noindex`.
+
+### Acceptance testing
+See `UAT.md` for the launch acceptance scripts by role.
 
 ## License
 All rights reserved © Vernox 2026.

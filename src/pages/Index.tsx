@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { StudioOpeningAnimation } from '@/components/editor/StudioOpeningAnimation';
 import { cn } from '@/lib/utils';
 
+import { useSeo } from '@/lib/seo';
 function EditorLayout() {
   const { state, dispatch, addImage } = useEditor();
   const isMobile = useIsMobile();
@@ -211,6 +212,7 @@ function EditorLayout() {
 }
 
 const Index = () => {
+  useSeo({ title: 'Design Studio', description: 'Design your own laser-cut metal wall art online. Choose shape, size, material and finish, then order made to order in India.', canonicalPath: '/studio' });
   return (
     <EditorProvider>
       <EditorLayout />

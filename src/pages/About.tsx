@@ -20,6 +20,7 @@ import {
   Palette
 } from 'lucide-react';
 
+import { useSeo } from '@/lib/seo';
 const PROCESS_STEPS = [
   {
     phase: 'Phase 01',
@@ -59,6 +60,7 @@ const PROCESS_STEPS = [
 ];
 
 export default function About() {
+  useSeo({ title: 'About', description: 'The story behind Vernox: precision laser-cut metal wall art, designed and made to order in India.' });
   const [activeStep, setActiveStep] = useState<number | null>(0);
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
 

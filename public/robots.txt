@@ -1,12 +1,12 @@
 User-agent: *
 Allow: /
 Disallow: /admin
-Disallow: /admin/
-Disallow: /account
-Disallow: /account/
 Disallow: /checkout
+Disallow: /account
 Disallow: /cart
 Disallow: /order-confirmation/
+Disallow: /track-order
 Disallow: /api/
 
-Sitemap: https://vernox-editor.vercel.app/sitemap.xml
+# Absolute sitemap URL must match VITE_SITE_URL; update when the production domain is final.
+Sitemap: https://vernox.in/sitemap.xml

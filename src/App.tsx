@@ -1,20 +1,16 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CartProvider } from "@/lib/cartContext";
 import { CatalogProvider } from "@/lib/catalogContext";
 import { CartDrawer } from "@/components/shop/CartDrawer";
-import { PageCurtain } from "@/components/experience/PageCurtain";
 import { ScrollToTop } from "@/components/ScrollToTop";
 
-// Eagerly load primary storefront landing page
-import Home from "./pages/Home.tsx";
-
-// Code-split all other pages to eliminate the 3MB initial bundle bottleneck
+// Every route is code-split; heavy sections inside pages are split further.
+const Home = lazy(() => import("./pages/Home.tsx"));
 const Shop = lazy(() => import("./pages/Shop.tsx"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail.tsx"));
 const Cart = lazy(() => import("./pages/Cart.tsx"));
@@ -50,15 +46,12 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange storageKey="vernox-theme">
       <TooltipProvider>
-        <Toaster />
         <Sonner />
         <CatalogProvider>
           <CartProvider>
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               {/* Universal Scroll Reset on Every Navigation */}
               <ScrollToTop />
-              {/* Professional Luxury Curtain Transition for First Load, Reload & Navigation */}
-              <PageCurtain />
               <CartDrawer />
               <Suspense fallback={<PageFallback />}>
                 <Routes>
@@ -72,19 +65,19 @@ const App = () => (
                   <Route path="/account" element={<Account />} />
                   <Route path="/about" element={<About />} />
                   <Route path="/trade" element={<Trade />} />
-                  <Route path="/b2b" element={<Trade />} />
+                  <Route path="/b2b" element={<Navigate to="/trade" replace />} />
                   <Route path="/shipping" element={<Shipping />} />
                   <Route path="/returns" element={<Returns />} />
                   <Route path="/faqs" element={<Faqs />} />
                   <Route path="/contact" element={<Contact />} />
                   <Route path="/track-order" element={<TrackOrder />} />
-                  <Route path="/customize" element={<Index />} />
+                  <Route path="/customize" element={<Navigate to="/studio" replace />} />
                   <Route path="/studio" element={<Index />} />
                   <Route path="/admin" element={<Admin />} />
                   <Route path="/notebook" element={<Notebook />} />
                   <Route path="/privacy" element={<Legal defaultTab="privacy" />} />
                   <Route path="/terms" element={<Legal defaultTab="terms" />} />
-                  <Route path="/shipping-returns" element={<Shipping />} />
+                  <Route path="/shipping-returns" element={<Navigate to="/returns" replace />} />
                   <Route path="/legal" element={<Legal defaultTab="privacy" />} />
                   {/* CATCH-ALL 404 ROUTE */}
                   <Route path="*" element={<NotFound />} />

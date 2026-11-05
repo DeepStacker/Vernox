@@ -20,7 +20,9 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { AtelierSelect } from '@/components/ui/select';
 
+import { useSeo } from '@/lib/seo';
 export default function Trade() {
+  useSeo({ title: 'Trade & Bulk Orders', description: 'Laser-cut metal signage and wall art for architects, designers, hotels and businesses. Request a trade quote from Vernox.', canonicalPath: '/trade' });
   const [formData, setFormData] = useState({
     firmName: '',
     contactName: '',

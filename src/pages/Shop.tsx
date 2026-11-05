@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { ChevronDown, Check, Search, SlidersHorizontal, X, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { useSeo, itemListJsonLd } from '@/lib/seo';
 export default function Shop() {
   const { products, categories, storeConfig } = useCatalog();
   const { category } = useParams<{ category?: string }>();
@@ -113,6 +114,7 @@ export default function Shop() {
 
     return sorted;
   }, [category, search, maxPrice, selectedFinishes, sort, products]);
+  useSeo({ title: activeCategory ? activeCategory.name : 'Shop Metal Wall Art', description: activeCategory ? activeCategory.description : 'Browse laser-cut metal wall art, sculptures and statement pieces made to order in India.', jsonLd: itemListJsonLd(filteredList.slice(0, 24)) });
 
   const getSortLabel = (s: typeof sort) => {
     switch (s) {

@@ -5,7 +5,9 @@ import { SiteFooter } from '@/components/shop/SiteFooter';
 import { ArrowRight, BookOpen, Clock, Calendar, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { useSeo } from '@/lib/seo';
 export default function Notebook() {
+  useSeo({ title: 'Notebook', noindex: true });
   const { topics } = useCatalog();
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('All');

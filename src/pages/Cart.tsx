@@ -26,8 +26,10 @@ import { toast } from 'sonner';
 import { RecentlyViewed } from '@/components/shop/RecentlyViewed';
 
 import { calculateCouponDiscount } from '@/lib/couponValidator';
+import { useSeo } from '@/lib/seo';
 
 export default function Cart() {
+  useSeo({ title: 'Cart', noindex: true });
   const { storeConfig, products, coupons } = useCatalog();
   const { items, updateQty, remove, subtotal, clear, appliedCoupon, applyCoupon, removeCoupon } = useCart();
   const navigate = useNavigate();

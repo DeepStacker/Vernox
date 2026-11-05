@@ -6,6 +6,7 @@ import checkoutIntentHandler from "./api/checkout-intent";
 import verifyPaymentHandler from "./api/verify-payment";
 import validateCouponHandler from "./api/validate-coupon";
 import adminHandler from "./api/admin";
+import { DEFAULT_SITE_URL } from "./src/lib/seo/defaultSiteUrl";
 
 function apiMiddlewarePlugin(env: Record<string, string>): Plugin {
   return {
@@ -89,6 +90,15 @@ function apiMiddlewarePlugin(env: Record<string, string>): Plugin {
   };
 }
 
+// Replaces %VITE_SITE_URL% in index.html (absolute OG image URLs) with the configured origin.
+function siteUrlHtmlPlugin(env: Record<string, string>): Plugin {
+  const siteUrl = (env.VITE_SITE_URL || DEFAULT_SITE_URL).replace(/\/+$/, "");
+  return {
+    name: "site-url-html",
+    transformIndexHtml: (html) => html.replace(/%VITE_SITE_URL%/g, siteUrl),
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -120,7 +130,7 @@ export default defineConfig(({ mode }) => {
           }
         : {}),
     },
-    plugins: [react(), apiMiddlewarePlugin(env)].filter(Boolean),
+    plugins: [react(), apiMiddlewarePlugin(env), siteUrlHtmlPlugin(env)].filter(Boolean),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
@@ -131,7 +141,17 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            // Vite's virtual helpers (dynamic-import preloader, CJS interop) are used everywhere;
+            // pin them to the core chunk so they don't drag pdf/charts into the entry.
+            if (id.includes('vite/preload-helper') || id.includes('commonjsHelpers')) {
+              return 'vendor-react';
+            }
             if (id.includes('node_modules')) {
+              // Core runtime first: without an explicit chunk Rollup parks shared React code inside
+              // whichever vendor chunk imports it first (charts/pdf), forcing them into the initial load.
+              if (/node_modules\/(react|react-dom|scheduler|react-router|react-router-dom|@remix-run|clsx|tailwind-merge|class-variance-authority)\//.test(id)) {
+                return 'vendor-react';
+              }
               if (id.includes('firebase')) {
                 return 'vendor-firebase';
               }
