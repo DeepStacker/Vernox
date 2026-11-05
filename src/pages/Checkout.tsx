@@ -19,6 +19,9 @@ import {
 import { formatDeliveryDate } from '@/lib/shipping/deliveryEstimate';
 import { useDeliveryEstimate } from '@/lib/shipping/useDeliveryEstimate';
 import { CUSTOM_PRODUCT_ID } from '@/types/products';
+import { isCreditCode } from '@/lib/consultations/consultationModel';
+import { useAutoApplyConsultationCredit } from '@/lib/consultations/useCreditAutoApply';
+import { trackSpaceEvent } from '@/lib/spaces/analytics';
 import {
   INDIAN_STATES_AND_UTS, normalizeIndianMobile, validateAddress, type AddressErrors, type AddressForm,
 } from '@/lib/checkout/validation';
@@ -41,6 +44,7 @@ export default function Checkout() {
   } = useCart();
   const { storeConfig } = useCatalog();
   const { profile } = useAuth();
+  useAutoApplyConsultationCredit();
   const navigate = useNavigate();
   const currency = storeConfig.currency;
 
@@ -215,6 +219,7 @@ export default function Checkout() {
       setPhase('verifying');
       const verified = await verifyPayment(outcome.payment);
       trackStoreEvent('purchase', { orderId: verified.orderId, orderTotal: intent.pricing.total });
+      if (isCreditCode(couponCode)) trackSpaceEvent('consultation_credit_redeemed', { orderId: verified.orderId });
       clear();
       toast.success('Payment received. Your order is confirmed.');
       navigate(`/order-confirmation/${verified.orderId}?email=${encodeURIComponent(customer.email)}`);

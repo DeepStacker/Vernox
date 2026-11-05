@@ -246,3 +246,53 @@ Rules and side effects:
 'delivered' | 'rto' | 'cancelled', shipmentId, providerOrderId, awb, courier, trackingUrl, labelUrl, manifestUrl,
 pickupScheduledAt, lastEvent: { status, at } | null, error, createdAt, updatedAt }`.
 `RefundDoc`: see DATABASE.md `refunds`. `ReturnDoc`: see DATABASE.md `returns`.
+
+
+## Design consultation (Stage 2)
+
+A paid service sold through the ordinary prepaid checkout; ROADMAP.md "Decision: room scanning and interior planning". The
+customer's space and walls are read and written directly in Firestore/Storage (DATABASE.md, `users/{uid}/spaces`); everything
+that moves money or changes a consultation goes through the API.
+
+### `POST /api/consultation`
+Signed-in customer only (`Authorization: Bearer <ID token>`, else `401`); rate-limited per IP. Body `{ "action": ..., ... }`.
+
+| Action | Params | Result |
+|---|---|---|
+| `PURCHASE` | `spaceId, idempotencyKey ([A-Za-z0-9_-]{8,128}), name, phone, state` | Same body as a prepaid `checkout-intent`: `{ orderId, orderNumber, razorpayOrderId, keyId, amount (paise), currency, pricing }` |
+| `REQUEST_REVISION` | `consultationId, message (3–1000)` | `{ success: true }` |
+| `CLOSE` | `consultationId, outcome: 'accepted' \| 'declined'` | `{ success: true }` |
+
+- `PURCHASE` reads the caller's own space (`users/{uid}/spaces/{spaceId}`, `404` if missing; another customer's space is never
+  reachable), needs at least one wall with a photo (`400`), and needs `settings/store.consultation.enabled` (`409` otherwise). The
+  fee, SAC and GST come from settings only: the client never sends a price. The order is `kind: 'service'`, prepaid, with one line
+  (`productId: 'design-consultation'`), no stock, no shipping, no COD, no coupon. Payment is completed with the normal
+  `POST /api/verify-payment` (or the webhook); on `Paid` the server creates `consultations/{orderId}` and, when
+  `creditTowardsOrder`, the credit coupon, in the same transaction, then copies the wall photos. The `order_confirmed` email
+  for a consultation order is the consultation receipt (with the credit code).
+- `REQUEST_REVISION`: only while `proposed` and only once (`409` afterwards): status back to `in_progress`, `revisionNote` set,
+  turnaround clock restarted.
+- `CLOSE`: only while `proposed`; the consultation becomes `closed` with the outcome.
+- Someone else's consultation answers `404`, like a missing one.
+- `/api/checkout-intent` cannot buy the consultation: `design-consultation` is not a product, so it is rejected as `INVALID_ITEM`.
+
+### Credit coupons (per-customer binding)
+`coupons/cc_{orderId}` is a `fixed` coupon for the consultation fee (before GST), `maxUsageCount: 1`, expiring after
+`creditValidityDays`, with `boundEmail` = the buyer's email. The coupon engine (`api/_lib/coupons.ts`) now refuses a coupon whose
+`boundEmail` differs from the checkout email: `COUPON_NOT_FOR_CUSTOMER` in `/api/validate-coupon` ("This coupon was issued to
+another customer."), `INVALID_COUPON` at checkout. `/api/validate-coupon` therefore needs `customerEmail` for such codes (the cart
+sends the signed-in email). Redemption (on payment) also stamps `consultations/{id}.creditRedeemedAt/creditRedeemedOrderId`.
+
+### New `/api/admin` actions (consultations)
+| Action | Method | Permission | Params | Result |
+|---|---|---|---|---|
+| `CLAIM_CONSULTATION` | POST | `consultations.manage` | `consultationId` | `{ status, photosReady }`; `new` → `in_progress`, assigns the caller; `409` if another designer has it (admins may take over); retries the photo copy when it had failed |
+| `SAVE_PROPOSAL_DRAFT` | POST | `consultations.manage` | `consultationId, draft: { items: ProposalItem[] (≤ 12), note (≤ 1000) }` | `{ consultationId }`; only the assignee (or an admin) while `in_progress`; previews must be `consultations/{id}/previews/{itemId}.png` |
+| `SEND_PROPOSAL` | POST | `consultations.manage` | `consultationId` | `{ version }`; validates every piece (catalogue size/finish via the checkout pricing, custom size/finish via the custom-piece rules), sets `proposed`, enqueues one `proposal_ready` email per version |
+
+Reads of consultations and drafts are by Firestore rules (`consultations.read`), not through the API.
+
+### Notifications and orders
+New event `proposal_ready` (outbox id `{orderId}_proposal_ready_v{n}`). `order_confirmed` carries `service: 'consultation'` plus
+`creditCode/creditPaise/creditExpiresAt` for consultation orders. Consultation orders are never shipped or invoiced by the shipping
+flow, are excluded from the workshop queues, and cannot be cancelled by the customer (`409`); finance refunds them with `CREATE_REFUND`.

@@ -7,7 +7,7 @@ import type { Outline, Point, Quad } from '@/lib/wallPreview/types';
 import { Chip, Row } from './controls';
 import { CalibrationStage } from './CalibrationStage';
 import { WallCanvas, type WallCanvasHandle } from './WallCanvas';
-import { backdropFromFile, estimateBackdropLight, type Backdrop } from './render/backdrop';
+import { backdropFromFile, backdropFromUrl, estimateBackdropLight, type Backdrop } from './render/backdrop';
 import type { Pose } from './render/compose';
 
 type Method = 'object' | 'width' | 'corners';
@@ -17,11 +17,15 @@ interface Props {
   finish: string;
   eventData: EventData;
   canvasRef: React.Ref<WallCanvasHandle>;
+  /** Saved wall photo with its scale (My Space); skips the upload and calibration steps. */
+  initialPhoto?: { url: string; pxPerCm: number };
+  /** Reports the piece's pose whenever it changes. */
+  onPose?: (pose: Pose) => void;
 }
 
 const num = (v: string) => (v.trim() === '' ? NaN : Number(v));
 
-export function YourWall({ outline, finish, eventData, canvasRef }: Props) {
+export function YourWall({ outline, finish, eventData, canvasRef, initialPhoto, onPose }: Props) {
   const [backdrop, setBackdrop] = useState<Backdrop | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -34,6 +38,8 @@ export function YourWall({ outline, finish, eventData, canvasRef }: Props) {
   const [rectH, setRectH] = useState('');
   const [calibration, setCalibration] = useState<{ h: Matrix3; method: Method; ppcm?: number } | null>(null);
   const [pose, setPose] = useState<Pose>({ cx: 0, cy: 0, rotationDeg: 0 });
+
+  useEffect(() => onPose?.(pose), [pose, onPose]);
 
   const light = useMemo(() => (backdrop ? estimateBackdropLight(backdrop) : null), [backdrop]);
 
@@ -91,6 +97,28 @@ export function YourWall({ outline, finish, eventData, canvasRef }: Props) {
   }, []);
 
   useEffect(() => setPoints([]), [method]);
+
+  useEffect(() => {
+    if (!initialPhoto) return;
+    let cancelled = false;
+    setBusy(true);
+    backdropFromUrl(initialPhoto.url)
+      .then(b => {
+        if (cancelled) return;
+        const h = scaleOnlyHomography(initialPhoto.pxPerCm);
+        const inv = invertMatrix3(h);
+        const centre = inv ? applyHomography(inv, { x: b.width / 2, y: b.height / 2 }) : { x: 0, y: 0 };
+        setBackdrop(b);
+        setCalibration({ h, method: 'width', ppcm: initialPhoto.pxPerCm });
+        setPose({ cx: centre.x, cy: centre.y, rotationDeg: 0 });
+        trackWallPreview('own_photo_used', { calibration: 'saved', ...eventData });
+      })
+      .catch(() => !cancelled && setError('Your saved photo could not be opened.'))
+      .finally(() => !cancelled && setBusy(false));
+    return () => { cancelled = true; };
+    // Re-runs only when the saved photo itself changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPhoto?.url, initialPhoto?.pxPerCm]);
 
   if (!backdrop) {
     return (
@@ -188,14 +216,16 @@ export function YourWall({ outline, finish, eventData, canvasRef }: Props) {
         <Chip onClick={() => { setBackdrop(null); setCalibration(null); }}>New photo</Chip>
       </div>
       <p className="text-xs text-muted-foreground">{calibration.ppcm ? 'Pinch to fine-tune the scale. ' : ''}Light and shadow follow your photo.</p>
-      <PrivacyNote />
+      <PrivacyNote saved={!!initialPhoto} />
     </div>
   );
 }
 
-function PrivacyNote() {
+function PrivacyNote({ saved = false }: { saved?: boolean }) {
   return (
-    <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Lock className="h-3 w-3" aria-hidden /> Your photo stays on this device and is never uploaded.</p>
+    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <Lock className="h-3 w-3" aria-hidden /> {saved ? 'This photo is saved privately in your account.' : 'Your photo stays on this device and is never uploaded.'}
+    </p>
   );
 }
 

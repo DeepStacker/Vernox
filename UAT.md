@@ -24,7 +24,7 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | Base URL | `VITE_SITE_URL` of the staging deployment |
 | Guest | no account, fresh private browser window |
 | Customer A / Customer B | two signed-in customer accounts with different emails and phones |
-| Admin roles | one account per role: Catalog manager, Order manager, Production, QC and packing, Shipping, Finance, Support, Super admin |
+| Admin roles | one account per role: Designer, Catalog manager, Order manager, Production, QC and packing, Shipping, Finance, Support, Super admin |
 | Test pincodes | one serviceable (e.g. 560001), one non-serviceable, one COD-ineligible (manual provider: any valid PIN is serviceable; use Shiprocket test lanes or `codEnabled: false` for the negative cases) |
 | Devices | Chrome desktop, iPhone Safari, mid-range Android Chrome |
 
@@ -88,6 +88,35 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | CS-12 | Return window expired | Delivered beyond window | Try to raise return | `POST /api/return-request` after `returnWindowDays` returns 409 with the window text | Testable via API (UI: Phase 3) |
 | CS-13 | Download GST invoice | Paid order | Download invoice | Invoice available after dispatch (`GET /api/invoice`): PDF with seller GSTIN, HSN per line, CGST+SGST (same state) or IGST, number `VX/YY-YY/NNNNNN`; 404 "issued when dispatched" before that | Testable via API (download button: Phase 3) |
 | CS-14 | Data export and delete | Signed in | Request data export and account deletion | Request recorded and fulfilled per privacy policy | Blocked: Phase 2 |
+
+## 2a. My Space and design consultation (Stage 2)
+
+Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a designer account (role `designer`) and Customer A / B with verified emails.
+
+| ID | Case | Preconditions | Steps | Expected result | Result |
+|---|---|---|---|---|---|
+| SP-01 | Create a space | Customer A signed in | `/account/spaces` → New space, name and room | Space listed; opens its page; `space_created` recorded | |
+| SP-02 | Add a wall, typed size | Space exists | Add a wall, take or upload a photo, type width and height in cm, add notes | Wall card shows the photo, size and notes; photo is stored at `spaces/{uid}/{spaceId}/{wallId}.jpg`; `wall_added` recorded | |
+| SP-03 | Calibrate from the photo | Wall editor open with a photo | Choose Measure from photo, tap both ends of an A4 sheet, pick A4 | "The photo shows about W × H cm" appears; the size fields fill in; the saved wall previews at that scale | |
+| SP-04 | Photo handling | Wall editor | Upload a 12 MP phone photo; a non-image; a very large wall size (6000 cm) | Photo is downscaled to ≤ 1600 px before upload; non-image rejected; size outside 30 cm to 30 × 15 m refused with a message | |
+| SP-05 | Try a design here | Wall with photo and scale | Try a design here, change the design and the size | The wall preview opens on "Your wall" with the saved photo at the saved scale; the piece is to scale; the privacy note says the photo is saved in the account | |
+| SP-06 | Wall without a photo | Wall saved without a photo | Look at its card | Try a design here is disabled; Get design help stays disabled until a wall has a photo | |
+| SP-07 | Buy a consultation | Space with a photographed wall; consultation enabled | Get design help, enter name, mobile, state, pay with a test card | Razorpay shows the server price (fee + 18% GST); after payment `/account/consultations/{id}` shows "Designer at work" and the due date; receipt email mentions the credit code; `consultation_purchased` recorded | |
+| SP-08 | Price is server-side | SP-07 request | Replay `POST /api/consultation` with an extra `amount` field; call `/api/checkout-intent` with `productId: design-consultation` | The extra field is ignored; the public checkout rejects the item (`INVALID_ITEM`) | |
+| SP-09 | Disabled or no photo | Setting off / space without photos | `PURCHASE` | `409` / `400` with a message; no order created | |
+| SP-10 | Credit coupon issued | SP-07 done | Open the consultation | Credit panel shows ₹fee off until the expiry date and the `DESIGN-` code; a `coupons/cc_{orderId}` document exists, bound to the buyer's email, single use | |
+| SP-11 | Credit redeemed once | SP-10 | As Customer A add items worth more than the fee to the cart | The credit is applied automatically in the cart; after paying, the code is refused ("reached its redemption limit") and the credit panel says it has been used; `consultation_credit_redeemed` recorded | |
+| SP-12 | Credit is personal and expires | SP-10 | Use the code as Customer B (validate-coupon with B's email; checkout with B's email); use it after the expiry date | Refused ("issued to another customer"); refused as expired | |
+| SP-13 | Designer queue | SP-07 done | Designer opens Consultations | New queue lists the consultation with days left (turnaround from settings); overdue ones turn red | |
+| SP-14 | Claim | SP-13 | Claim; a second designer tries to claim | First claim moves it to In progress; the second gets a conflict; an admin can take over | |
+| SP-15 | Wall photos for the designer | SP-14 | Open the consultation | Wall photos, sizes and notes are shown from the consultation's own copy; the designer cannot open `spaces/{uid}/...` | |
+| SP-16 | Build a proposal | SP-14 | Add a piece: catalogue product, place it on a wall with the preview, Use this placement; add a second piece from a saved studio design; add notes | Each piece appears with its composed preview; Save draft persists; the customer sees nothing yet | |
+| SP-17 | Send the proposal | SP-16 | Send proposal | Status Proposed; the customer gets the "proposal ready" email; a piece that cannot be ordered (size not offered, design too small) blocks sending with a message | |
+| SP-18 | Customer views the proposal | SP-17 | Open the link from the email | Per-wall previews, size, finish and price; designer's note; `proposal_viewed` recorded | |
+| SP-19 | Add proposal items to the cart | SP-18 | Add a catalogue piece and a custom piece | Catalogue line carries size and finish; custom line is a studio line with its design; the server re-prices both at checkout; `proposal_item_added_to_cart` recorded | |
+| SP-20 | Revision | SP-18 | Ask for a revision with a message; designer sends a new version; ask again | The first request returns the consultation to In progress with the message and a new due date; version 2 is emailed; the second request is refused | |
+| SP-21 | Accept or close | SP-18 | I like this proposal / Not for me | Consultation Closed with the outcome; items stay available to add to the cart | |
+| SP-22 | Cancelling and refunds | SP-07 done | Try to cancel the consultation order as the customer; finance refunds it with `CREATE_REFUND` | Customer cancel refused ("cannot be cancelled online"); finance refund works and the order does not appear in Production or Shipping | |
 
 ## 3. Catalog manager
 
@@ -256,6 +285,9 @@ Each role must be refused actions that belong to other roles. Test by UI (action
 | RP-09 | Signed-out user | Open `/admin` or call admin APIs | Redirected to sign-in; API returns 401 | |
 | RP-11 | Catalog manager | Open Production, QC, Support or Trade enquiries | |
 | RP-10 | Customer | Open `/admin` or call admin APIs | Refused with 403 | |
+| RP-12 | Designer | Open Orders, Production, QC, Shipping, Returns, Finance, Support, Customers, Analytics, Trade, Products, Discounts, Settings or Team; read `orders`, `users`, `coupons`, `staff` or `audit_logs`; call any `/api/admin` action other than the three consultation actions (403); read a customer's `users/{uid}/spaces` or `spaces/{uid}/...` photos | |
+| RP-13 | Customer B | Read Customer A's spaces, wall photos, consultation or proposal previews (rules deny; the API answers 404); redeem A's credit code | |
+| RP-14 | Support, Finance, Order manager | See the Consultations tab or read `consultations/*` | |
 
 ## 13. Security negative tests
 

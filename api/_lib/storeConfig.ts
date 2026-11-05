@@ -21,9 +21,12 @@
  *   customLeadTimeDays: number           production days for Crafting Studio pieces
  *   manualTransitDays: number            courier transit estimate when Shiprocket is not configured
  *   defaultHsnCode: string               HSN for products without hsnCode (owner must confirm)
+ *   consultation: { enabled, priceInr, creditTowardsOrder, creditValidityDays, turnaroundDays, sacCode }
+ *                                        paid design consultation (see ConsultationSettings; price is GST-exclusive)
  *   seller: { legalName, tradeName, gstin, address, city, state, stateCode, pincode, email, phone }
  *                                        supplier block printed on GST invoices
  */
+import { DEFAULT_CONSULTATION_SETTINGS } from '../../src/types/consultation';
 import type { StoreSettingsDoc } from '../../src/types/settings';
 import { isNonNegativeFinite, paiseToRupees, rupeesToPaise } from './money';
 import type { DocData, DocStore } from './store';
@@ -67,6 +70,15 @@ export interface FulfilmentConfig {
   returnWindowDays: number;
 }
 
+export interface ConsultationConfig {
+  enabled: boolean;
+  pricePaise: number;
+  creditTowardsOrder: boolean;
+  creditValidityDays: number;
+  turnaroundDays: number;
+  sacCode: string;
+}
+
 export interface StoreConfig {
   currency: 'INR';
   /** GST in basis points (1800 = 18%). */
@@ -77,6 +89,7 @@ export interface StoreConfig {
   cod: CodConfig;
   fulfilment: FulfilmentConfig;
   defaultHsnCode: string;
+  consultation: ConsultationConfig;
   seller: SellerDetails;
   customPieces: {
     minDimensionMm: number;
@@ -138,6 +151,14 @@ export function defaultStoreConfig(env: NodeJS.ProcessEnv = process.env): StoreC
       returnWindowDays: Math.floor(envNumber(env, 'STORE_RETURN_WINDOW_DAYS', 7)),
     },
     defaultHsnCode: env.STORE_DEFAULT_HSN_CODE?.trim() || '8306',
+    consultation: {
+      enabled: DEFAULT_CONSULTATION_SETTINGS.enabled,
+      pricePaise: rupeesToPaise(DEFAULT_CONSULTATION_SETTINGS.priceInr),
+      creditTowardsOrder: DEFAULT_CONSULTATION_SETTINGS.creditTowardsOrder,
+      creditValidityDays: DEFAULT_CONSULTATION_SETTINGS.creditValidityDays,
+      turnaroundDays: DEFAULT_CONSULTATION_SETTINGS.turnaroundDays,
+      sacCode: DEFAULT_CONSULTATION_SETTINGS.sacCode,
+    },
     seller: { ...EMPTY_SELLER },
     customPieces: { ...CUSTOM_PIECE_LIMITS, finishes: { ...DEFAULT_CUSTOM_FINISH_RATES } },
   };
@@ -150,6 +171,7 @@ export function mergeStoreConfig(defaults: StoreConfig, doc: DocData | null): St
     ...defaults,
     cod: { ...defaults.cod },
     fulfilment: { ...defaults.fulfilment },
+    consultation: { ...defaults.consultation },
     seller: { ...defaults.seller },
     customPieces: { ...defaults.customPieces, finishes: { ...defaults.customPieces.finishes } },
   };
@@ -197,6 +219,27 @@ export function mergeStoreConfig(defaults: StoreConfig, doc: DocData | null): St
       config.defaultHsnCode = doc.defaultHsnCode.trim();
     } else warn('defaultHsnCode');
   }
+  if (doc.consultation && typeof doc.consultation === 'object') {
+    const raw = doc.consultation as Record<string, unknown>;
+    const c = config.consultation;
+    if (typeof raw.enabled === 'boolean') c.enabled = raw.enabled;
+    if (raw.priceInr !== undefined) {
+      // A zero price would create a free paid order the gateway refuses; treat it as invalid.
+      if (isNonNegativeFinite(raw.priceInr) && raw.priceInr >= 1 && raw.priceInr <= 100_000) c.pricePaise = rupeesToPaise(raw.priceInr);
+      else warn('consultation.priceInr');
+    }
+    if (typeof raw.creditTowardsOrder === 'boolean') c.creditTowardsOrder = raw.creditTowardsOrder;
+    for (const [key, max] of [['creditValidityDays', 365], ['turnaroundDays', 30]] as const) {
+      const value = raw[key];
+      if (value === undefined) continue;
+      if (isNonNegativeFinite(value) && Number.isInteger(value) && value >= 1 && value <= max) c[key] = value;
+      else warn(`consultation.${key}`);
+    }
+    if (raw.sacCode !== undefined) {
+      if (typeof raw.sacCode === 'string' && /^[0-9]{4,8}$/.test(raw.sacCode.trim())) c.sacCode = raw.sacCode.trim();
+      else warn('consultation.sacCode');
+    }
+  }
   if (doc.seller && typeof doc.seller === 'object') {
     const raw = doc.seller as Record<string, unknown>;
     for (const key of Object.keys(EMPTY_SELLER) as Array<keyof SellerDetails>) {
@@ -232,6 +275,14 @@ export function defaultSettingsDoc(config: StoreConfig = defaultStoreConfig()): 
     customLeadTimeDays: config.fulfilment.customLeadTimeDays,
     manualTransitDays: config.fulfilment.manualTransitDays,
     defaultHsnCode: config.defaultHsnCode,
+    consultation: {
+      enabled: config.consultation.enabled,
+      priceInr: paiseToRupees(config.consultation.pricePaise),
+      creditTowardsOrder: config.consultation.creditTowardsOrder,
+      creditValidityDays: config.consultation.creditValidityDays,
+      turnaroundDays: config.consultation.turnaroundDays,
+      sacCode: config.consultation.sacCode,
+    },
     seller: { ...EMPTY_SELLER },
     whatsappNumber: '',
     supportPhone: '',

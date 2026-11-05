@@ -26,6 +26,7 @@ import {
   normaliseCouponCode,
   writeCouponRedemption,
 } from './coupons';
+import type { ConsultationPurchase } from './consultations';
 import { ApiError } from './errors';
 import { enqueueNotification, payloadFromOrder, planNotification } from './notifications/outbox';
 import {
@@ -43,6 +44,7 @@ import { cancelUnstartedCheckout } from './payments';
 import {
   CUSTOM_PRODUCT_ID,
   computeTotals,
+  priceConsultationLine,
   priceLines,
   productFromDoc,
   stockRequirements,
@@ -151,8 +153,9 @@ export interface CheckoutDeps {
   now?: () => number;
 }
 
-function requestHash(req: CheckoutRequest): string {
+function requestHash(req: CheckoutRequest, consultation: ConsultationPurchase | null): string {
   const canonical = JSON.stringify({
+    ...(consultation ? { consultationSpace: consultation.spaceId } : {}),
     items: req.items.map(i => [i.productId, i.sizeLabel ?? null, i.widthMm ?? null, i.heightMm ?? null, i.finish, i.quantity, i.customDesignRef ?? null]),
     coupon: req.couponCode ? normaliseCouponCode(req.couponCode) : null,
     email: req.customer.email,
@@ -192,16 +195,29 @@ async function resolveDuplicate(deps: CheckoutDeps, orderId: string): Promise<Ch
   throw new ApiError(409, 'VALIDATION_ERROR', 'This checkout has already been completed or closed. Start a new checkout.');
 }
 
+export interface CheckoutOptions {
+  /**
+   * Sells the design consultation instead of `req.items` (which must be empty): one prepaid service
+   * line priced from settings, no stock, no shipping, no coupon. Only api/consultation.ts passes it.
+   */
+  consultation?: ConsultationPurchase;
+}
+
 export async function createCheckoutIntent(
   deps: CheckoutDeps,
   req: CheckoutRequest,
   userId: string | null,
+  options: CheckoutOptions = {},
 ): Promise<CheckoutResponse> {
   const { store, config } = deps;
+  const consultation = options.consultation ?? null;
   const now = (deps.now ?? Date.now)();
-  const hash = requestHash(req);
+  const hash = requestHash(req, consultation);
   const idempotencyPath = `idempotency/${req.idempotencyKey}`;
   const cod = req.paymentMethod === 'cod';
+  if (consultation && (cod || req.items.length > 0 || req.couponCode)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'A design consultation is prepaid and cannot be combined with items or a coupon.');
+  }
 
   if (cod && !(await store.get(idempotencyPath))) {
     // Cheap checks before the transaction; a retried request with a used key skips them.
@@ -236,27 +252,30 @@ export async function createCheckoutIntent(
 
     // ---- price ----
     const products = new Map<string, ProductRecord | null>(catalogIds.map((id, idx) => [id, productFromDoc(id, productDocs[idx])]));
-    const lines = priceLines(req.items, products, config);
+    const lines = consultation ? [priceConsultationLine(config)] : priceLines(req.items, products, config);
 
     let discountPaise = 0;
     let coupon: OrderDoc['coupon'] = null;
+    let couponConsultationId: string | null = null;
     if (couponId) {
       const evaluation = evaluateCoupon(couponFromDoc(couponId, couponDoc), lines, {
         now,
         customerUsageCount: typeof usageDoc?.count === 'number' ? usageDoc.count : 0,
+        customerEmail: req.customer.email,
       });
       if ('errorCode' in evaluation) throw new ApiError(400, 'INVALID_COUPON', evaluation.message);
       discountPaise = evaluation.discountPaise;
       coupon = { id: evaluation.coupon.id, code: evaluation.coupon.code, discountPaise };
+      couponConsultationId = evaluation.coupon.consultationId;
     }
     const totals = computeTotals(lines, discountPaise, config, { cod });
     if (totals.totalPaise < MIN_PAYABLE_PAISE) {
       throw new ApiError(400, 'VALIDATION_ERROR', 'The order total is below the minimum payable amount.');
     }
     if (cod) assertCodOrderAllowed(lines, totals.totalPaise, config.cod);
-    const leadTimeDays = Math.max(
-      ...lines.map(l => itemLeadTimeDays(l.isCustom, l.isCustom ? null : products.get(l.productId)?.leadTimeDays ?? null, config)),
-    );
+    const leadTimeDays = consultation
+      ? undefined
+      : Math.max(...lines.map(l => itemLeadTimeDays(l.isCustom, l.isCustom ? null : products.get(l.productId)?.leadTimeDays ?? null, config)));
     const notification = cod ? await planNotification(tx, orderId, 'order_confirmed') : null;
 
     // ---- stock ----
@@ -292,6 +311,7 @@ export async function createCheckoutIntent(
       now,
       paymentMethod: req.paymentMethod,
       leadTimeDays,
+      consultation: consultation ?? undefined,
     });
     tx.create(orderPath(orderId), order as unknown as Record<string, unknown>);
     tx.create(idempotencyPath, { orderId, requestHash: hash, createdAt: now, expiresAt: new Date(now + IDEMPOTENCY_TTL_MS) });
@@ -306,6 +326,7 @@ export async function createCheckoutIntent(
           discountPaise: coupon.discountPaise,
           orderTotalPaise: order.amounts.totalPaise,
           now,
+          consultationId: couponConsultationId,
         });
       }
       if (notification) enqueueNotification(tx, notification, payloadFromOrder(order), now);
@@ -377,7 +398,7 @@ export async function previewCoupon(store: DocStore, config: StoreConfig, req: C
     const usage = await store.get(customerUsagePath(coupon.id, req.customerEmail));
     customerUsageCount = typeof usage?.count === 'number' ? usage.count : 0;
   }
-  const evaluation = evaluateCoupon(coupon, lines, { now, customerUsageCount });
+  const evaluation = evaluateCoupon(coupon, lines, { now, customerUsageCount, customerEmail: req.customerEmail });
   const totals = computeTotals(lines, 'discountPaise' in evaluation ? evaluation.discountPaise : 0, config);
   return { evaluation, totals };
 }

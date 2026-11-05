@@ -1,7 +1,7 @@
 import { Suspense, lazy } from 'react';
 import type { WallPreviewProps } from './WallPreviewImpl';
 
-export type { WallPreviewProps } from './WallPreviewImpl';
+export type { WallComposition, WallPreviewProps } from './WallPreviewImpl';
 
 // The preview (canvas renderer, scenes, calibration UI) is fetched only when it is first rendered.
 const WallPreviewImpl = lazy(() => import('./WallPreviewImpl'));

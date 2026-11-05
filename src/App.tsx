@@ -17,6 +17,9 @@ const Cart = lazy(() => import("./pages/Cart.tsx"));
 const Checkout = lazy(() => import("./pages/Checkout.tsx"));
 const OrderConfirmation = lazy(() => import("./pages/OrderConfirmation.tsx"));
 const Account = lazy(() => import("./pages/Account.tsx"));
+const Spaces = lazy(() => import("./pages/account/Spaces.tsx"));
+const SpaceDetail = lazy(() => import("./pages/account/SpaceDetail.tsx"));
+const ConsultationView = lazy(() => import("./pages/account/ConsultationView.tsx"));
 const About = lazy(() => import("./pages/About.tsx"));
 const Index = lazy(() => import("./pages/Index.tsx"));
 const Admin = lazy(() => import("./pages/Admin.tsx"));
@@ -63,6 +66,9 @@ const App = () => (
                   <Route path="/checkout" element={<Checkout />} />
                   <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
                   <Route path="/account" element={<Account />} />
+                  <Route path="/account/spaces" element={<Spaces />} />
+                  <Route path="/account/spaces/:spaceId" element={<SpaceDetail />} />
+                  <Route path="/account/consultations/:id" element={<ConsultationView />} />
                   <Route path="/about" element={<About />} />
                   <Route path="/trade" element={<Trade />} />
                   <Route path="/b2b" element={<Navigate to="/trade" replace />} />

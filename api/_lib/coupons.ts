@@ -36,6 +36,10 @@ export interface CouponRecord {
   isActive: boolean;
   applicableCategories: string[];
   applicableProductIds: string[];
+  /** When set, only this customer (checkout email, lower case) may redeem the coupon. */
+  boundEmail: string | null;
+  /** Consultation whose fee this coupon credits (api/_lib/consultations.ts); redemption is recorded on it. */
+  consultationId: string | null;
 }
 
 export type CouponErrorCode = NonNullable<CouponValidationResult['errorCode']>;
@@ -88,6 +92,8 @@ export function couponFromDoc(id: string, data: DocData | null): CouponRecord | 
     isActive: data.isActive !== false,
     applicableCategories: stringList(data.applicableCategories),
     applicableProductIds: stringList(data.applicableProductIds),
+    boundEmail: typeof data.boundEmail === 'string' && data.boundEmail.trim() ? data.boundEmail.trim().toLowerCase() : null,
+    consultationId: typeof data.consultationId === 'string' && data.consultationId ? data.consultationId : null,
   };
 }
 
@@ -97,11 +103,16 @@ export interface CouponContext {
   now: number;
   /** Redemptions already recorded for this customer; null when no email is known. */
   customerUsageCount: number | null;
+  /** Checkout email, for coupons bound to one customer. A bound coupon is refused when it is missing. */
+  customerEmail?: string | null;
 }
 
 export function evaluateCoupon(coupon: CouponRecord | null, lines: PricedLine[], ctx: CouponContext): CouponEvaluation {
   if (!coupon) return reject('COUPON_NOT_FOUND', 'This coupon code is not recognised.');
   if (!coupon.isActive) return reject('COUPON_INACTIVE', 'This promotion is currently disabled.');
+  if (coupon.boundEmail !== null && coupon.boundEmail !== ctx.customerEmail?.trim().toLowerCase()) {
+    return reject('COUPON_NOT_FOR_CUSTOMER', 'This coupon was issued to another customer.');
+  }
   if (coupon.startsAt !== null && ctx.now < coupon.startsAt) {
     return reject('COUPON_NOT_STARTED', 'This promotion has not started yet.');
   }
@@ -160,9 +171,12 @@ export async function findCouponByCode(store: DocStore, code: string): Promise<C
 /** Records one redemption (write phase of a transaction; the caller has read the coupon and usage docs). */
 export function writeCouponRedemption(
   tx: StoreTransaction,
-  params: { couponId: string; couponCode: string; orderId: string; email: string; discountPaise: number; orderTotalPaise: number; now: number },
+  params: { couponId: string; couponCode: string; orderId: string; email: string; discountPaise: number; orderTotalPaise: number; now: number; consultationId?: string | null },
 ) {
   const { couponId, email, now } = params;
+  if (params.consultationId) {
+    tx.update(`consultations/${params.consultationId}`, { creditRedeemedAt: now, creditRedeemedOrderId: params.orderId, updatedAt: now });
+  }
   tx.update(couponPath(couponId), { usedCount: increment(1), updatedAt: now });
   tx.set(customerUsagePath(couponId, email), { count: increment(1), customerKey: customerKey(email), updatedAt: now }, { merge: true });
   tx.set(`coupon_usages/${params.orderId}`, {

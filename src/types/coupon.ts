@@ -69,6 +69,7 @@ export interface CouponValidationResult {
     | 'COUPON_NOT_STARTED' 
     | 'USAGE_LIMIT_EXCEEDED' 
     | 'CUSTOMER_LIMIT_EXCEEDED' 
+    | 'COUPON_NOT_FOR_CUSTOMER'
     | 'MIN_ORDER_NOT_MET' 
     | 'NO_APPLICABLE_ITEMS' 
     | 'INVALID_CODE'

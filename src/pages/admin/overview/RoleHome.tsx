@@ -7,6 +7,8 @@ import { useAuth } from '@/lib/auth/AuthProvider';
 import { canAccessTab, formatRole, type AdminTabId } from '@/lib/auth/permissions';
 import { useAdminData } from '@/lib/data/adminData';
 import { useB2bInquiries } from '@/lib/data/b2b';
+import { useAdminConsultations } from '@/lib/consultations/consultations';
+import { consultationSla } from '@/lib/consultations/consultationModel';
 import { ORDER_STATUS_LABELS } from '@/lib/orders/orderStateMachine';
 import { isAssignedTo, oldestFirst, PRODUCTION_STAGES, stageCounts, workshopStage } from '@/lib/orders/productionQueue';
 import { AdminPageHeader, StatTile } from '@/components/admin/AdminUi';
@@ -68,6 +70,22 @@ function SupportSection({ go }: { go: Go }) {
   );
 }
 
+function ConsultationsSection({ go }: { go: Go }) {
+  const { data, isLoading } = useAdminConsultations(true);
+  const all = data ?? [];
+  const waiting = all.filter(c => c.status === 'new').length;
+  const overdue = all.filter(c => consultationSla(c, Date.now()).level === 'overdue').length;
+  return (
+    <Section title="Consultations">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile label="New" value={isLoading ? '…' : waiting} onClick={() => go('consultations')} warn={waiting > 0} />
+        <StatTile label="In progress" value={isLoading ? '…' : all.filter(c => c.status === 'in_progress').length} onClick={() => go('consultations')} />
+        <StatTile label="Past due" value={isLoading ? '…' : overdue} onClick={() => go('consultations')} warn={overdue > 0} />
+      </div>
+    </Section>
+  );
+}
+
 function CatalogSection({ go }: { go: Go }) {
   const { products } = useAdminData();
   const out = products.filter(p => p.trackInventory !== false && p.stock <= 0).length;
@@ -98,7 +116,7 @@ export function RoleHome({ role, onSelectTab }: { role: NonNullable<ReturnType<t
   const { permissions: p } = useAuth();
   if (!p) return null;
   const links: Array<[AdminTabId, string]> = [
-    ['production', 'Production'], ['qc', 'QC and packing'], ['orders', 'Orders'], ['shipping', 'Shipping'], ['returns', 'Returns'], ['finance', 'Finance'], ['support', 'Support'], ['b2b', 'Trade enquiries'],
+    ['production', 'Production'], ['qc', 'QC and packing'], ['orders', 'Orders'], ['shipping', 'Shipping'], ['returns', 'Returns'], ['finance', 'Finance'], ['support', 'Support'], ['b2b', 'Trade enquiries'], ['consultations', 'Consultations'],
     ['products', 'Catalog'], ['analytics', 'Analytics'], ['roles', 'Team'],
   ];
   return (
@@ -107,6 +125,7 @@ export function RoleHome({ role, onSelectTab }: { role: NonNullable<ReturnType<t
       {p.canManageProduction && <WorkshopSection go={onSelectTab} />}
       {p.canManageShipping && !p.canManageProduction && <DispatchSection go={onSelectTab} />}
       {p.canManageSupport && <SupportSection go={onSelectTab} />}
+      {p.canReadConsultations && <ConsultationsSection go={onSelectTab} />}
       {p.canManageProducts && <CatalogSection go={onSelectTab} />}
       <Section title="Quick links">
         <div className="flex flex-wrap gap-2">

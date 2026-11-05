@@ -101,8 +101,11 @@ export interface StoreConfig {
   supportEmail?: string;
   supportHours?: string;
   workshopAddress?: string;
+  /** Paid design consultation (display; the server prices it). */
+  consultation?: Partial<ConsultationSettings>;
 }
 
+import type { ConsultationSettings } from './consultation';
 import type { SellerSettings } from './settings';
 export type { SellerSettings, StoreSettingsDoc } from './settings';
 
@@ -148,6 +151,8 @@ export interface Order {
   email: string;
   status: OrderStatus;
   paymentStatus?: PaymentStatus;
+  /** `service` = a design consultation: nothing ships, so it is kept out of the workshop queues. */
+  kind?: 'service';
   placedAt: number;
   updatedAt?: number;
   items: OrderItem[];

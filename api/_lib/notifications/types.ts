@@ -8,6 +8,10 @@
  * configured channels with retry/backoff (deliver.ts). The deterministic id makes
  * "one notification per order + event" an invariant: a repeated transition or a
  * retried transaction finds the existing document and does not enqueue again.
+ *
+ * Design consultations (api/_lib/consultations.ts) use the same outbox: the consultation id is its
+ * order id, `order_confirmed` carries `service: 'consultation'` for the purchase receipt, and
+ * `proposal_ready` is enqueued with a per-version discriminator.
  */
 
 export const NOTIFICATION_EVENTS = [
@@ -22,6 +26,7 @@ export const NOTIFICATION_EVENTS = [
   'return_approved',
   'return_rejected',
   'return_received',
+  'proposal_ready',
 ] as const;
 
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
@@ -41,6 +46,12 @@ export interface NotificationPayload {
   trackingUrl?: string | null;
   refundAmountPaise?: number;
   note?: string | null;
+  /** Set for design-consultation orders: the confirmation copy differs (nothing ships). */
+  service?: 'consultation';
+  /** Credit coupon issued with a consultation, shown in the receipt. */
+  creditCode?: string | null;
+  creditPaise?: number;
+  creditExpiresAt?: number | null;
 }
 
 export type ChannelName = 'email' | 'sms';

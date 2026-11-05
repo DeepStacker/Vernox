@@ -9,6 +9,13 @@ rules_version = '2';
 //  - Read: the same customer, or staff who can read orders (mirrors
 //    canReadOrders() in firestore.rules / STAFF_ROLE_PERMISSIONS 'orders.read').
 //  - Files are immutable once uploaded; nothing else in the bucket is accessible.
+// spaces/{uid}/{spaceId}/{wallId}.jpg: wall photos of My Space. Only the owner (verified email for
+//  password accounts) reads, writes and deletes; JPEG/PNG/WebP up to 5 MB. Staff have no access.
+// consultations/{id}/walls/{wallId}.jpg: server-written snapshot of a paid consultation's wall photos.
+// consultations/{id}/previews/{itemId}.png: proposal previews composed in the designer's browser.
+//  - Read: the consultation's customer, or staff who can read consultations (designer, admin, super_admin;
+//    mirrors canReadConsultations() in firestore.rules / STAFF_ROLE_PERMISSIONS 'consultations.read').
+//  - Previews: written and deleted by the same staff, images up to 5 MB. Walls: never from clients.
 // Cross-service reads (firestore.get) require the Storage service agent to have
 // Firestore read access — Firebase grants it when these rules are first deployed.
 service firebase.storage {
@@ -34,6 +41,41 @@ service firebase.storage {
         || (request.auth.token.get('email_verified', false) == true
             && request.auth.token.get('email', '').lower() == orderOf(orderId).email)
       );
+    }
+
+    function isConsultationStaff() {
+      return request.auth != null && emailTrusted()
+        && request.auth.token.get('role', '') in ['super_admin', 'admin', 'designer'];
+    }
+
+    function ownsConsultation(consultationId) {
+      return request.auth != null
+        && firestore.get(/databases/(default)/documents/consultations/$(consultationId)).data.userId == request.auth.uid;
+    }
+
+    function isImageUpTo5Mb() {
+      return request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    match /spaces/{uid}/{spaceId}/{fileName} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid && emailTrusted();
+      allow create, update: if request.auth != null && request.auth.uid == uid && emailTrusted()
+        && fileName.matches('^[A-Za-z0-9_-]{1,40}[.]jpg$')
+        && isImageUpTo5Mb();
+    }
+
+    match /consultations/{consultationId}/walls/{fileName} {
+      allow read: if ownsConsultation(consultationId) || isConsultationStaff();
+      allow write: if false;
+    }
+
+    match /consultations/{consultationId}/previews/{fileName} {
+      allow read: if ownsConsultation(consultationId) || isConsultationStaff();
+      allow create, update: if isConsultationStaff()
+        && fileName.matches('^[A-Za-z0-9_-]{1,40}[.]png$')
+        && isImageUpTo5Mb();
+      allow delete: if isConsultationStaff();
     }
 
     match /returns/{orderId}/{fileName} {

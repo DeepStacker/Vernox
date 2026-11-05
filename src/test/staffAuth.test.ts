@@ -37,6 +37,15 @@ describe('staff authorisation', () => {
     expect(authoriseStaff(token({ role: 'super_admin' }), 'staff.manage').role).toBe('super_admin');
   });
 
+  it('lets a designer manage consultations and nothing else', () => {
+    expect(authoriseStaff(token({ role: 'designer' }), 'consultations.manage').role).toBe('designer');
+    for (const permission of ['orders.read', 'orders.refund', 'customers.read', 'coupons.read', 'reports.export', 'settings.write', 'catalog.write', 'staff.read'] as const) {
+      expect(forbidden(() => authoriseStaff(token({ role: 'designer' }), permission))).toBe(true);
+    }
+    expect(forbidden(() => authoriseStaff(token({ role: 'support' }), 'consultations.manage'))).toBe(true);
+    expect(authoriseStaff(token({ role: 'admin' }), 'consultations.manage').role).toBe('admin');
+  });
+
   it('derives the legacy boolean matrix from the permission map', () => {
     for (const role of STAFF_ROLES) {
       expect(ROLE_PERMISSIONS[role].canManageCoupons).toBe(roleHasPermission(role, 'coupons.write'));

@@ -43,6 +43,9 @@ export async function cancelOrder(
   const order = await store.runTransaction(async tx => {
     const current = asOrder(await tx.get(orderPath(params.orderId)));
     if (!current) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
+    if (params.initiatedBy === 'customer' && current.kind === 'service') {
+      throw new ApiError(409, 'CONFLICT', 'A design consultation cannot be cancelled online. Please contact support.');
+    }
     if (params.initiatedBy === 'customer' && !CUSTOMER_CANCELLABLE_STATUSES.includes(current.status)) {
       throw new ApiError(409, 'CONFLICT', 'This order is already in production and can no longer be cancelled online. Please contact support.');
     }

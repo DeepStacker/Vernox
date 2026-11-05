@@ -148,9 +148,39 @@ customer's own wall answers the buying question at a fraction of the cost.
 | Stage | Scope | Gate to start the next stage |
 |---|---|---|
 | 1 (in progress) | View on your wall: calibrated room scenes, own-wall photo with scale calibration, true-scale AR (generated GLB/USDZ via model-viewer), fit recommendation; usage analytics | AR/preview users convert measurably better than non-users |
-| 2 (queued) | "My Space": customers save walls (photos + measurements) to their account; paid design consultation (price and credit-against-purchase configurable); designer workspace to propose pieces | Consultations sell and lead to orders |
+| 2 (built, see "Stage 2 status") | "My Space": customers save walls (photos + measurements) to their account; paid design consultation (price and credit-against-purchase configurable); designer workspace to propose pieces | Consultations sell and lead to orders |
 | 3 (pilot) | Small iOS app/App Clip with RoomPlan (LiDAR) opened by QR; room model viewed on the web; place Vernox pieces on any wall, try paint colours. Android: guided photos + measurements or a licensed scanning SDK (pricing to verify) | Pilot lifts conversion or order value |
 | 4 (only if 3 succeeds) | Full interior planner with materials; license a platform rather than build | — |
+
+
+## Stage 2 status: My Space and paid design consultation (built, awaiting live payment test)
+
+Built on `/account/spaces`, `/account/consultations/:id` and the designer workspace (admin tab Consultations). It tests whether
+customers pay for design help before any room scanning is built. The gate for Stage 3 is the one above ("Consultations sell and
+lead to orders"); the numbers come from `consultations/` (count, `status`, `outcome`, `creditRedeemedAt`), the credited orders, and
+the browser events `space_created`, `wall_added`, `consultation_purchased`, `proposal_viewed`, `proposal_item_added_to_cart`,
+`consultation_credit_redeemed` (same tracker as the wall-preview events).
+
+Not yet verified live: the Razorpay payment step (test keys are not configured here; the purchase, confirmation, credit coupon and
+photo copy are covered by `src/test/consultations.test.ts` against the in-memory store and a fake gateway). Everything else was driven
+in the browser against the emulators.
+
+Owner decisions needed before launch:
+- **Price**: default ₹999 + GST (`settings/store.consultation.priceInr`, shown in Settings).
+- **Credit policy**: default is to credit the fee (before GST) against the next order, valid 60 days, single use, bound to the
+  buyer's email. Alternatives: no credit, or a shorter/longer validity (Settings).
+- **SAC code**: default 998391 (specialty design services). Confirm with the CA; it is stored on the service line and printed
+  nowhere yet.
+- **GST invoice for the service**: the existing invoice is issued at dispatch and consultation orders never dispatch, so no tax
+  invoice is generated for a consultation yet. A service invoice (time of supply = payment) is a follow-up once the CA confirms
+  the SAC and the treatment of the credit.
+- **Turnaround**: default 3 days (Settings); it is shown to customers and drives the designer queue's deadline.
+- Designers need the `designer` role (Team screen). Production needs the Storage bucket CORS entry for the site origin
+  (DEPLOYMENT.md) so wall photos can be read for the preview.
+
+Follow-ups noted, not built: a service invoice (above); the Razorpay webhook path does not copy the photos itself (the first claim
+retries it); one preview image per piece rather than several pieces composed on one wall image; no designer-to-customer chat beyond
+the one revision message.
 
 ## Still needed from the owner
 

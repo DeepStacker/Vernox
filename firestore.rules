@@ -6,6 +6,7 @@ rules_version = '2';
 //  - The serverless API (api/) uses the Firebase Admin SDK, which bypasses these
 //    rules. It is the only writer of orders, stock reservations, coupons usage,
 //    idempotency keys, webhook events, rate limits, audit logs and staff roles.
+//  - Design consultations (consultations/*) are likewise written only by the API.
 //  - Staff roles are the `role` custom claim, set only via the Admin SDK.
 //    The role -> permission mapping below MIRRORS STAFF_ROLE_PERMISSIONS in
 //    src/types/admin.ts; change both together (and src/test/firestore.rules.test.ts).
@@ -48,6 +49,7 @@ service cloud.firestore {
     function canModerateReviews() { return hasRole(['super_admin', 'admin', 'catalog_manager', 'support']); }
     function canReadCustomers()   { return hasRole(['super_admin', 'admin', 'order_manager', 'support']); }
     function canReadB2b()         { return hasRole(['super_admin', 'admin', 'order_manager', 'support']); }
+    function canReadConsultations() { return hasRole(['super_admin', 'admin', 'designer']); }
     function canReadStaff()       { return hasRole(['super_admin', 'admin']); }
     function canReadAudit()       { return hasRole(['super_admin']); }
 
@@ -94,10 +96,43 @@ service cloud.firestore {
       allow update: if isOwner(uid)
         && !changedKeys().hasAny(['role', 'isAdmin']);
       allow delete: if false;
+
+      // My Space: private to the customer (staff, designers included, never read it; a paid
+      // consultation carries its own snapshot, see /consultations below). The server re-validates the
+      // walls when it snapshots them, so these rules only bound size and shape.
+      match /spaces/{spaceId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validSpace(request.resource.data);
+      }
     }
 
     match /wishlists/{uid} {
       allow read, write: if isOwner(uid);
+    }
+
+    function validSpace(d) {
+      return d.keys().hasOnly(['id', 'name', 'roomType', 'budgetBand', 'notes', 'walls', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 80
+        && d.roomType in ['living', 'bedroom', 'pooja', 'entrance', 'office', 'outdoor', 'kids']
+        && (d.get('budgetBand', null) == null || d.budgetBand in ['under_10k', '10k_25k', '25k_50k', 'over_50k'])
+        && d.get('notes', '') is string && d.get('notes', '').size() <= 2000
+        && d.walls is list && d.walls.size() <= 8;
+    }
+
+    // ---------- design consultations (created and changed only by the API) ----------
+
+    // The id equals the paid order's id. Customers read their own; designers and admins read all.
+    // Wall photos and previews are snapshotted under consultations/{id}/ in Storage (storage.rules),
+    // so a designer never needs access to a customer's private space.
+    match /consultations/{consultationId} {
+      allow read: if (signedIn() && resource.data.userId == request.auth.uid) || canReadConsultations();
+      allow write: if false;
+
+      // Proposal draft: staff only, invisible to the customer until it is sent.
+      match /private/{docId} {
+        allow read: if canReadConsultations();
+        allow write: if false;
+      }
     }
 
     // ---------- reviews ----------

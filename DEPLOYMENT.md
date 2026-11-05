@@ -56,3 +56,14 @@ Local development: use Razorpay **test** keys and either real Firebase credentia
 ## 4. Production Health Checks & Readiness
 - `server/index.ts` exposes `/api/health`. On Vercel, `GET /api/checkout-intent` returns `405 METHOD_NOT_ALLOWED`.
 - Continuous synthetic monitoring via Pingdom/BetterUptime pinging the root endpoint.
+
+## Design consultation (Stage 2)
+
+- Storage bucket CORS: wall photos and proposal previews are read in the browser with the Storage SDK (`getBlob`) so the wall
+  preview can read their pixels. Allow the site origin for `GET`: `gsutil cors set cors.json gs://<bucket>` with
+  `[{"origin": ["https://<site>"], "method": ["GET"], "maxAgeSeconds": 3600}]`.
+- `FIREBASE_STORAGE_BUCKET` (optional; defaults to `<project id>.firebasestorage.app`): the Admin SDK copies a paid consultation's
+  wall photos with it. Locally set `FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199` too.
+- Deploy `firestore.rules` and `storage.rules` together with the API: the `designer` role, `users/{uid}/spaces`, `consultations`
+  and the `spaces/` and `consultations/` Storage paths are new.
+- Enable the service in Settings (Design consultation) once the price, credit policy and SAC are confirmed.

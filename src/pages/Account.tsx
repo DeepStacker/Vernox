@@ -11,7 +11,7 @@ import { EmptyState, ErrorState, LoadingBlock } from '@/components/shop/StateVie
 import { toPublicSummary } from '@/lib/data/orderLookup';
 import { INDIAN_STATES_AND_UTS, isValidPincode, normalizeIndianMobile } from '@/lib/checkout/validation';
 import { ShapeThumb } from '@/components/shop/ShapeThumb';
-import { User, Lock, Settings, History, ShieldCheck, Phone, ArrowRight, Eye, EyeOff, X, PhoneCall, Heart } from 'lucide-react';
+import { User, Lock, Settings, History, ShieldCheck, Phone, ArrowRight, Eye, EyeOff, X, PhoneCall, Heart, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
 import { auth, googleProvider } from '@/lib/firebase';
 import { signInWithPopup, RecaptchaVerifier, type ConfirmationResult, signInWithPhoneNumber, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
@@ -602,6 +602,13 @@ export default function Account() {
           </nav>
 
           <div className="border-t border-border/50 pt-4 flex flex-col gap-2">
+            <Link
+              to="/account/spaces"
+              className="w-full p-3 rounded text-xs uppercase tracking-wider font-semibold flex items-center gap-3 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-all"
+            >
+              <LayoutGrid className="w-4 h-4 shrink-0" />
+              <span>My Space</span>
+            </Link>
 
             <button
               onClick={logoutCustomer}

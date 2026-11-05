@@ -21,6 +21,7 @@ export const STAFF_ROLES = [
   'shipping',
   'finance',
   'support',
+  'designer',
 ] as const;
 
 export type StaffRole = (typeof STAFF_ROLES)[number];
@@ -38,6 +39,8 @@ export const PERMISSIONS = [
   'reviews.moderate',
   'customers.read',
   'b2b.read',
+  'consultations.read', // design consultations: walls, photos, proposals
+  'consultations.manage', // claim, draft and send proposals
   'reports.export',
   'staff.read',
   'staff.manage', // grant/revoke roles
@@ -57,6 +60,8 @@ export const STAFF_ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = 
   shipping: ['orders.read', 'orders.update_status', 'orders.tracking'],
   finance: ['orders.read', 'orders.refund', 'coupons.read', 'reports.export'],
   support: ['orders.read', 'customers.read', 'reviews.moderate', 'b2b.read', 'coupons.read'],
+  // The catalogue is world-readable, so a designer needs no catalogue permission to pick products.
+  designer: ['consultations.read', 'consultations.manage'],
 };
 
 export function isStaffRole(value: unknown): value is StaffRole {
@@ -107,6 +112,7 @@ export type AuditTargetType =
   | 'staff'
   | 'review'
   | 'inventory'
+  | 'consultation'
   | 'config';
 
 export interface AuditLog {

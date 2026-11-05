@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "optimize-images": "node scripts/optimize-images.mjs",
     "typecheck:api": "tsc --noEmit -p tsconfig.api.json",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-vernox 'vitest run src/test/firestore.rules.test.ts'",
+    "test:rules": "firebase emulators:exec --only firestore,storage --project demo-vernox 'vitest run src/test/firestore.rules.test.ts src/test/storage.rules.test.ts'",
     "seed": "tsx scripts/seed-firestore.ts",
     "grant-super-admin": "tsx scripts/grant-super-admin.ts",
     "emulators": "firebase emulators:start --only firestore,auth,storage --project vernox-1b5d5",

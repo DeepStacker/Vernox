@@ -4,6 +4,7 @@
  * Each function runs one transaction: re-read the order, decide from its
  * current status, then write — so duplicate or out-of-order deliveries are safe.
  */
+import { copyConsultationPhotos, consultationPath, creditCouponId, generateCreditCode, planConsultationOnPayment, type PhotoStorage } from './consultations';
 import { auditInTransaction, buildAuditEntry, SYSTEM_ACTOR } from './audit';
 import { couponFromDoc, couponPath, customerUsagePath, writeCouponRedemption } from './coupons';
 import { ApiError } from './errors';
@@ -58,12 +59,15 @@ export async function confirmPayment(
     /** Known only from webhooks; the checkout callback's signature already binds the server-set amount. */
     captured?: { amountPaise: number; currency: string };
     now?: number;
+    /** Copies a paid consultation's wall photos after the transaction; omitted = left to the claim retry. */
+    photoStorage?: PhotoStorage;
   },
 ): Promise<ConfirmOutcome> {
   const now = params.now ?? Date.now();
   const by = params.source === 'webhook' ? 'razorpay' : 'customer';
+  const creditCode = generateCreditCode(); // only used when the order is a consultation
 
-  return store.runTransaction(async tx => {
+  const outcome = await store.runTransaction(async (tx): Promise<ConfirmOutcome> => {
     const order = asOrder(await tx.get(orderPath(params.orderId)));
     if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
 
@@ -139,6 +143,8 @@ export async function confirmPayment(
       }
     }
 
+    const consultation = planConsultationOnPayment(order, creditCode, now);
+
     // ---- writes ----
     applyStockDelta(tx, recommit, -1, now);
     applyStatusChange(tx, transition, order, now, {
@@ -147,7 +153,11 @@ export async function confirmPayment(
       paymentConfirmedVia: params.source,
       ...(order.stockReservation?.status === 'none' ? {} : { stockReservation: { ...order.stockReservation, status: 'committed' } }),
       ...(flags.length > 0 ? { flags: arrayUnion(...flags) } : {}),
-    });
+    }, consultation?.notificationExtra);
+    if (consultation) {
+      tx.create(consultationPath(order.id), consultation.consultation as unknown as Record<string, unknown>);
+      if (consultation.coupon) tx.create(`coupons/${creditCouponId(order.id)}`, consultation.coupon);
+    }
 
     if (order.coupon && coupon) {
       writeCouponRedemption(tx, {
@@ -158,6 +168,7 @@ export async function confirmPayment(
         discountPaise: order.coupon.discountPaise,
         orderTotalPaise: order.amounts.totalPaise,
         now,
+        consultationId: coupon.consultationId,
       });
     }
 
@@ -176,6 +187,14 @@ export async function confirmPayment(
 
     return { outcome: 'paid', order: { ...order, status: 'Paid', razorpayPaymentId: params.razorpayPaymentId } };
   });
+
+  if (outcome.outcome === 'paid' && outcome.order.consultation && params.photoStorage) {
+    // Outside the transaction (a file copy cannot roll back); copyConsultationPhotos records failure and a claim retries.
+    await copyConsultationPhotos(store, params.photoStorage, outcome.order.id, now).catch(err =>
+      console.error(`[payments] consultation photo copy failed for ${outcome.order.id}`, err),
+    );
+  }
+  return outcome;
 }
 
 /** payment.failed: release the reservation; the customer may still retry on the same Razorpay order. */

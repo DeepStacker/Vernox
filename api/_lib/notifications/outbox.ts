@@ -50,6 +50,7 @@ export function payloadFromOrder(order: OrderDoc, extra: Partial<NotificationPay
     courier: order.shipment?.courier ?? order.tracking?.carrier ?? null,
     awb: order.shipment?.awb ?? order.tracking?.trackingNumber ?? null,
     trackingUrl: order.shipment?.trackingUrl ?? order.tracking?.url ?? null,
+    ...(order.kind === 'service' ? { service: 'consultation' as const } : {}),
     ...extra,
   };
 }

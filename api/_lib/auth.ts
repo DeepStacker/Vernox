@@ -58,6 +58,13 @@ export async function optionalUser(req: VercelRequest, verifier: TokenVerifier):
   return toUser(await verify(verifier, token, false));
 }
 
+/** A signed-in customer is required (401 otherwise); the token is not revocation-checked, like optionalUser. */
+export async function requireUser(req: VercelRequest, verifier: TokenVerifier): Promise<AuthenticatedUser> {
+  const user = await optionalUser(req, verifier);
+  if (!user) throw new ApiError(401, 'UNAUTHENTICATED', 'Please sign in to continue.');
+  return user;
+}
+
 /** Pure authorisation decision for a decoded staff token (exported for tests). */
 export function authoriseStaff(decoded: DecodedIdToken, permission: Permission | null): StaffUser {
   const user = toUser(decoded);

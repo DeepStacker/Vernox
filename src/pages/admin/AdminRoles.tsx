@@ -23,6 +23,7 @@ const CAPABILITIES: Array<{ name: string; key: keyof RolePermissions }> = [
   { name: 'Customer support', key: 'canManageSupport' },
   { name: 'Order status and notes', key: 'canUpdateOrders' },
   { name: 'Trade enquiries', key: 'canReadB2b' },
+  { name: 'Design consultations', key: 'canManageConsultations' },
   { name: 'Store settings', key: 'canManageSettings' },
   { name: 'Staff and roles', key: 'canManageStaff' },
   { name: 'Audit logs', key: 'canViewAuditLogs' },

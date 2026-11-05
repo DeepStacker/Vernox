@@ -6,6 +6,7 @@
  */
 import type { SellerSettings } from '@/types/settings';
 import type { StoreConfig } from '@/types/store';
+import { DEFAULT_CONSULTATION_SETTINGS } from '@/types/consultation';
 
 /** Mirror of GSTIN_PATTERN in api/_lib/storeConfig.ts. */
 export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
@@ -27,6 +28,7 @@ export interface BusinessDraft {
   defaultLeadTimeDays: string;
   customLeadTimeDays: string;
   returnWindowDays: string;
+  consultation: { enabled: boolean; priceInr: string; creditTowardsOrder: boolean; creditValidityDays: string; turnaroundDays: string; sacCode: string };
 }
 
 export type BusinessErrors = Partial<Record<string, string>>;
@@ -48,6 +50,14 @@ export function draftFromConfig(config: StoreConfig): BusinessDraft {
     defaultLeadTimeDays: str(config.defaultLeadTimeDays),
     customLeadTimeDays: str(config.customLeadTimeDays),
     returnWindowDays: str(config.returnWindowDays),
+    consultation: {
+      enabled: config.consultation?.enabled === true,
+      priceInr: str(config.consultation?.priceInr ?? DEFAULT_CONSULTATION_SETTINGS.priceInr),
+      creditTowardsOrder: config.consultation?.creditTowardsOrder ?? DEFAULT_CONSULTATION_SETTINGS.creditTowardsOrder,
+      creditValidityDays: str(config.consultation?.creditValidityDays ?? DEFAULT_CONSULTATION_SETTINGS.creditValidityDays),
+      turnaroundDays: str(config.consultation?.turnaroundDays ?? DEFAULT_CONSULTATION_SETTINGS.turnaroundDays),
+      sacCode: str(config.consultation?.sacCode ?? DEFAULT_CONSULTATION_SETTINGS.sacCode),
+    },
   };
 }
 
@@ -94,6 +104,11 @@ export function validateBusiness(d: BusinessDraft): BusinessErrors {
   checkNumber(errors, 'defaultLeadTimeDays', d.defaultLeadTimeDays, 'Lead time', { integer: true, max: 365 });
   checkNumber(errors, 'customLeadTimeDays', d.customLeadTimeDays, 'Custom lead time', { integer: true, max: 365 });
   checkNumber(errors, 'returnWindowDays', d.returnWindowDays, 'The return window', { integer: true, max: 90 });
+  const c = d.consultation;
+  if (c.priceInr.trim() === '' || !(Number(c.priceInr) >= 1) || Number(c.priceInr) > 100_000) errors.consultationPrice = 'Enter a fee between ₹1 and ₹1,00,000, before GST.';
+  checkNumber(errors, 'creditValidityDays', c.creditValidityDays, 'Credit validity', { integer: true, max: 365 });
+  checkNumber(errors, 'turnaroundDays', c.turnaroundDays, 'Turnaround', { integer: true, max: 30 });
+  if (c.sacCode.trim() && !/^\d{4,8}$/.test(c.sacCode.trim())) errors.sacCode = 'A SAC code is 4 to 8 digits, for example 998391.';
   return errors;
 }
 
@@ -112,6 +127,14 @@ export function toStorePatch(d: BusinessDraft): Partial<StoreConfig> {
     supportHours: d.supportHours.trim(),
     workshopAddress: d.workshopAddress.trim(),
     codEnabled: d.codEnabled,
+    consultation: {
+      enabled: d.consultation.enabled,
+      priceInr: Number(d.consultation.priceInr),
+      creditTowardsOrder: d.consultation.creditTowardsOrder,
+      ...(num(d.consultation.creditValidityDays) !== undefined ? { creditValidityDays: num(d.consultation.creditValidityDays) } : {}),
+      ...(num(d.consultation.turnaroundDays) !== undefined ? { turnaroundDays: num(d.consultation.turnaroundDays) } : {}),
+      ...(d.consultation.sacCode.trim() ? { sacCode: d.consultation.sacCode.trim() } : {}),
+    },
   };
   const optional: Array<[keyof StoreConfig, number | undefined]> = [
     ['codFee', num(d.codFee)], ['codMaxOrderValue', num(d.codMaxOrderValue)], ['defaultLeadTimeDays', num(d.defaultLeadTimeDays)],

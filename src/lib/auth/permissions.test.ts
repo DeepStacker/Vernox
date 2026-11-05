@@ -41,3 +41,15 @@ describe('console tab access', () => {
     expect(ROLE_PERMISSIONS.finance.canUpdateOrders).toBe(false);
   });
 });
+
+describe('designer role', () => {
+  it('sees only the consultations console and nothing about orders, money or customers', () => {
+    expect(roles('consultations')).toEqual(['super_admin', 'admin', 'designer']);
+    for (const tab of ['orders', 'production', 'finance', 'support', 'customers', 'analytics', 'products', 'settings', 'coupons', 'b2b'] as const) {
+      expect(canAccessTab('designer', tab)).toBe(false);
+    }
+    expect(ROLE_PERMISSIONS.designer.canManageConsultations).toBe(true);
+    expect(ROLE_PERMISSIONS.designer.canRefund).toBe(false);
+    expect(ROLE_PERMISSIONS.designer.canUpdateOrders).toBe(false);
+  });
+});

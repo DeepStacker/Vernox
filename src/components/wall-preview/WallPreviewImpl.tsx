@@ -11,11 +11,12 @@ import { FitPanel } from './FitPanel';
 import { RoomScenes } from './RoomScenes';
 import { YourWall } from './YourWall';
 import type { WallCanvasHandle } from './WallCanvas';
+import type { Pose } from './render/compose';
 
 export type WallPreviewProps = {
   finish: FinishId;
   /** Where the preview is mounted; recorded with the opened event. Defaults to pdp for products, studio for outlines. */
-  source?: 'pdp' | 'studio';
+  source?: 'pdp' | 'studio' | 'space';
   /** Called when the customer taps "Choose this size" after trying another size in the preview. */
   onChooseSize?: (size: ProductSize) => void;
   /** Called when the customer picks another finish inside the preview. */
@@ -23,10 +24,30 @@ export type WallPreviewProps = {
   /** Finishes offered in the preview; defaults to the product's. Needed for outline previews to allow switching. */
   finishes?: FinishId[];
   className?: string;
+  /**
+   * A saved wall photo (My Space) and its scale in photo pixels per cm. The preview opens on "Your wall",
+   * already calibrated. `url` must be same-origin (a blob: URL) so the photo can be read back for lighting.
+   */
+  initialPhoto?: { url: string; pxPerCm: number };
+  /**
+   * Adds a button (on "Your wall") that renders the current placement to an image and hands it, with where the
+   * piece sits and which size and finish were showing, to the caller. Used by the designer's proposal builder.
+   */
+  compose?: { label: string; onDone: (result: WallComposition) => void | Promise<void> };
 } & (
   | { product: Product; size: ProductSize; outline?: undefined }
   | { outline: Outline; product?: undefined; size?: undefined }
 );
+
+/** What `compose.onDone` receives. `size` is set when a catalogue product is previewed. */
+export interface WallComposition {
+  blob: Blob;
+  pose: Pose;
+  widthMm: number;
+  heightMm: number;
+  size: ProductSize | null;
+  finish: string;
+}
 
 type Tab = 'rooms' | 'wall' | 'ar';
 const TABS: { id: Tab; label: string }[] = [
@@ -52,9 +73,11 @@ export default function WallPreviewImpl(props: WallPreviewProps) {
   const propIndex = product ? Math.max(0, sizes.findIndex(s => s.widthMm === props.size!.widthMm && s.heightMm === props.size!.heightMm)) : -1;
   const [sizeIndex, setSizeIndex] = useState(propIndex);
   const [finish, setFinish] = useState<string>(props.finish);
-  const [tab, setTab] = useState<Tab>('rooms');
+  const [tab, setTab] = useState<Tab>(props.initialPhoto ? 'wall' : 'rooms');
   const [showFit, setShowFit] = useState(false);
   const [notice, setNotice] = useState('');
+  const poseRef = useRef<Pose>({ cx: 0, cy: 0, rotationDeg: 0 });
+  const [composing, setComposing] = useState(false);
   const handleRef = useRef<WallCanvasHandle | null>(null);
   const [hasCanvas, setHasCanvas] = useState(false);
   const canvasRef = useCallback((h: WallCanvasHandle | null) => {
@@ -123,6 +146,17 @@ export default function WallPreviewImpl(props: WallPreviewProps) {
     setNotice('Image saved. Share it from your gallery.');
   };
 
+  const composeNow = async () => {
+    if (!props.compose) return;
+    setComposing(true);
+    try {
+      const blob = await render();
+      if (blob) await props.compose.onDone({ blob, pose: poseRef.current, widthMm: outline.widthMm, heightMm: outline.heightMm, size: activeSize ?? null, finish });
+    } finally {
+      setComposing(false);
+    }
+  };
+
   const onTabKey = (e: React.KeyboardEvent) => {
     const i = TABS.findIndex(t => t.id === tab);
     const next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : null;
@@ -157,7 +191,7 @@ export default function WallPreviewImpl(props: WallPreviewProps) {
 
       <div role="tabpanel" id={`wp-panel-${tab}`} aria-labelledby={`wp-tab-${tab}`} className="space-y-4 animate-in fade-in duration-300 motion-reduce:animate-none">
         {tab === 'rooms' && <RoomScenes outline={outline} finish={finish} sizes={sizes} sizeIndex={sizeIndex} round={round} eventData={eventData} canvasRef={canvasRef} />}
-        {tab === 'wall' && <YourWall outline={outline} finish={finish} eventData={eventData} canvasRef={canvasRef} />}
+        {tab === 'wall' && <YourWall outline={outline} finish={finish} eventData={eventData} canvasRef={canvasRef} initialPhoto={props.initialPhoto} onPose={p => { poseRef.current = p; }} />}
         {tab === 'ar' && (
           <ArPanel
             outline={outline}
@@ -183,6 +217,11 @@ export default function WallPreviewImpl(props: WallPreviewProps) {
           </button>
         )}
         {tab !== 'ar' && sizes.length > 1 && <Chip active={showFit} onClick={() => setShowFit(v => !v)}>Will it fit?</Chip>}
+        {props.compose && tab === 'wall' && hasCanvas && (
+          <button type="button" onClick={composeNow} disabled={composing} className="min-h-11 rounded-full bg-burgundy px-5 text-sm font-medium text-cream disabled:opacity-50">
+            {composing ? 'Working…' : props.compose.label}
+          </button>
+        )}
         {tab !== 'ar' && (
           <>
             <Chip onClick={save} label="Save image" ><Download className="mr-1.5 inline h-4 w-4" />Save</Chip>

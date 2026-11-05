@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import {
   Bell, Briefcase, BarChart3, ClipboardCheck, ExternalLink, FileText, Hammer, Headphones, Home, LogOut, Lock, Menu,
   MessageSquare, Package, Palette, PanelLeftClose, PanelLeftOpen, Receipt, RotateCcw, Search, Settings, ShieldCheck,
-  ShoppingCart, SlidersHorizontal, Tag, Truck, Users, ArrowLeft,
+  ShoppingCart, SlidersHorizontal, Tag, Truck, Users, ArrowLeft, PencilRuler,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AdminCommandPalette } from '@/components/admin/AdminCommandPalette';
@@ -29,6 +29,7 @@ import { ReturnsConsole } from './admin/returns/ReturnsConsole';
 import { FinanceConsole } from './admin/finance/FinanceConsole';
 import { SupportConsole } from './admin/support/SupportConsole';
 import { B2bInquiries } from './admin/b2b/B2bInquiries';
+import { ConsultationsConsole } from './admin/consultations/ConsultationsConsole';
 import { AdminOrders } from './admin/AdminOrders';
 import { AdminProducts } from './admin/AdminProducts';
 import { AdminCoupons } from './admin/AdminCoupons';
@@ -98,7 +99,7 @@ function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; display
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const pendingOrders = useMemo(() => orders.filter(o => o.status === 'Paid' || o.status === 'In_Design').length, [orders]);
+  const pendingOrders = useMemo(() => orders.filter(o => o.kind !== 'service' && (o.status === 'Paid' || o.status === 'In_Design')).length, [orders]);
   const customOrders = useMemo(() => orders.filter(o => o.items?.some(i => i.customDesignRef || i.userUploadedImage || i.productId === 'custom-bespoke')).length, [orders]);
   const lowStock = useMemo(() => products.filter(p => (p.stock ?? 0) <= 5).length, [products]);
   const urgentAlerts = useMemo(
@@ -118,6 +119,7 @@ function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; display
         { id: 'finance', label: 'Finance', icon: Receipt },
         { id: 'support', label: 'Support', icon: Headphones },
         { id: 'b2b', label: 'Trade enquiries', icon: Briefcase },
+        { id: 'consultations', label: 'Consultations', icon: PencilRuler },
       ] },
       { title: 'Store', items: [
         { id: 'products', label: 'Products', icon: Package, badge: lowStock ? `${lowStock} low` : undefined },
@@ -193,6 +195,7 @@ function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; display
           {activeTab === 'finance' && canAccessTab(role, 'finance') && <FinanceConsole />}
           {activeTab === 'support' && canAccessTab(role, 'support') && <SupportConsole />}
           {activeTab === 'b2b' && canAccessTab(role, 'b2b') && <B2bInquiries />}
+          {activeTab === 'consultations' && canAccessTab(role, 'consultations') && <ConsultationsConsole />}
           {activeTab === 'orders' && canAccessTab(role, 'orders') && <AdminOrders onSelectTab={tab => selectTab(tab as AdminTabId)} />}
           {activeTab === 'custom-orders' && canAccessTab(role, 'custom-orders') && <AdminOrders initialFilter="custom" onSelectTab={tab => selectTab(tab as AdminTabId)} />}
           {activeTab === 'products' && canAccessTab(role, 'products') && <AdminProducts />}

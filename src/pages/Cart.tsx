@@ -13,6 +13,8 @@ import { finishName } from '@/lib/catalog';
 import { previewCoupon } from '@/lib/data/couponPreview';
 import { useSeo } from '@/lib/seo';
 import { formatINR, formatINRExact } from '@/lib/storefront/format';
+import { useAuth } from '@/lib/auth/AuthProvider';
+import { useAutoApplyConsultationCredit } from '@/lib/consultations/useCreditAutoApply';
 import { reviewStatsByProduct, sortProducts } from '@/lib/storefront/listing';
 
 export default function Cart() {
@@ -20,6 +22,8 @@ export default function Cart() {
   const { storeConfig, products, reviews } = useCatalog();
   const { items, updateQty, remove, subtotal, appliedCoupon, applyCoupon, removeCoupon } = useCart();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  useAutoApplyConsultationCredit();
   const [code, setCode] = useState('');
   const [couponError, setCouponError] = useState('');
   const [checking, setChecking] = useState(false);
@@ -41,7 +45,7 @@ export default function Cart() {
     setCouponError('');
     setChecking(true);
     try {
-      const result = await previewCoupon({ code: clean, items });
+      const result = await previewCoupon({ code: clean, items, email: user?.email ?? undefined });
       if (result.isValid) {
         applyCoupon({
           code: result.couponCode || clean,

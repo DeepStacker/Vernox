@@ -32,6 +32,10 @@ export interface RolePermissions {
   /** May write order status, assignment and notes (orders.update_status). Support is read-only. */
   canUpdateOrders: boolean;
   canReadB2b: boolean;
+  /** consultations.read: the designer queue and proposals. */
+  canReadConsultations: boolean;
+  /** consultations.manage: claim, draft and send proposals. */
+  canManageConsultations: boolean;
 }
 
 function derivePermissions(role: StaffRole): RolePermissions {
@@ -56,6 +60,8 @@ function derivePermissions(role: StaffRole): RolePermissions {
     canManageSupport: seesCustomers,
     canUpdateOrders: updatesStatus,
     canReadB2b: has('b2b.read'),
+    canReadConsultations: has('consultations.read'),
+    canManageConsultations: has('consultations.manage'),
   };
 }
 
@@ -70,7 +76,7 @@ export function formatRole(role: StaffRole): string {
 export type AdminTabId =
   | 'home' | 'orders' | 'products' | 'customers' | 'analytics' | 'marketing' | 'coupons'
   | 'custom-orders' | 'hero-slider' | 'reviews' | 'notifications' | 'roles' | 'audit' | 'settings'
-  | 'production' | 'qc' | 'support' | 'b2b' | 'shipping' | 'returns' | 'finance';
+  | 'production' | 'qc' | 'support' | 'b2b' | 'shipping' | 'returns' | 'finance' | 'consultations';
 
 /** Which admin tabs a role may open. Single source for navigation and the command palette. */
 export function canAccessTab(role: StaffRole, tab: AdminTabId): boolean {
@@ -95,6 +101,8 @@ export function canAccessTab(role: StaffRole, tab: AdminTabId): boolean {
       return p.canManageSupport;
     case 'b2b':
       return p.canReadB2b;
+    case 'consultations':
+      return p.canReadConsultations;
     case 'customers':
       return p.canManageOrders || p.canManageSupport;
     case 'analytics':

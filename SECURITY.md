@@ -40,7 +40,24 @@ and no development payment bypasses — use Razorpay test keys locally.
 - Password accounts must have a verified email before a role is honoured (API and rules).
 - Demotion/removal revokes refresh tokens and the API verifies ID tokens with revocation checks.
 - There is no shared admin password, no server-issued session token and no hardcoded admin email.
+- `designer` (Stage 2) holds only `consultations.read` and `consultations.manage`: no orders, customers, finance, coupons, settings or
+  catalogue write. The catalogue is world-readable, so picking products needs no permission. Rules mirror: `canReadConsultations()`
+  in `firestore.rules` and `isConsultationStaff()` in `storage.rules`.
 - Bootstrap the first owner once: `npm run grant-super-admin -- owner@example.com` (Admin SDK credentials required).
+
+## Customer spaces and consultations (Stage 2)
+
+- Wall photos are private data of someone's home. `users/{uid}/spaces/*` and `spaces/{uid}/*` (Storage) are owner-only: no staff
+  role, including `super_admin`, can read them through the client rules; the Admin SDK does, once, to snapshot a paid consultation.
+- A paid consultation carries its own copy (`consultations/{id}/walls/*`) readable by the customer and by consultation staff only,
+  so designers never get access to anyone's space. The consultation document stores no email or phone.
+- The price is never client input; `design-consultation` is not a product, so the public checkout cannot sell it. Payment goes through
+  the same signature/webhook/idempotent confirmation as orders, and the consultation and credit coupon are created in the same
+  transaction as `Paid` (no consultation without payment, none twice).
+- Credit coupons are bound to the buyer's email and single-use; a consultation is reachable only by its owner (others get `404`
+  from the API and `permission-denied` from the rules).
+- Uploads need a verified email (like return photos), images only, ≤ 5 MB. The server only copies a wall's own
+  `spaces/{uid}/{spaceId}/{wallId}.jpg` path, so a tampered space document cannot make it copy another customer's file.
 
 ## Abuse controls
 
@@ -73,8 +90,8 @@ Errors returned to clients never include provider responses or internal details;
 
 ## Known gaps
 
-- Rules unit tests (`src/test/firestore.rules.test.ts`) need the Firestore emulator: `npm run test:rules`. `storage.rules` has no
-  automated test yet (needs the Storage emulator); verify UAT CS-11 manually.
+- Rules unit tests need the emulators: `npm run test:rules` runs `src/test/firestore.rules.test.ts` and `src/test/storage.rules.test.ts`
+  (the `spaces/` and `consultations/` paths). The `returns/` Storage rules still have no automated test; verify UAT CS-11 manually.
 - `/api/order-cancel` and `/api/return-request` accept the order id + email without an OTP; the order id is a random 20-character
   id only the customer receives, and both are rate-limited.
 - Configure Firestore TTL policies on `rate_limits.expiresAt`, `idempotency.expiresAt` and `webhook_events.expiresAt`.

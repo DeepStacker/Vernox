@@ -10,6 +10,7 @@
 import crypto from 'crypto';
 import { paiseToRupees } from './money';
 import { CUSTOMER_CANCELLABLE_STATUSES, type OrderStatus, type StatusHistoryEntry } from './orderLifecycle';
+import type { ConsultationPurchase } from './consultations';
 import type { LineTax, OrderTotals, PricedLine } from './pricing';
 import type { DocData } from './store';
 
@@ -39,6 +40,8 @@ export interface OrderItemSnapshot {
   unitPrice: number; // ₹ display copy
   lineTotal: number; // ₹ display copy
   isCustom: boolean;
+  /** True for the design consultation service line. */
+  isService?: boolean;
   customDesignRef: string | null;
   hsnCode: string;
   gstRateBps: number;
@@ -119,6 +122,13 @@ export interface OrderDoc {
   parentOrderId?: string | null;
   replacementOrderId?: string | null;
   flags: string[];
+  /**
+   * `service` orders sell a design consultation (api/_lib/consultations.ts): nothing ships, so they
+   * stay out of the workshop queues and cannot be cancelled by the customer (refunds go through finance).
+   */
+  kind?: 'service';
+  /** Frozen at purchase: what payment confirmation turns into `consultations/{id}` and the credit coupon. */
+  consultation?: ConsultationPurchase;
   placedAt: number;
   createdAt: number;
   updatedAt: number;
@@ -172,6 +182,7 @@ export function snapshotItem(line: PricedLine, tax: LineTax): OrderItemSnapshot 
     unitPrice: paiseToRupees(line.unitPricePaise),
     lineTotal: paiseToRupees(line.lineTotalPaise),
     isCustom: line.isCustom,
+    ...(line.isService ? { isService: true } : {}),
     customDesignRef: line.customDesignRef,
     hsnCode: line.hsnCode,
     gstRateBps: tax.gstRateBps,
@@ -196,6 +207,7 @@ export function buildOrderDoc(params: {
   paymentMethod?: PaymentMethod;
   leadTimeDays?: number;
   parentOrderId?: string | null;
+  consultation?: ConsultationPurchase;
 }): OrderDoc {
   const { customer, totals, now } = params;
   const paymentMethod = params.paymentMethod ?? 'prepaid';
@@ -234,6 +246,7 @@ export function buildOrderDoc(params: {
     invoiceNumber: null,
     deliveredAt: null,
     parentOrderId: params.parentOrderId ?? null,
+    ...(params.consultation ? { kind: 'service' as const, consultation: params.consultation } : {}),
     flags: [],
     placedAt: now,
     createdAt: now,
@@ -307,7 +320,7 @@ export function publicOrderSummary(order: OrderDoc, returnWindowDays?: number) {
     paymentMethod: order.paymentMethod ?? 'prepaid',
     tracking: publicTracking(order),
     invoiceNumber: order.invoiceNumber ?? null,
-    canCancel: CUSTOMER_CANCELLABLE_STATUSES.includes(order.status),
+    canCancel: order.kind !== 'service' && CUSTOMER_CANCELLABLE_STATUSES.includes(order.status),
     returnEligibleUntil:
       order.status === 'Delivered' && order.deliveredAt && returnWindowDays !== undefined
         ? order.deliveredAt + returnWindowDays * 24 * 3600_000

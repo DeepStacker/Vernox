@@ -37,6 +37,7 @@ export const oldestFirst = (a: Order, b: Order): number => a.placedAt - b.placed
 export function groupByStage<S extends OrderStatus>(orders: readonly Order[], stages: readonly S[]): Record<S, Order[]> {
   const groups = Object.fromEntries(stages.map(s => [s, [] as Order[]])) as Record<S, Order[]>;
   for (const order of [...orders].sort(oldestFirst)) {
+    if (order.kind === 'service') continue; // design consultations have nothing to make
     const stage = workshopStage(order.status);
     if ((stages as readonly OrderStatus[]).includes(stage)) groups[stage as S].push(order);
   }

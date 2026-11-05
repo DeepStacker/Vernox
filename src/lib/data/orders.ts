@@ -84,6 +84,7 @@ export function normalizeOrder(id: string, raw: Raw): Order {
     email: String(raw.email ?? customer.email ?? ''),
     status: normalizeOrderStatus(raw.status),
     paymentStatus: raw.paymentStatus as PaymentStatus | undefined,
+    ...(raw.kind === 'service' ? { kind: 'service' as const } : {}),
     placedAt: toMillis(raw.placedAt ?? raw.createdAt),
     updatedAt: toMillis(raw.updatedAt) || undefined,
     items,

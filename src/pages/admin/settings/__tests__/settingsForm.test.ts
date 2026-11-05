@@ -43,3 +43,25 @@ describe('business settings form', () => {
     expect(missingSellerFields({ legalName: 'A', gstin: 'G', address: 'x', state: 'KA', stateCode: '29', pincode: '560001' })).toEqual([]);
   });
 });
+
+describe('design consultation settings', () => {
+  it('starts from the defaults (disabled, 999, credit on, 60 days, 3 days)', () => {
+    expect(draftFromConfig(config).consultation).toEqual({ enabled: false, priceInr: '999', creditTowardsOrder: true, creditValidityDays: '60', turnaroundDays: '3', sacCode: '998391' });
+  });
+
+  it('validates the fee, the day counts and the SAC code', () => {
+    const d = draftFromConfig(config);
+    d.consultation = { ...d.consultation, priceInr: '0', turnaroundDays: '2.5', creditValidityDays: '400', sacCode: '99' };
+    const errors = validateBusiness(d);
+    expect(errors.consultationPrice).toBeDefined();
+    expect(errors.turnaroundDays).toBeDefined();
+    expect(errors.creditValidityDays).toBeDefined();
+    expect(errors.sacCode).toBeDefined();
+  });
+
+  it('writes the consultation block with numbers into the patch', () => {
+    const d = draftFromConfig(config);
+    d.consultation = { ...d.consultation, enabled: true, priceInr: '1499' };
+    expect(toStorePatch(d).consultation).toEqual({ enabled: true, priceInr: 1499, creditTowardsOrder: true, creditValidityDays: 60, turnaroundDays: 3, sacCode: '998391' });
+  });
+});

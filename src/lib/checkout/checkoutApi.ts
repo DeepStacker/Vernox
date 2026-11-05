@@ -75,7 +75,7 @@ async function authHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
-async function postJson(url: string, body: unknown): Promise<Record<string, any>> { // eslint-disable-line @typescript-eslint/no-explicit-any -- server JSON validated by callers
+export async function postJson(url: string, body: unknown): Promise<Record<string, any>> { // eslint-disable-line @typescript-eslint/no-explicit-any -- server JSON validated by callers
   let res: Response;
   try {
     res = await fetch(url, { method: 'POST', headers: await authHeaders(), body: JSON.stringify(body) });

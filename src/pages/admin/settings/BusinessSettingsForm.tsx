@@ -39,6 +39,8 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
   useEffect(() => { setDraft(draftFromConfig(config)); }, [config]);
 
   const set = <K extends keyof BusinessDraft>(key: K, value: BusinessDraft[K]) => setDraft(d => ({ ...d, [key]: value }));
+  const setConsultation = <K extends keyof BusinessDraft['consultation']>(key: K, value: BusinessDraft['consultation'][K]) =>
+    setDraft(d => ({ ...d, consultation: { ...d.consultation, [key]: value } }));
   const setSeller = (key: keyof BusinessDraft['seller'], value: string) => setDraft(d => ({ ...d, seller: { ...d.seller, [key]: value } }));
 
   const save = async (e: React.FormEvent) => {
@@ -85,6 +87,27 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
         </label>
         <Field label="COD fee (₹)" error={errors.codFee}><input inputMode="decimal" value={draft.codFee} onChange={e => set('codFee', e.target.value)} className="field font-mono" /></Field>
         <Field label="Largest COD order (₹)" error={errors.codMaxOrderValue}><input inputMode="decimal" value={draft.codMaxOrderValue} onChange={e => set('codMaxOrderValue', e.target.value)} className="field font-mono" /></Field>
+      </Section>
+
+      <Section title="Design consultation" hint="A paid service: a designer proposes pieces on the customer's own walls. The fee is before GST, like catalogue prices.">
+        <label className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2">
+          <input type="checkbox" checked={draft.consultation.enabled} onChange={e => setConsultation('enabled', e.target.checked)} className="h-5 w-5 accent-primary" />
+          <span className="font-semibold">Offer design consultations</span>
+        </label>
+        <Field label="Fee (₹, before GST)" error={errors.consultationPrice}><input inputMode="decimal" value={draft.consultation.priceInr} onChange={e => setConsultation('priceInr', e.target.value)} className="field font-mono" /></Field>
+        <Field label="Turnaround (days)" hint="Shown to customers and used as the designer queue's deadline." error={errors.turnaroundDays}>
+          <input inputMode="numeric" value={draft.consultation.turnaroundDays} onChange={e => setConsultation('turnaroundDays', e.target.value)} className="field font-mono" />
+        </Field>
+        <label className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2">
+          <input type="checkbox" checked={draft.consultation.creditTowardsOrder} onChange={e => setConsultation('creditTowardsOrder', e.target.checked)} className="h-5 w-5 accent-primary" />
+          <span className="font-semibold">Credit the fee towards the customer's next order</span>
+        </label>
+        <Field label="Credit valid for (days)" error={errors.creditValidityDays}>
+          <input inputMode="numeric" value={draft.consultation.creditValidityDays} onChange={e => setConsultation('creditValidityDays', e.target.value)} className="field font-mono" />
+        </Field>
+        <Field label="SAC code" hint="Owner to confirm with the CA; 998391 is specialty design services." error={errors.sacCode}>
+          <input value={draft.consultation.sacCode} onChange={e => setConsultation('sacCode', e.target.value)} className="field font-mono" />
+        </Field>
       </Section>
 
       <Section title="Lead times and returns">

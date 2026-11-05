@@ -2,13 +2,14 @@
  * POST /api/verify-payment — Razorpay Checkout success callback.
  * Body: { razorpay_order_id, razorpay_payment_id, razorpay_signature } — nothing else is read.
  * Verifies the HMAC signature and transitions the order to Paid in one transaction
- * (stock committed, coupon redeemed). Returns failure if any write fails.
+ * (stock committed, coupon redeemed; a design consultation and its credit coupon are created and its
+ * wall photos copied). Returns failure if any write fails.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { z } from 'zod';
 import { getRazorpayCredentials } from './_lib/config';
 import { ApiError, sendError } from './_lib/errors';
-import { getStore } from './_lib/firebaseAdmin';
+import { getPhotoStorage, getStore } from './_lib/firebaseAdmin';
 import { assertMethod, parseBody } from './_lib/http';
 import { confirmPayment, findOrderIdByRazorpayOrderId } from './_lib/payments';
 import { verifyPaymentSignature } from './_lib/razorpay';
@@ -41,6 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       orderId,
       razorpayPaymentId: body.razorpay_payment_id,
       source: 'checkout_callback',
+      photoStorage: getPhotoStorage(),
     });
     if (result.outcome === 'paid' || result.outcome === 'duplicate') {
       return res.status(200).json({

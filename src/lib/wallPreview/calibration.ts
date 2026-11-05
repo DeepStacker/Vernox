@@ -28,6 +28,15 @@ export function pxPerCmFromWallWidth(imageWidthPx: number, wallWidthCm: number):
   return imageWidthPx / wallWidthCm;
 }
 
+/**
+ * Real-world area a photo covers once its scale is known, in whole centimetres. Used by My Space to turn
+ * "I marked a known object" into wall measurements. Null when the scale or the image size is unusable.
+ */
+export function wallSizeFromScale(imageWidthPx: number, imageHeightPx: number, pxPerCm: number): { widthCm: number; heightCm: number } | null {
+  if (!(pxPerCm > 0) || !(imageWidthPx > 0) || !(imageHeightPx > 0)) return null;
+  return { widthCm: Math.round(imageWidthPx / pxPerCm), heightCm: Math.round(imageHeightPx / pxPerCm) };
+}
+
 /** Wall-to-image mapping for a front-on photo: pure scale, wall origin at the image's top-left. */
 export function scaleOnlyHomography(pxPerCm: number): Matrix3 {
   return [pxPerCm, 0, 0, 0, pxPerCm, 0, 0, 0, 1];

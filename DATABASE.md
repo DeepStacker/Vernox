@@ -25,11 +25,12 @@ fields; `npm run seed` writes the same defaults). **Public document: never store
 `customPieces: { [finishId]: { label, setupFee (₹), ratePerCm2 (₹), minimum (₹) } }` merged over the built-in defaults,
 `codEnabled`, `codFee` (₹), `codMaxOrderValue` (₹), `codMaxOpenOrdersPerPhone`, `returnWindowDays`, `defaultLeadTimeDays`,
 `customLeadTimeDays`, `manualTransitDays`, `defaultHsnCode`,
+`consultation: { enabled (default false), priceInr (default 999, before GST, ₹1–1,00,000), creditTowardsOrder (default true), creditValidityDays (default 60), turnaroundDays (default 3), sacCode (default 998391) }`,
 `seller: { legalName, tradeName, gstin, address, city, state, stateCode (2-digit GST code = GSTIN prefix), pincode, email, phone }`
 (printed on invoices; invoices cannot be issued until legalName, gstin, address, state, stateCode and pincode are set),
 storefront contact `whatsappNumber`, `supportPhone`, `supportEmail`, `supportHours`, `workshopAddress` (empty = hidden on the storefront).
 The admin Settings screen edits `seller`, the contact fields, `codEnabled`, `codFee`, `codMaxOrderValue`, `defaultLeadTimeDays`,
-`customLeadTimeDays` and `returnWindowDays` (form model and GSTIN check: `src/pages/admin/settings/settingsForm.ts`, mirroring
+`customLeadTimeDays`, `returnWindowDays` and the `consultation` block (form model and GSTIN check: `src/pages/admin/settings/settingsForm.ts`, mirroring
 `GSTIN_PATTERN` in `api/_lib/storeConfig.ts`).
 
 ### `orders/{orderId}` — written only by the API (`api/_lib/orders.ts`)
@@ -81,6 +82,32 @@ most 20 000 characters (QC/packing records are kept there by the staff consoles)
 `minOrderValue` (₹), `maxUsageCount`, `usedCount` (server-maintained), `maxUsagePerCustomer`, `startDate`/`expiryDate`
 (`YYYY-MM-DD` = whole day IST, or ISO timestamp), `isActive`, `applicableCategories[]`, `applicableProductIds[]`.
 Subcollection `customer_usage/{sha256(email)}`: `{ count }` (server only).
+Consultation credits add `boundEmail` (only that checkout email may redeem), `consultationId`, `source: 'consultation_credit'` (`cc_{orderId}`, see below).
+
+### Spaces and consultations (Stage 2)
+- `users/{uid}/spaces/{spaceId}` — **owner only** (not even `customers.read` roles or designers). `{ id, name (≤ 80), roomType
+  (living|bedroom|pooja|entrance|office|outdoor|kids), budgetBand?, notes (≤ 2000), walls[], createdAt, updatedAt }`. Walls are an
+  **array** on the space document (max 8 small objects, always read and written together, one atomic write, one read for the
+  list), not a subcollection: `{ id, name, widthCm, heightCm, pxPerCm, photoPath, photoWidth, photoHeight, notes }`. `pxPerCm` is
+  the photo's scale (the wall-preview calibration, `src/lib/wallPreview/calibration.ts`); it comes from the typed width
+  (photo width ÷ width) or from marking a known object. Photos: Storage `spaces/{uid}/{spaceId}/{wallId}.jpg` (JPEG, ≤ 1600 px, ≤ 5 MB).
+  Rules bound the shape and size only; the server re-validates when snapshotting (a wall's photo path must be its own).
+- `consultations/{orderId}` — **written only by the API**; the id equals the paid order's id. Read by the customer (`userId == uid`)
+  and by `super_admin`, `admin`, `designer` (`consultations.read`). `status` new|in_progress|proposed|closed, `outcome`
+  accepted|declined|null, a snapshot of the space (`spaceName`, `roomType`, `budgetBand`, `notes`, `walls[]` whose `photoPath` is
+  `consultations/{id}/walls/{wallId}.jpg`), `photosReady`, `pricePaise`, `turnaroundDays`, `dueAt` (SLA), `assignedUid/Name`,
+  `proposal { version, items[], note, sentAt, sentBy } | null`, `revisionsUsed`, `revisionNote`, `credit { code, amountInr,
+  expiresAt } | null`, `creditRedeemedAt/OrderId`. It holds no email or phone: a designer sees the customer's first name only.
+  A `ProposalItem` is `{ id, wallId, kind catalogue|custom, productId, productName, sizeLabel, widthMm, heightMm, finish,
+  designRef (studio document JSON, custom only, ≤ 200 000 chars, ≤ 600 000 per proposal), pose { cx, cy, rotationDeg } (wall cm),
+  previewPath (consultations/{id}/previews/{itemId}.png), note }`.
+- `consultations/{orderId}/private/draft` — the designer's draft `{ items, note, updatedAt, updatedBy }`; staff read only, so the
+  customer sees nothing until `SEND_PROPOSAL` copies it to `proposal`.
+- `orders/{orderId}` for a consultation has `kind: 'service'` and `consultation` (the frozen purchase: space snapshot incl. photo
+  paths and notes, credit terms). Staff with `orders.read` can therefore read the snapshot; designers cannot read orders.
+- Storage (`storage.rules`): `spaces/{uid}/...` owner only (verified email); `consultations/{id}/walls/*` server-written, read by
+  the customer and consultation staff; `consultations/{id}/previews/*` written by consultation staff, read by both. Browsers load
+  these through `getBlob`, so the bucket needs a CORS entry for the site's origin (DEPLOYMENT.md).
 
 ### Server-only collections (no client access)
 Phase 2 (India commerce):
@@ -126,6 +153,7 @@ Earlier collections:
 - `admin_users` — legacy, closed.
 
 ## Indexes
+`consultations`: single-field only (the designer queue orders by `createdAt`, the customer filters by `userId`).
 `orders`: (userId, placedAt desc), (status, placedAt desc), (email, placedAt desc), (status, reservationExpiresAt) for the cron;
 `audit_logs`: (targetType, timestamp desc); `notifications_outbox`: (status, nextAttemptAt), (status, leaseUntil). Single-field indexes cover `orders.razorpayOrderId`, `orders.razorpayPaymentId`,
 `coupons.code`. `orders.items` and `orders.customer` are exempt from indexing.

@@ -1,3 +1,5 @@
+import type { ConsultationSettings } from './consultation';
+
 /**
  * `settings/store` document shape, shared by the storefront, admin UI, seed
  * script and API (api/_lib/storeConfig.ts parses it). Dependency-free so the
@@ -45,6 +47,8 @@ export interface StoreSettingsDoc {
   supportEmail: string;
   supportHours: string;
   workshopAddress: string;
+  /** Paid design consultation (Stage 2); absent = disabled with defaults. */
+  consultation?: Partial<ConsultationSettings>;
   customPieces?: Record<string, { label?: string; setupFee?: number; ratePerCm2?: number; minimum?: number }>;
   updatedAt?: number;
 }

@@ -17,7 +17,7 @@ import { requireStaff, type StaffUser } from './_lib/auth';
 import { cancelOrder } from './_lib/cancellation';
 import { normaliseCouponCode } from './_lib/coupons';
 import { ApiError, badRequest, sendError } from './_lib/errors';
-import { getAdminAuth, getStore } from './_lib/firebaseAdmin';
+import { getAdminAuth, getPhotoStorage, getStore } from './_lib/firebaseAdmin';
 import { invoicePath, type TaxDocument } from './_lib/gst/invoice';
 import { clientIp } from './_lib/http';
 import { rupeesToPaise } from './_lib/money';
@@ -26,6 +26,7 @@ import { applyStatusChange, planStatusChange } from './_lib/orderTransitions';
 import { asOrder, orderPath } from './_lib/orders';
 import { createRazorpayRefundGateway } from './_lib/razorpay';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
+import { claimConsultation, proposalDraftSchema, saveProposalDraft, sendProposal } from './_lib/proposals';
 import { createRefund, refundCeilingPaise } from './_lib/refunds';
 import { decideReturn, markReturnReceived, returnPath } from './_lib/returns';
 import { createShippingProvider } from './_lib/shipping';
@@ -97,6 +98,7 @@ const reviewSchema = z.object({
 const idSchema = (key: string) => z.object({ [key]: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/) });
 
 const orderIdField = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
+const consultationIdField = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
 const reasonField = z.string().trim().min(3).max(300);
 const MAX_NOTES_LENGTH = 20_000;
 
@@ -242,6 +244,38 @@ const ACTIONS: Record<string, ActionDefinition> = {
         return next;
       });
       return { orderId: p.orderId, notes };
+    },
+  },
+
+  // ---------- design consultations (permission consultations.manage; reads are firestore.rules) ----------
+
+  CLAIM_CONSULTATION: {
+    method: 'POST',
+    permission: 'consultations.manage',
+    async run(ctx) {
+      const p = parse(z.object({ consultationId: consultationIdField }), ctx.params);
+      const c = await claimConsultation(ctx.store, getPhotoStorage(), { id: p.consultationId, actor: ctx.actor, ip: ctx.ip });
+      return { consultationId: p.consultationId, status: c.status, photosReady: c.photosReady };
+    },
+  },
+
+  SAVE_PROPOSAL_DRAFT: {
+    method: 'POST',
+    permission: 'consultations.manage',
+    async run(ctx) {
+      const p = parse(z.object({ consultationId: consultationIdField, draft: proposalDraftSchema }), ctx.params);
+      await saveProposalDraft(ctx.store, { id: p.consultationId, actor: ctx.actor, draft: p.draft, ip: ctx.ip });
+      return { consultationId: p.consultationId };
+    },
+  },
+
+  SEND_PROPOSAL: {
+    method: 'POST',
+    permission: 'consultations.manage',
+    async run(ctx) {
+      const p = parse(z.object({ consultationId: consultationIdField }), ctx.params);
+      const proposal = await sendProposal(ctx.store, await loadStoreConfig(ctx.store), { id: p.consultationId, actor: ctx.actor, ip: ctx.ip });
+      return { consultationId: p.consultationId, version: proposal.version };
     },
   },
 

@@ -29,6 +29,21 @@ function copyFor(event: NotificationEvent, p: NotificationPayload, base: string)
   const tracking = p.trackingUrl || trackPage;
   switch (event) {
     case 'order_confirmed':
+      if (p.service === 'consultation') {
+        const when = p.creditExpiresAt ? new Date(p.creditExpiresAt + 5.5 * 3600_000).toISOString().slice(0, 10) : '';
+        return {
+          subject: `Design consultation ${p.orderNumber} confirmed`,
+          lines: [
+            `Thank you. We have received your payment of ${rupees(p.totalPaise)} for your design consultation.`,
+            `A designer will look at your walls and send a proposal to your account.`,
+            ...(p.creditCode
+              ? [`Your fee comes back as credit: use code ${p.creditCode} for ${rupees(p.creditPaise ?? 0)} off your next order${when ? ` until ${when}` : ''}.`]
+              : []),
+          ],
+          smsValue: 'consultation booked',
+          link: { label: 'Open your consultation', url: `${base}/account/consultations/${encodeURIComponent(p.orderId)}` },
+        };
+      }
       return p.paymentMethod === 'cod'
         ? {
             subject: `Order ${p.orderNumber} confirmed (Cash on Delivery)`,
@@ -49,6 +64,13 @@ function copyFor(event: NotificationEvent, p: NotificationPayload, base: string)
             smsValue: rupees(p.totalPaise),
             link: { label: 'View your order', url: trackPage },
           };
+    case 'proposal_ready':
+      return {
+        subject: `Your design proposal is ready`,
+        lines: [`Your designer has put together a proposal for your space, with each piece shown on your own wall.`, ...(p.note ? [p.note] : [])],
+        smsValue: 'proposal ready',
+        link: { label: 'View your proposal', url: `${base}/account/consultations/${encodeURIComponent(p.orderId)}` },
+      };
     case 'in_production':
       return {
         subject: `Order ${p.orderNumber} is in production`,

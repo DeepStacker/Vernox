@@ -23,6 +23,7 @@ import { isNonNegativeFinite, rupeesToPaise } from './money';
 import type { DocData } from './store';
 import type { StoreConfig } from './storeConfig';
 
+import { CONSULTATION_SERVICE_ID } from '../../src/types/consultation';
 import { CUSTOM_PRODUCT_ID } from '../../src/types/products';
 import { normaliseFinishId, quoteCustomPiece } from '../../src/lib/pricing/customPiece';
 
@@ -77,8 +78,11 @@ export interface PricedLine {
   lineTotalPaise: number;
   isCustom: boolean;
   customDesignRef: string | null;
+  /** HSN for goods; SAC for a service line. */
   hsnCode: string;
   gstRateBps: number;
+  /** A service (design consultation): no stock, no shipping, never COD. */
+  isService?: boolean;
 }
 
 export interface LineTax {
@@ -236,6 +240,32 @@ export function priceCustomLine(item: CheckoutItemInput, config: StoreConfig): P
   };
 }
 
+/**
+ * The design consultation: a server-defined service line. The fee, SAC and GST come from
+ * StoreConfig only; it is only ever priced by the consultation purchase (api/_lib/consultations.ts),
+ * never from a client-supplied item, so no `products/` document can impersonate it.
+ */
+export function priceConsultationLine(config: StoreConfig): PricedLine {
+  const { pricePaise, sacCode } = config.consultation;
+  return {
+    productId: CONSULTATION_SERVICE_ID,
+    name: 'Design consultation',
+    category: 'service',
+    sizeLabel: null,
+    widthMm: null,
+    heightMm: null,
+    finish: 'service',
+    quantity: 1,
+    unitPricePaise: pricePaise,
+    lineTotalPaise: pricePaise,
+    isCustom: false,
+    customDesignRef: null,
+    hsnCode: sacCode,
+    gstRateBps: config.gstRateBps,
+    isService: true,
+  };
+}
+
 /** Prices every line; `products` holds the Firestore record for each catalog productId (or null). */
 export function priceLines(
   items: CheckoutItemInput[],
@@ -277,7 +307,8 @@ export function computeTotals(
   const subtotalPaise = lines.reduce((sum, l) => sum + l.lineTotalPaise, 0);
   const discount = Math.min(subtotalPaise, Math.max(0, Math.round(discountPaise)));
   // Free shipping is judged on the merchandise subtotal before discount, inclusive (>=).
-  const shippingPaise = subtotalPaise >= config.freeShippingThresholdPaise ? 0 : config.shippingFeePaise;
+  const shippable = lines.some(l => !l.isService);
+  const shippingPaise = !shippable || subtotalPaise >= config.freeShippingThresholdPaise ? 0 : config.shippingFeePaise;
   const codFeePaise = options.cod ? config.cod.feePaise : 0;
 
   const discounts = allocateProRata(discount, lines.map(l => l.lineTotalPaise));
@@ -310,7 +341,7 @@ export function computeTotals(
 export function stockRequirements(lines: PricedLine[]): Map<string, number> {
   const required = new Map<string, number>();
   for (const line of lines) {
-    if (line.isCustom) continue;
+    if (line.isCustom || line.isService) continue;
     required.set(line.productId, (required.get(line.productId) ?? 0) + line.quantity);
   }
   return required;

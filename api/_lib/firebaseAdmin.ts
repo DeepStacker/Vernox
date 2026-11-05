@@ -14,6 +14,8 @@
 import { applicationDefault, cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
+import type { PhotoStorage } from './consultations';
 import { configError } from './errors';
 import { createFirestoreStore, type DocStore } from './store';
 
@@ -85,4 +87,20 @@ export function getAdminAuth(): Auth {
 export function getStore(): DocStore {
   store ??= createFirestoreStore(getDb());
   return store;
+}
+
+/**
+ * Copies files inside the default Storage bucket with the Admin SDK (rules do not apply).
+ * Bucket: FIREBASE_STORAGE_BUCKET, else `<project id>.firebasestorage.app`. In the emulator set
+ * FIREBASE_STORAGE_EMULATOR_HOST so the SDK talks to it.
+ */
+export function getPhotoStorage(): PhotoStorage {
+  return {
+    async copy(fromPath, toPath) {
+      const app = getAdminApp();
+      const bucketName = process.env.FIREBASE_STORAGE_BUCKET?.trim() || `${app.options.projectId ?? projectIdFromEnv() ?? ''}.firebasestorage.app`;
+      const bucket = getStorage(app).bucket(bucketName);
+      await bucket.file(fromPath).copy(bucket.file(toPath));
+    },
+  };
 }
