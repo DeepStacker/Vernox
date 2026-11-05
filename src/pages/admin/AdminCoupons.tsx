@@ -7,7 +7,9 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useCatalog } from '@/lib/catalogContext';
+import { useAdminData } from '@/lib/data/adminData';
+import { useAuth } from '@/lib/auth/AuthProvider';
+import { useCouponMutations, useCouponUsages } from '@/lib/data/coupons';
 import type { Coupon, DiscountType } from '@/types/coupon';
 import { 
   Tag, Plus, Edit2, Trash2, Search, CheckCircle2, 
@@ -17,10 +19,15 @@ import { toast } from 'sonner';
 import { AtelierSelect } from '@/components/ui/select';
 
 export function AdminCoupons() {
-  const { 
-    coupons, couponUsages, storeConfig, 
-    createCoupon, updateCoupon, deleteCoupon, toggleCouponStatus 
-  } = useCatalog();
+  const { coupons, storeConfig } = useAdminData();
+  const { permissions } = useAuth();
+  const { data: couponUsages = [] } = useCouponUsages(Boolean(permissions?.canManageCoupons));
+  const { createCoupon, saveCoupon, deleteCoupon } = useCouponMutations();
+  const updateCoupon = (id: string, updates: Partial<Coupon>) => {
+    const existing = coupons.find(c => c.id === id);
+    return existing ? saveCoupon({ ...existing, ...updates }) : Promise.resolve(false);
+  };
+  const toggleCouponStatus = (id: string, isActive: boolean) => updateCoupon(id, { isActive });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'expired'>('all');

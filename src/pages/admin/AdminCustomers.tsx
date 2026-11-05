@@ -5,15 +5,16 @@
  */
 
 import { useState, useMemo } from 'react';
-import { useCatalog, Order } from '@/lib/catalogContext';
-import type { CustomerAccount } from '@/lib/catalogContext';
+import { isRevenueStatus } from '@/lib/orders/orderStateMachine';
+import { useAdminData } from '@/lib/data/adminData';
+import type { CustomerAccount, Order } from '@/types/store';
 import { 
   Users, Search, ShoppingBag, MapPin, Mail, 
   Phone, Calendar, ArrowUpRight, Eye, ShieldCheck, ChevronRight, X
 } from 'lucide-react';
 
 export function AdminCustomers() {
-  const { customers, orders, storeConfig } = useCatalog();
+  const { customers, orders, storeConfig } = useAdminData();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerAccount | null>(null);
 
@@ -22,12 +23,12 @@ export function AdminCustomers() {
     const statsMap = new Map<string, { totalOrders: number; lifetimeSpend: number; lastOrderDate: number; ordersList: Order[] }>();
 
     orders.forEach(o => {
-      if (o.email) {
+      if (o.email && isRevenueStatus(o.status)) {
         const em = o.email.trim().toLowerCase();
         const current = statsMap.get(em) || { totalOrders: 0, lifetimeSpend: 0, lastOrderDate: 0, ordersList: [] };
         current.totalOrders += 1;
         current.lifetimeSpend += (o.total || 0);
-        const orderTime = o.placedAt || new Date(o.createdAt || 0).getTime();
+        const orderTime = o.placedAt;
         if (orderTime > current.lastOrderDate) {
           current.lastOrderDate = orderTime;
         }
@@ -148,11 +149,6 @@ export function AdminCustomers() {
                       <td className="p-4">
                         <div className="font-semibold text-foreground flex items-center gap-2">
                           <span>{c.name || 'Anonymous Customer'}</span>
-                          {c.role === 'admin' && (
-                            <span className="text-[10px] bg-oxblood/10 text-oxblood border border-oxblood/20 px-1.5 py-0.5 rounded font-mono font-bold">
-                              ADMIN
-                            </span>
-                          )}
                         </div>
                       </td>
 
@@ -246,12 +242,12 @@ export function AdminCustomers() {
                 <span className="text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">Shipping Address:</span>
                 <p className="font-medium text-foreground">{selectedCustomer.address || 'Not specified'}</p>
                 <p className="text-muted-foreground">
-                  {[selectedCustomer.city, selectedCustomer.zip, selectedCustomer.country].filter(Boolean).join(', ') || 'No locality provided'}
+                  {[selectedCustomer.city, selectedCustomer.state, selectedCustomer.pincode, selectedCustomer.country].filter(Boolean).join(', ') || 'No locality provided'}
                 </p>
               </div>
               <div className="space-y-1">
-                <span className="text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">Account Role:</span>
-                <p className="font-medium text-foreground capitalize">{selectedCustomer.role || 'Standard Customer'}</p>
+                <span className="text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">Contact:</span>
+                <p className="font-medium text-foreground">{selectedCustomer.email}</p>
                 {selectedCustomer.phone && <p className="font-mono text-muted-foreground">{selectedCustomer.phone}</p>}
               </div>
             </div>

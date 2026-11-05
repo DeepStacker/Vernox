@@ -7,7 +7,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { useCatalog } from '@/lib/catalogContext';
+import { useAuth } from '@/lib/auth/AuthProvider';
+import { canAccessTab, formatRole, type StaffRole } from '@/lib/auth/permissions';
+import { useAdminData } from '@/lib/data/adminData';
+import { safeLocal } from '@/lib/safeStorage';
 import { AdminOverview } from './admin/AdminOverview';
 import { AdminOrders } from './admin/AdminOrders';
 import { AdminProducts } from './admin/AdminProducts';
@@ -45,25 +48,15 @@ export type AdminTab =
   | 'audit' 
   | 'settings';
 
-export default function Admin() {
-  const { 
-    isAdmin, loginAdmin, logoutAdmin, currentAdmin, adminRole,
-    orders, products 
-  } = useCatalog();
-
-  // Authentication Form State
-  const [adminEmail, setAdminEmail] = useState('admin@vernox.com');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
+function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; displayName: string; onSignOut: () => void }) {
+  const { orders, products } = useAdminData();
   const [activeTab, setActiveTab] = useState<AdminTab>('home');
+  const allowed = (tab: AdminTab) => canAccessTab(role, tab);
+  const selectTab = (tab: AdminTab) => { if (allowed(tab)) setActiveTab(tab); };
 
   // Ergonomic UI States
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem('vernox-admin-sidebar-collapsed') === 'true';
-    } catch {
-      return false;
-    }
+    return safeLocal.get('vernox-admin-sidebar-collapsed') === 'true';
   });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
@@ -92,7 +85,7 @@ export default function Admin() {
 
   // Real-time Operational Telemetry Badges
   const pendingOrdersCount = useMemo(() => {
-    return orders.filter(o => o.status === 'Pending' || o.fulfillmentStatus === 'Unfulfilled').length;
+    return orders.filter(o => o.status === 'Paid' || o.status === 'In_Design').length;
   }, [orders]);
 
   const customOrdersCount = useMemo(() => {
@@ -106,101 +99,9 @@ export default function Admin() {
   const urgentAlertsCount = useMemo(() => {
     const outStock = products.filter(p => (p.stock ?? 0) === 0).length;
     const lowStock = products.filter(p => (p.stock ?? 0) > 0 && (p.stock ?? 0) <= 5).length;
-    const pending = orders.filter(o => o.status === 'Pending').length;
+    const pending = orders.filter(o => o.status === 'Paid').length;
     return outStock + lowStock + pending;
   }, [products, orders]);
-
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adminEmail.trim() || !adminPassword) {
-      toast.error('Please enter both administrative email and password');
-      return;
-    }
-
-    setIsAuthenticating(true);
-    try {
-      const success = await loginAdmin(adminEmail.trim(), adminPassword);
-      if (success) {
-        toast.success('Administrative session established');
-      } else {
-        toast.error('Invalid administrative credentials or insufficient authorization');
-      }
-    } catch {
-      toast.error('Administrative authentication failed');
-    } finally {
-      setIsAuthenticating(false);
-    }
-  };
-
-  // 1. Unauthenticated Login Gate (Vernox Luxury Styling)
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-[#140F0E] text-[#E8DFD3] flex flex-col justify-center items-center p-4 selection:bg-oxblood selection:text-ivory">
-        <div className="w-full max-w-md bg-[#1C1615] border border-[#2E2421] rounded-2xl p-8 shadow-2xl space-y-6 animate-scale-in">
-          <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-xl bg-oxblood/20 border border-oxblood/40 flex items-center justify-center mx-auto text-brass mb-3 shadow-soft">
-              <Lock className="w-6 h-6 text-brass" />
-            </div>
-            <h1 className="font-display text-2xl font-bold text-[#F8F4E7]">Vernox Atelier Portal</h1>
-            <p className="text-xs text-[#A8988E] leading-relaxed font-serif-italic">
-              Administrative gateway for bespoke architectural commissions, CAM production routing, patron intelligence, and atelier analytics.
-            </p>
-          </div>
-
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-[#C4B7AC]">Administrator Email</label>
-              <input 
-                type="email"
-                required
-                value={adminEmail}
-                onChange={e => setAdminEmail(e.target.value)}
-                placeholder="admin@vernox.com"
-                className="w-full bg-[#120D0C] border border-[#2E2421] rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood transition text-white"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-[#C4B7AC]">Passphrase</label>
-              <input 
-                type="password"
-                required
-                value={adminPassword}
-                onChange={e => setAdminPassword(e.target.value)}
-                placeholder="Enter passphrase (min 6 characters)"
-                className="w-full bg-[#120D0C] border border-[#2E2421] rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood transition text-white"
-              />
-            </div>
-
-            {/* Quick Helper Credentials Callout for Local Dev */}
-            <div className="bg-[#241A18] border border-oxblood/20 rounded-lg p-2.5 text-[11px] text-[#D8CDC4] flex items-start gap-2">
-              <KeyRound className="w-3.5 h-3.5 text-brass shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold text-brass">Atelier Master Account:</span>
-                <div className="font-mono text-[10px] text-[#A8988E] mt-0.5">
-                  Email: <span className="text-white">admin@vernox.com</span> · Password: <span className="text-white">admin123</span>
-                </div>
-              </div>
-            </div>
-
-            <button 
-              type="submit"
-              disabled={isAuthenticating}
-              className="w-full bg-oxblood hover:bg-oxblood-deep text-ivory font-semibold py-2.5 rounded-xl text-sm transition shadow-soft disabled:opacity-50 mt-2 border border-oxblood/50"
-            >
-              {isAuthenticating ? "Verifying Credentials..." : "Authenticate Administrator"}
-            </button>
-          </form>
-
-          <div className="text-center pt-2 border-t border-[#2E2421]">
-            <Link to="/" className="text-xs text-[#A8988E] hover:text-[#F8F4E7] inline-flex items-center gap-1 transition">
-              <ArrowLeft className="w-3 h-3" /> Return to Vernox Storefront
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // Navigation Items Structure (Luxury Atelier Aesthetic)
   const primaryNavigation = [
@@ -246,6 +147,8 @@ export default function Admin() {
     { id: 'audit' as AdminTab, label: 'Activity Log', icon: FileText },
   ];
 
+  const visiblePrimary = primaryNavigation.filter(t => allowed(t.id));
+  const visibleSecondary = secondaryNavigation.filter(t => allowed(t.id));
   const allNavItems = [...primaryNavigation, ...secondaryNavigation, { id: 'settings' as AdminTab, label: 'Settings', icon: Settings }];
   const currentTabInfo = allNavItems.find(item => item.id === activeTab);
 
@@ -257,15 +160,15 @@ export default function Admin() {
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onSelectTab={(tab) => {
-          setActiveTab(tab as any);
+          selectTab(tab as AdminTab);
           setIsCommandPaletteOpen(false);
         }}
         onSelectOrder={() => {
-          setActiveTab('orders');
+          selectTab('orders');
           setIsCommandPaletteOpen(false);
         }}
         onSelectProduct={() => {
-          setActiveTab('products');
+          selectTab('products');
           setIsCommandPaletteOpen(false);
         }}
       />
@@ -287,7 +190,7 @@ export default function Admin() {
             onClick={() => {
               setIsSidebarCollapsed(prev => {
                 const next = !prev;
-                try { localStorage.setItem('vernox-admin-sidebar-collapsed', String(next)); } catch {}
+                safeLocal.set('vernox-admin-sidebar-collapsed', String(next));
                 return next;
               });
             }}
@@ -344,7 +247,7 @@ export default function Admin() {
 
           {/* Help & Audit Log */}
           <button
-            onClick={() => setActiveTab('audit')}
+            onClick={() => selectTab('audit')}
             title="Activity Log & System Audit"
             className="p-2 rounded-lg text-[#A8988E] hover:text-white hover:bg-[#2A211E] transition"
           >
@@ -353,7 +256,7 @@ export default function Admin() {
 
           {/* Notification Bell */}
           <button
-            onClick={() => setActiveTab('notifications')}
+            onClick={() => selectTab('notifications')}
             className="relative p-2 rounded-lg text-[#A8988E] hover:text-white hover:bg-[#2A211E] transition"
             title="Operational Notifications"
           >
@@ -376,13 +279,12 @@ export default function Admin() {
           {/* Profile Avatar */}
           <div className="flex items-center gap-2 pl-1">
             <div className="w-8 h-8 rounded-full overflow-hidden border border-brass/40 shadow-2xs bg-oxblood text-ivory shrink-0 flex items-center justify-center font-bold text-xs">
-              {currentAdmin?.name ? currentAdmin.name.charAt(0).toUpperCase() : 'V'}
+              {displayName.charAt(0).toUpperCase() || 'V'}
             </div>
 
             <button
               onClick={() => {
-                logoutAdmin();
-                toast.success('Signed out of administrative console');
+                onSignOut();
               }}
               title="Sign Out"
               className="p-1.5 text-[#A8988E] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
@@ -414,7 +316,7 @@ export default function Admin() {
 
             {/* Primary Navigation */}
             <nav className="flex flex-col gap-1">
-              {primaryNavigation.map(tab => {
+              {visiblePrimary.map(tab => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
                 return (
@@ -465,7 +367,7 @@ export default function Admin() {
                 </div>
               )}
               <nav className="flex flex-col gap-1">
-                {secondaryNavigation.map(tab => {
+                {visibleSecondary.map(tab => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
                   return (
@@ -512,7 +414,7 @@ export default function Admin() {
               } ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
               title="Store Settings"
             >
-              {activeTab === 'settings' && (
+              {activeTab === 'settings' && allowed('settings') && (
                 <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-brass shadow-[0_0_8px_rgba(198,161,91,0.6)]" />
               )}
               <Settings className={`w-4 h-4 shrink-0 transition-transform duration-150 group-hover:rotate-45 ${activeTab === 'settings' ? 'text-brass drop-shadow-[0_0_5px_rgba(198,161,91,0.5)]' : 'text-[#9E8E84] group-hover:text-brass'}`} />
@@ -538,59 +440,59 @@ export default function Admin() {
 
         {/* Content Viewport */}
         <main className="flex-1 min-w-0 min-h-0 overflow-y-auto p-4 sm:p-6 md:p-8 bg-[#FAF7F2] text-[#1C1615]">
-          {activeTab === 'home' && (
-            <AdminOverview initialViewMode="operations" onSelectTab={(tab) => setActiveTab(tab as AdminTab)} />
+          {activeTab === 'home' && allowed('home') && (
+            <AdminOverview initialViewMode="operations" onSelectTab={(tab) => selectTab(tab as AdminTab)} />
           )}
 
-          {activeTab === 'analytics' && (
-            <AdminOverview initialViewMode="financials" onSelectTab={(tab) => setActiveTab(tab as AdminTab)} />
+          {activeTab === 'analytics' && allowed('analytics') && (
+            <AdminOverview initialViewMode="financials" onSelectTab={(tab) => selectTab(tab as AdminTab)} />
           )}
 
-          {activeTab === 'orders' && (
-            <AdminOrders onSelectTab={(tab) => setActiveTab(tab as AdminTab)} />
+          {activeTab === 'orders' && allowed('orders') && (
+            <AdminOrders onSelectTab={(tab) => selectTab(tab as AdminTab)} />
           )}
 
-          {activeTab === 'products' && (
+          {activeTab === 'products' && allowed('products') && (
             <AdminProducts />
           )}
 
-          {activeTab === 'customers' && (
+          {activeTab === 'customers' && allowed('customers') && (
             <AdminCustomers />
           )}
 
-          {activeTab === 'marketing' && (
+          {activeTab === 'marketing' && allowed('marketing') && (
             <AdminCoupons />
           )}
 
-          {activeTab === 'coupons' && (
+          {activeTab === 'coupons' && allowed('coupons') && (
             <AdminCoupons />
           )}
 
-          {activeTab === 'custom-orders' && (
-            <AdminOrders initialFilter="custom" onSelectTab={(tab) => setActiveTab(tab as AdminTab)} />
+          {activeTab === 'custom-orders' && allowed('custom-orders') && (
+            <AdminOrders initialFilter="custom" onSelectTab={(tab) => selectTab(tab as AdminTab)} />
           )}
 
-          {activeTab === 'hero-slider' && (
+          {activeTab === 'hero-slider' && allowed('hero-slider') && (
             <AdminHeroSlider />
           )}
 
-          {activeTab === 'reviews' && (
+          {activeTab === 'reviews' && allowed('reviews') && (
             <AdminReviews />
           )}
 
-          {activeTab === 'notifications' && (
-            <AdminNotifications onSelectTab={(tab) => setActiveTab(tab as AdminTab)} />
+          {activeTab === 'notifications' && allowed('notifications') && (
+            <AdminNotifications onSelectTab={(tab) => selectTab(tab as AdminTab)} />
           )}
 
-          {activeTab === 'roles' && (
+          {activeTab === 'roles' && allowed('roles') && (
             <AdminRoles />
           )}
 
-          {activeTab === 'audit' && (
+          {activeTab === 'audit' && allowed('audit') && (
             <AdminAuditLogs />
           )}
 
-          {activeTab === 'settings' && (
+          {activeTab === 'settings' && allowed('settings') && (
             <AdminSettings />
           )}
         </main>
@@ -664,14 +566,14 @@ export default function Admin() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-7 h-7 rounded-full bg-oxblood/20 border border-brass/40 flex items-center justify-center font-bold text-xs text-brass shrink-0">
-                    {currentAdmin?.name ? currentAdmin.name.charAt(0).toUpperCase() : 'V'}
+                    {displayName.charAt(0).toUpperCase() || 'V'}
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-semibold truncate text-[#F8F4E7]">
-                      {currentAdmin?.name || 'Administrator'}
+                      {displayName || 'Staff'}
                     </div>
                     <div className="text-[10px] font-mono text-[#A8988E] truncate">
-                      {adminRole.replace('_', ' ')}
+                      {formatRole(role)}
                     </div>
                   </div>
                 </div>
@@ -679,7 +581,7 @@ export default function Admin() {
                 <button
                   onClick={() => {
                     setIsMobileDrawerOpen(false);
-                    logoutAdmin();
+                    onSignOut();
                   }}
                   className="p-1.5 text-[#A8988E] hover:text-red-400 rounded-md transition"
                   title="Sign Out"
@@ -694,4 +596,112 @@ export default function Admin() {
       )}
     </div>
   );
+}
+
+function AdminLogin() {
+  const { staffSignIn, user, signOut } = useAuth();
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminEmail.trim() || !adminPassword) {
+      toast.error('Please enter both email and password');
+      return;
+    }
+    setIsAuthenticating(true);
+    try {
+      await staffSignIn(adminEmail.trim(), adminPassword);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      toast.error(message.includes('staff access') ? message : 'Invalid credentials');
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  // Signed in as a customer: explain instead of showing a form that cannot succeed.
+  if (user) {
+    return (
+      <div className="min-h-screen bg-[#140F0E] text-[#E8DFD3] flex flex-col justify-center items-center p-4">
+        <div className="w-full max-w-md bg-[#1C1615] border border-[#2E2421] rounded-2xl p-8 space-y-4 text-center">
+          <Lock className="w-6 h-6 text-brass mx-auto" />
+          <h1 className="font-display text-xl font-bold text-[#F8F4E7]">No staff access</h1>
+          <p className="text-xs text-[#A8988E]">{user.email} is not a staff account. Sign out to use a different account.</p>
+          <button onClick={() => signOut()} className="bg-oxblood hover:bg-oxblood-deep text-ivory font-semibold py-2 px-4 rounded-xl text-sm transition">Sign out</button>
+          <div><Link to="/" className="text-xs text-[#A8988E] hover:text-[#F8F4E7]">Return to storefront</Link></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+      <div className="min-h-screen bg-[#140F0E] text-[#E8DFD3] flex flex-col justify-center items-center p-4 selection:bg-oxblood selection:text-ivory">
+        <div className="w-full max-w-md bg-[#1C1615] border border-[#2E2421] rounded-2xl p-8 shadow-2xl space-y-6 animate-scale-in">
+          <div className="text-center space-y-2">
+            <div className="w-12 h-12 rounded-xl bg-oxblood/20 border border-oxblood/40 flex items-center justify-center mx-auto text-brass mb-3 shadow-soft">
+              <Lock className="w-6 h-6 text-brass" />
+            </div>
+            <h1 className="font-display text-2xl font-bold text-[#F8F4E7]">Vernox Atelier Portal</h1>
+            <p className="text-xs text-[#A8988E] leading-relaxed font-serif-italic">
+              Administrative gateway for bespoke architectural commissions, CAM production routing, patron intelligence, and atelier analytics.
+            </p>
+          </div>
+
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-[#C4B7AC]">Administrator Email</label>
+              <input 
+                type="email"
+                required
+                value={adminEmail}
+                onChange={e => setAdminEmail(e.target.value)}
+                placeholder="you@company.com"
+                className="w-full bg-[#120D0C] border border-[#2E2421] rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood transition text-white"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-[#C4B7AC]">Password</label>
+              <input 
+                type="password"
+                required
+                value={adminPassword}
+                onChange={e => setAdminPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full bg-[#120D0C] border border-[#2E2421] rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood transition text-white"
+              />
+            </div>
+
+            <button 
+              type="submit"
+              disabled={isAuthenticating}
+              className="w-full bg-oxblood hover:bg-oxblood-deep text-ivory font-semibold py-2.5 rounded-xl text-sm transition shadow-soft disabled:opacity-50 mt-2 border border-oxblood/50"
+            >
+              {isAuthenticating ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+
+          <div className="text-center pt-2 border-t border-[#2E2421]">
+            <Link to="/" className="text-xs text-[#A8988E] hover:text-[#F8F4E7] inline-flex items-center gap-1 transition">
+              <ArrowLeft className="w-3 h-3" /> Return to Vernox Storefront
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+}
+
+/** Route guard for /admin: nothing from the admin data layer is mounted until a staff role is verified. */
+export default function Admin() {
+  const { loading, user, staffRole, signOut, profile } = useAuth();
+
+  if (loading) {
+    return <div className="min-h-screen bg-[#140F0E] flex items-center justify-center text-[#A8988E] text-sm">Checking access…</div>;
+  }
+  if (!staffRole) return <AdminLogin />;
+
+  const displayName = profile?.name || user?.displayName || user?.email || '';
+  return <AdminShell role={staffRole} displayName={displayName} onSignOut={() => { void signOut(); toast.success('Signed out'); }} />;
 }

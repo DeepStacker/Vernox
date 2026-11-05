@@ -1,3 +1,4 @@
+import { safeLocal } from '@/lib/safeStorage';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCatalog } from '@/lib/catalogContext';
@@ -16,12 +17,11 @@ export function RecentlyViewed({ currentProductId, className = '' }: Props) {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('vernox_recent_views');
-      let idList: string[] = stored ? JSON.parse(stored) : [];
+      let idList = safeLocal.getJson<string[]>('vernox_recent_views', []);
 
       if (currentProductId) {
         idList = [currentProductId, ...idList.filter(id => id !== currentProductId)].slice(0, 8);
-        localStorage.setItem('vernox_recent_views', JSON.stringify(idList));
+        safeLocal.setJson('vernox_recent_views', idList);
       }
 
       // Filter out current product and map to real products

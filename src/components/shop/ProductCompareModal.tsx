@@ -30,7 +30,19 @@ export function ProductCompareModal({
   }
 
   const handleAddToCart = (product: Product) => {
-    add(product, product.finishes[0] || 'brass', 1, 0);
+    const size = product.sizes?.[0];
+    add({
+      productId: product.id,
+      productName: product.name,
+      productSlug: product.slug,
+      shapeId: product.shapeId || 'rectangle',
+      sizeLabel: size?.label ?? 'Standard',
+      widthMm: size?.widthMm ?? 800,
+      heightMm: size?.heightMm ?? 800,
+      finish: product.finishes[0] || 'brass',
+      unitPrice: product.price + (size?.priceDelta ?? 0),
+      quantity: 1,
+    });
     toast.success(`${product.name} added to your cart.`);
   };
 

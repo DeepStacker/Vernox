@@ -1,4 +1,5 @@
 import { EditorState } from './editorTypes';
+import { safeLocal } from './safeStorage';
 
 const STORAGE_KEY = 'metalshape-projects';
 
@@ -11,13 +12,7 @@ export interface SavedProject {
 }
 
 export function listProjects(): SavedProject[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as SavedProject[];
-  } catch {
-    return [];
-  }
+  return safeLocal.getJson<SavedProject[]>(STORAGE_KEY, []);
 }
 
 export function saveProject(name: string, state: EditorState, id?: string): SavedProject {
@@ -44,13 +39,13 @@ export function saveProject(name: string, state: EditorState, id?: string): Save
     project = { id: crypto.randomUUID(), name, state: snapshot, createdAt: now, updatedAt: now };
     projects.push(project);
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  if (!safeLocal.setJson(STORAGE_KEY, projects)) throw new Error('Could not save the project: browser storage is unavailable or full.');
   return project;
 }
 
 export function deleteProject(id: string) {
   const projects = listProjects().filter(p => p.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  safeLocal.setJson(STORAGE_KEY, projects);
 }
 
 export function loadProject(id: string): SavedProject | null {

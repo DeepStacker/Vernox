@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { safeLocal } from './safeStorage';
 
 export interface CartItem {
   id: string; // uuid per line
@@ -13,7 +14,7 @@ export interface CartItem {
   unitPrice: number;
   quantity: number;
   customDesignThumb?: string; // dataURL preview from customizer
-  customDesignRef?: string;   // project id in localStorage
+  customDesignRef?: string;   // full Crafting Studio design JSON (layers, material, dimensions); the server stores it on the order for production
   userUploadedImage?: string; // Client reference artwork uploaded in Crafting Studio
   uploadedArtworkName?: string;
 }
@@ -47,38 +48,23 @@ const COUPON_KEY = 'vernox-applied-coupon';
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
-    try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; }
+    return safeLocal.getJson<CartItem[]>(KEY, []);
   });
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(() => {
-    try {
-      const saved = localStorage.getItem(COUPON_KEY);
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
+    return safeLocal.getJson<AppliedCoupon | null>(COUPON_KEY, null);
   });
   const [isDrawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
-    try {
-      // Sanitize items: strip or compress any oversize base64 data URLs > 15KB
-      const sanitized = items.map(item => {
-        if (item.customDesignThumb && item.customDesignThumb.length > 15000) {
-          return { ...item, customDesignThumb: undefined };
-        }
-        return item;
-      });
-      localStorage.setItem(KEY, JSON.stringify(sanitized));
-    } catch (err: any) {
-      if (err?.name === 'QuotaExceededError' || err?.code === 22) {
-        console.warn('LocalStorage quota exceeded. Stripping preview thumbnails to preserve cart state.');
-        try {
-          const stripped = items.map(item => ({ ...item, customDesignThumb: undefined }));
-          localStorage.setItem(KEY, JSON.stringify(stripped));
-        } catch (innerErr) {
-          console.error('Failed to save even stripped cart to localStorage:', innerErr);
-        }
-      }
+    // Strip oversize base64 previews (>15KB) so the cart fits in storage.
+    const sanitized = items.map(item =>
+      item.customDesignThumb && item.customDesignThumb.length > 15000 ? { ...item, customDesignThumb: undefined } : item,
+    );
+    if (safeLocal.setJson(KEY, sanitized)) return;
+    // Quota exceeded or storage unavailable: retry without any previews.
+    const stripped = items.map(item => ({ ...item, customDesignThumb: undefined }));
+    if (!safeLocal.setJson(KEY, stripped)) {
+      console.warn('[cart] could not persist cart to local storage; it will not survive a reload.');
     }
   }, [items]);
 
@@ -118,16 +104,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const applyCoupon = (coupon: AppliedCoupon) => {
     setAppliedCoupon(coupon);
-    try {
-      localStorage.setItem(COUPON_KEY, JSON.stringify(coupon));
-    } catch {}
+    safeLocal.setJson(COUPON_KEY, coupon);
   };
 
   const removeCoupon = () => {
     setAppliedCoupon(null);
-    try {
-      localStorage.removeItem(COUPON_KEY);
-    } catch {}
+    safeLocal.remove(COUPON_KEY);
   };
 
   const clear = () => {

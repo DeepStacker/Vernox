@@ -1,9 +1,11 @@
+import type { BoundingBox2D } from '@/lib/cadEngineTypes';
 /**
  * Industrial CAD/CAM Tools Panel
  * Provides Vector Typography, Standoff Hole Placer, Image-to-Vector Tracer,
  * Layer Hierarchy Manager, and Live CAM Linter with Manufacturing Analytics.
  */
 
+import { safeLocal } from '@/lib/safeStorage';
 import { useState, useRef, useEffect } from 'react';
 import { useVectorDocument } from '@/hooks/useVectorDocument';
 import { StencilFontRegistry } from '@/lib/fontRegistry';
@@ -88,13 +90,11 @@ export function ToolsPanel({ initialTab = 'tools', onClose, className }: ToolsPa
     setTraceModalOpen(true);
   };
 
-  const handleApplyTracedVector = (pathData: string, boundsMm: any, name: string, userImagePreview?: string) => {
+  const handleApplyTracedVector = (pathData: string, boundsMm: BoundingBox2D, name: string, userImagePreview?: string) => {
     const layer = addImageTracedPath(pathData, boundsMm, name, userImagePreview);
     if (userImagePreview) {
-      try {
-        localStorage.setItem('vernox-studio-artwork', userImagePreview);
-        localStorage.setItem('vernox-studio-artwork-name', name);
-      } catch {}
+      safeLocal.set('vernox-studio-artwork', userImagePreview);
+      safeLocal.set('vernox-studio-artwork-name', name);
     }
     selectLayer(layer.id);
     toast({
@@ -105,12 +105,11 @@ export function ToolsPanel({ initialTab = 'tools', onClose, className }: ToolsPa
 
   // Allow canvas HUD or shortcuts to focus vector tracer
   useEffect(() => {
-    const handler = (e: any) => {
+    const handler = (e: Event) => {
       setActiveTab('tools');
       setSubTool('tracer');
-      if (e?.detail?.file) {
-        handleOpenTraceModal(e.detail.file);
-      }
+      const file = (e as CustomEvent<{ file?: File }>).detail?.file;
+      if (file) handleOpenTraceModal(file);
     };
     window.addEventListener('vernox:open-tracer', handler);
     return () => window.removeEventListener('vernox:open-tracer', handler);
@@ -236,10 +235,8 @@ export function ToolsPanel({ initialTab = 'tools', onClose, className }: ToolsPa
 
       const userImagePreview = canvas.toDataURL('image/jpeg', 0.82);
       const artworkName = file.name.replace(/\.[^/.]+$/, '');
-      try {
-        localStorage.setItem('vernox-studio-artwork', userImagePreview);
-        localStorage.setItem('vernox-studio-artwork-name', artworkName);
-      } catch {}
+      safeLocal.set('vernox-studio-artwork', userImagePreview);
+      safeLocal.set('vernox-studio-artwork-name', artworkName);
 
       const layer = addImageTracedPath(
         result.pathData,
@@ -253,18 +250,20 @@ export function ToolsPanel({ initialTab = 'tools', onClose, className }: ToolsPa
         title: "Vector Toolpath Generated",
         description: `Extracted ${result.contours.length} contours. Ready for laser cut.`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Vector trace error:", err);
       toast({
         title: "Tracing Failed",
-        description: err.message || "Failed to extract vector contours from image.",
+        description: (err instanceof Error && err.message) || "Failed to extract vector contours from image.",
         variant: "destructive",
       });
     } finally {
       if (objectUrl) {
         try {
           URL.revokeObjectURL(objectUrl);
-        } catch (_) {}
+        } catch {
+          // Revoking an already-released object URL is harmless.
+        }
       }
       setIsTracing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -403,10 +402,10 @@ export function ToolsPanel({ initialTab = 'tools', onClose, className }: ToolsPa
           title: "Motif Vectorized",
           description: `Extracted ${result.contours.length} closed Bezier paths ready for cutting.`,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         toast({
           title: "Tracing Error",
-          description: err.message || "Failed to generate sample vector.",
+          description: (err instanceof Error && err.message) || "Failed to generate sample vector.",
           variant: "destructive",
         });
       } finally {
@@ -478,7 +477,7 @@ export function ToolsPanel({ initialTab = 'tools', onClose, className }: ToolsPa
 
   return (
     <div className={cn("w-full md:w-[350px] lg:w-[360px] flex-shrink-0 md:border-l border-border bg-card flex flex-col h-full min-h-0 min-w-0 flex-1", className)}>
-      <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="flex flex-col h-full min-h-0 flex-1">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex flex-col h-full min-h-0 flex-1">
         {/* Navigation Tabs Header */}
         <div className="p-2 border-b border-border bg-card flex items-center gap-1.5 flex-shrink-0">
           <TabsList className="grid grid-cols-4 flex-1 h-9 bg-muted/60 p-0.5">

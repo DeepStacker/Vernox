@@ -9,7 +9,10 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useCatalog, Product } from '@/lib/catalogContext';
+import { isRevenueStatus } from '@/lib/orders/orderStateMachine';
+import { useAdminData } from '@/lib/data/adminData';
+import { useProductMutations } from '@/lib/data/products';
+import type { Product } from '@/types/store';
 import { finishLabels } from '@/lib/catalog';
 import { shapeDefinitions } from '@/lib/shapes';
 import { 
@@ -25,10 +28,9 @@ import { toast } from 'sonner';
 import { AtelierSelect } from '@/components/ui/select';
 
 export function AdminProducts() {
-  const { 
-    products, categories, storeConfig, orders,
-    addProduct, updateProduct, deleteProduct, updateStock 
-  } = useCatalog();
+  const { products, categories, storeConfig, orders } = useAdminData();
+  const { saveProduct, deleteProduct, setStock } = useProductMutations();
+  const newProductId = () => `prod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
 
   const [productSearch, setProductSearch] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'active' | 'low_stock' | 'out_of_stock' | 'customizable'>('all');
@@ -85,8 +87,7 @@ export function AdminProducts() {
     const totalVolume = products.reduce((sum, p) => sum + (p.stock ?? 0), 0);
     const totalValue = products.reduce((sum, p) => sum + ((p.stock ?? 0) * (p.price || 0)), 0);
     const activeSkus = products.length;
-    const turnoverRate = 6.82; // Estimated annual turns
-    return { totalVolume, totalValue, activeSkus, turnoverRate };
+    return { totalVolume, totalValue, activeSkus };
   }, [products]);
 
   // Filtered Products
@@ -115,6 +116,7 @@ export function AdminProducts() {
     let revenueSold = 0;
 
     orders.forEach(o => {
+      if (!isRevenueStatus(o.status)) return;
       o.items?.forEach(i => {
         if (i.productId === pId || i.productSlug === pId) {
           unitsSold += (i.quantity || 1);
@@ -123,14 +125,21 @@ export function AdminProducts() {
       });
     });
 
-    // Mock realistic monthly cadence for sales curve chart
-    const salesCurve = [
-      { month: 'Jan', units: Math.max(1, Math.round(unitsSold * 0.15)) },
-      { month: 'Mar', units: Math.max(2, Math.round(unitsSold * 0.35)) },
-      { month: 'Jun', units: Math.max(3, Math.round(unitsSold * 0.65)) },
-      { month: 'Sep', units: Math.max(2, Math.round(unitsSold * 0.85)) },
-      { month: 'Now', units: Math.max(1, unitsSold) },
-    ];
+    // Real units per month over the last six months, from the orders loaded in the admin panel
+    const now = new Date();
+    const buckets = Array.from({ length: 6 }, (_, k) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - k), 1);
+      return { start: d.getTime(), month: d.toLocaleString('en-IN', { month: 'short' }), units: 0 };
+    });
+    orders.forEach(o => {
+      if (!isRevenueStatus(o.status)) return;
+      const bucket = [...buckets].reverse().find(b => o.placedAt >= b.start);
+      if (!bucket) return;
+      o.items?.forEach(i => {
+        if (i.productId === pId || i.productSlug === pId) bucket.units += i.quantity || 1;
+      });
+    });
+    const salesCurve = buckets.map(({ month, units }) => ({ month, units }));
 
     return { unitsSold, revenueSold, salesCurve };
   };
@@ -183,35 +192,30 @@ export function AdminProducts() {
     setIsModalOpen(true);
   };
 
-  const handleSaveForm = (e: React.FormEvent) => {
+  const handleSaveForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!productForm.name.trim() || !productForm.slug.trim()) {
       toast.error('Product name and slug are required');
       return;
     }
 
-    if (editingProduct) {
-      updateProduct(editingProduct.id, productForm);
-      toast.success(`Product ${productForm.name} updated successfully`);
-      if (inspectingProduct?.id === editingProduct.id) {
-        setInspectingProduct({ ...editingProduct, ...productForm });
-      }
-    } else {
-      addProduct(productForm);
-      toast.success(`Product ${productForm.name} added to catalog`);
-    }
+    const product: Product = editingProduct
+      ? { ...editingProduct, ...productForm }
+      : { ...productForm, id: newProductId() };
+    // The mutation rolls the list back and shows an error if the write is rejected.
+    const saved = await saveProduct(product);
+    if (!saved) return;
 
+    toast.success(editingProduct ? `Product ${productForm.name} updated` : `Product ${productForm.name} added to catalog`);
+    if (editingProduct && inspectingProduct?.id === editingProduct.id) setInspectingProduct(product);
     setIsModalOpen(false);
   };
 
-  const handleDeleteProduct = (p: Product) => {
-    if (confirm(`Permanently remove "${p.name}" from catalog?`)) {
-      deleteProduct(p.id);
-      if (inspectingProduct?.id === p.id) {
-        setInspectingProduct(null);
-      }
-      toast.success('Product deleted');
-    }
+  const handleDeleteProduct = async (p: Product) => {
+    if (!confirm(`Permanently remove "${p.name}" from catalog?`)) return;
+    if (!(await deleteProduct(p.id))) return;
+    if (inspectingProduct?.id === p.id) setInspectingProduct(null);
+    toast.success('Product deleted');
   };
 
   return (
@@ -261,7 +265,7 @@ export function AdminProducts() {
             {inventoryStats.activeSkus} Active SKUs
           </div>
           <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-            {inventoryStats.turnoverRate} Annual Turnover Ratio
+            {inventoryStats.totalVolume} units in stock
           </div>
         </div>
       </div>
@@ -278,7 +282,7 @@ export function AdminProducts() {
           ].map(f => (
             <button
               key={f.id}
-              onClick={() => setSelectedFilter(f.id as any)}
+              onClick={() => setSelectedFilter(f.id as typeof selectedFilter)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
                 selectedFilter === f.id
                   ? 'bg-oxblood text-ivory shadow-xs'
@@ -375,7 +379,7 @@ export function AdminProducts() {
                           <div className="inline-flex items-center gap-0.5 bg-muted/60 p-0.5 rounded-md border border-border">
                             <button
                               type="button"
-                              onClick={() => updateStock(p.id, Math.max(0, (p.stock ?? 0) - 1))}
+                              onClick={() => setStock({ id: p.id, stock: Math.max(0, (p.stock ?? 0) - 1) })}
                               className="w-5 h-5 rounded hover:bg-card text-muted-foreground hover:text-foreground text-xs font-bold flex items-center justify-center transition"
                               title="Decrease stock"
                             >
@@ -383,7 +387,7 @@ export function AdminProducts() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => updateStock(p.id, (p.stock ?? 0) + 1)}
+                              onClick={() => setStock({ id: p.id, stock: (p.stock ?? 0) + 1 })}
                               className="w-5 h-5 rounded hover:bg-card text-muted-foreground hover:text-foreground text-xs font-bold flex items-center justify-center transition"
                               title="Increase stock"
                             >
@@ -500,12 +504,14 @@ export function AdminProducts() {
               </button>
 
               <button
-                onClick={() => {
-                  addProduct({
+                onClick={async () => {
+                  const copy: Product = {
                     ...inspectingProduct,
+                    id: newProductId(),
                     name: `${inspectingProduct.name} (Copy)`,
-                    slug: `${inspectingProduct.slug}-copy-${Date.now().toString(36).slice(-4)}`
-                  });
+                    slug: `${inspectingProduct.slug}-copy-${Date.now().toString(36).slice(-4)}`,
+                  };
+                  if (!(await saveProduct(copy))) return;
                   toast.success(`Duplicated ${inspectingProduct.name}`);
                   setInspectingProduct(null);
                 }}
@@ -672,7 +678,7 @@ export function AdminProducts() {
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Category</label>
                   <AtelierSelect
                     value={productForm.category}
-                    onValueChange={val => setProductForm({ ...productForm, category: val as any })}
+                    onValueChange={val => setProductForm({ ...productForm, category: val as Product['category'] })}
                     className="w-full bg-background border border-border rounded-lg px-3.5 py-2 text-sm outline-none focus:border-oxblood"
                     options={categories.map(c => ({
                       value: c.id,

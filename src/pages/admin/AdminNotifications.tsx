@@ -5,18 +5,18 @@
  */
 
 import { useMemo } from 'react';
-import { useCatalog } from '@/lib/catalogContext';
+import { useAdminData } from '@/lib/data/adminData';
 import { 
   Bell, AlertTriangle, AlertCircle, ShoppingBag, 
   Tag, Shield, CheckCircle2, ArrowRight 
 } from 'lucide-react';
 
 interface AdminNotificationsProps {
-  onSelectTab: (tab: any) => void;
+  onSelectTab: (tab: string) => void;
 }
 
 export function AdminNotifications({ onSelectTab }: AdminNotificationsProps) {
-  const { products, orders, coupons, storeConfig } = useCatalog();
+  const { products, orders, coupons, storeConfig } = useAdminData();
 
   const notifications = useMemo(() => {
     const list: Array<{
@@ -58,7 +58,7 @@ export function AdminNotifications({ onSelectTab }: AdminNotificationsProps) {
     });
 
     // 3. Pending orders needing workshop routing (Warning)
-    const pendingOrders = orders.filter(o => o.status === 'Pending' || o.status === 'Paid');
+    const pendingOrders = orders.filter(o => o.status === 'Pending_Payment' || o.status === 'Paid');
     if (pendingOrders.length > 0) {
       list.push({
         id: 'pending-orders-batch',

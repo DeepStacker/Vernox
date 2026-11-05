@@ -59,7 +59,7 @@ const FINISH_DESCRIPTIONS: Record<string, FinishDescription> = {
 };
 
 export default function ProductDetail() {
-  const { getProductBySlug, products, reviews, wishlist, toggleWishlist, storeConfig, coupons } = useCatalog();
+  const { getProductBySlug, products, reviews, wishlist, toggleWishlist, storeConfig } = useCatalog();
   const { slug } = useParams<{ slug: string }>();
   const product = slug ? getProductBySlug(slug) : undefined;
   
@@ -106,40 +106,14 @@ export default function ProductDetail() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Curated architectural feedback from patrons & specifiers
-  const curatedFeedback = useMemo(() => {
-    if (!product) return [];
-    const prodReviews = reviews.filter(r => r.productId === product.id);
-    if (prodReviews.length > 0) {
-      return prodReviews.slice(0, 3);
-    }
-    return [
-      {
-        id: 'cb-1',
-        customerName: 'Studio Marc Van Dijk',
-        customerRole: 'Architectural Specifier · Antwerp',
-        rating: 5,
-        date: 'August 2026',
-        comment: 'The patina depth and microcrystalline wax seal in natural daylight exceeded our specification. Flawless edge tolerance and flush standoff installation.',
-      },
-      {
-        id: 'cb-2',
-        customerName: 'Hélène de Roche',
-        customerRole: 'Private Patron · Paris 7e',
-        rating: 5,
-        date: 'July 2026',
-        comment: 'Delivered in custom-built zero-deflection timber crating with signed provenance documents. The architectural presence anchors our entire living salon.',
-      },
-      {
-        id: 'cb-3',
-        customerName: 'Kaufmann & Söhne Architekten',
-        customerRole: 'Interior Architecture · Zurich',
-        rating: 5,
-        date: 'May 2026',
-        comment: 'Specified three pieces across a penthouse duplex. The concealed drop-shadow standoff cylinders create a museum-grade floating aesthetic on lime-wash plaster.',
-      }
-    ];
-  }, [product, reviews]);
+  // Published customer reviews for this product (none yet means an empty state, never placeholders)
+  const productReviews = useMemo(
+    () => (product ? reviews.filter(r => r.productId === product.id) : []),
+    [product, reviews],
+  );
+  const averageRating = productReviews.length
+    ? productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length
+    : 0;
 
   // Related products from the atelier
   const relatedProducts = useMemo(() => {
@@ -442,16 +416,20 @@ export default function ProductDetail() {
                   {product.tagline || `Vernox Atelier · ${formattedCategory}`}
                 </span>
                 
-                {/* Review Stars & Count */}
-                <div className="flex items-center gap-1.5 text-xs text-dark-brown/70">
-                  <div className="flex text-gold">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="w-3 h-3 fill-gold text-gold" />
-                    ))}
+                {/* Review summary: real published reviews only */}
+                {productReviews.length > 0 ? (
+                  <div className="flex items-center gap-1.5 text-xs text-dark-brown/70">
+                    <div className="flex text-gold">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} className={`w-3 h-3 text-gold ${i < Math.round(averageRating) ? 'fill-gold' : ''}`} />
+                      ))}
+                    </div>
+                    <span className="font-mono text-[11px] font-semibold text-dark-brown">{averageRating.toFixed(1)}</span>
+                    <span className="text-[11px] text-dark-brown/50">· {productReviews.length} {productReviews.length === 1 ? 'review' : 'reviews'}</span>
                   </div>
-                  <span className="font-mono text-[11px] font-semibold text-dark-brown">5.0</span>
-                  <span className="text-[11px] text-dark-brown/50">· 24 Reviews</span>
-                </div>
+                ) : (
+                  <span className="text-[11px] text-dark-brown/50">No reviews yet</span>
+                )}
               </div>
 
               <h1 className="font-editorial text-3xl sm:text-4xl lg:text-[42px] text-dark-brown font-normal tracking-tight leading-[1.12]">
@@ -621,16 +599,6 @@ export default function ProductDetail() {
                   </button>
                 </div>
               </div>
-
-              {/* Active Privilege Voucher Hint */}
-              {coupons && coupons.some(c => c.isActive) && (
-                <div className="flex items-center gap-2 p-2.5 rounded-[2px] bg-[#FAF8F5] border border-[#EBE4D6] text-[11px] text-dark-brown/85 font-sans">
-                  <Tag className="w-3.5 h-3.5 text-gold shrink-0" />
-                  <span>
-                    Atelier Privilege: Apply voucher <strong className="font-mono font-bold text-burgundy">{coupons.find(c => c.isActive)?.code || 'WELCOME10'}</strong> at checkout for {coupons.find(c => c.isActive)?.discountType === 'percentage' ? `${coupons.find(c => c.isActive)?.discountValue}% savings` : `${currencySymbol}${coupons.find(c => c.isActive)?.discountValue} savings`}.
-                  </span>
-                </div>
-              )}
 
               {/* Main Action Buttons: Acquire + Wishlist + CAD */}
               <div className="flex gap-2.5 pt-1">
@@ -854,19 +822,19 @@ export default function ProductDetail() {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
             <div>
               <span className="text-[10px] uppercase tracking-[0.28em] font-sans text-burgundy font-semibold">
-                Documented Provenance
+                Customer reviews
               </span>
               <h2 className="font-editorial text-2xl sm:text-3xl text-dark-brown font-normal mt-1">
-                Reflections From Patrons & Architects
+                What customers say
               </h2>
             </div>
-            <span className="text-xs text-dark-brown/60 font-sans">
-              100% Verified Private Commissions
-            </span>
           </div>
 
+          {productReviews.length === 0 && (
+            <p className="text-sm text-dark-brown/60 font-sans">No reviews yet. Reviews appear here once customers publish them.</p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {curatedFeedback.map((fb) => (
+            {productReviews.slice(0, 6).map((fb) => (
               <div 
                 key={fb.id} 
                 className="bg-white border border-[#EBE4D6] rounded-[2px] p-6 space-y-4 shadow-2xs flex flex-col justify-between"
@@ -874,7 +842,7 @@ export default function ProductDetail() {
                 <div className="space-y-2.5">
                   <div className="flex text-gold">
                     {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="w-3 h-3 fill-gold text-gold" />
+                      <Star key={i} className={`w-3 h-3 text-gold ${i < fb.rating ? 'fill-gold' : ''}`} />
                     ))}
                   </div>
                   <p className="font-editorial text-sm sm:text-base text-dark-brown/85 italic leading-relaxed">

@@ -5,7 +5,15 @@
  * powering the Vernox Atelier Performance Intelligence Dashboard.
  */
 
-import { Order, Product, CustomerAccount } from './catalogContext';
+import type { Order, Product, CustomerAccount } from '@/types/store';
+import { safeLocal } from './safeStorage';
+
+/** Orders may carry marketing attribution written by tracking integrations; core orders do not. */
+type AttributedOrder = Order & {
+  socialSource?: 'Facebook' | 'Instagram' | 'Twitter' | 'Pinterest' | 'Reddit';
+  trafficSource?: 'Direct' | 'Search' | 'Social' | 'Referrals' | 'Email';
+  campaign?: string;
+};
 
 export interface VisitorSession {
   id: string;
@@ -217,110 +225,39 @@ export function trackStoreEvent(step: 'view' | 'cart' | 'checkout' | 'purchase',
       ...metadata,
     };
 
-    const saved = localStorage.getItem(STORAGE_KEY);
-    const list: VisitorSession[] = saved ? JSON.parse(saved) : [];
+    const list = safeLocal.getJson<VisitorSession[]>(STORAGE_KEY, []);
     list.push(session);
     // Keep last 1,000 live sessions in local cache
     if (list.length > 1000) list.splice(0, list.length - 1000);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    safeLocal.setJson(STORAGE_KEY, list);
   } catch (err) {
     console.debug('Analytics track error:', err);
   }
 }
 
 /**
- * Seed historical sessions baseline to blend with live orders and visits
- */
-/**
- * Seed historical sessions baseline to blend with live orders and visits
+ * Real sessions only: locally recorded storefront visits plus one purchase session per real order.
+ * Nothing is synthesised; an empty store yields empty metrics.
  */
 function getHistoricalSessionsBaseline(orders: Order[]): VisitorSession[] {
-  const now = Date.now();
-  const dayMs = 24 * 3600 * 1000;
+  const stored = safeLocal.getJson<unknown>(STORAGE_KEY, []);
+  const live: VisitorSession[] = Array.isArray(stored)
+    ? (stored as VisitorSession[]).filter(s => s && !s.orderId && typeof s.timestamp === 'number')
+    : [];
 
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length >= 250) {
-        // Verify it covers at least 85 days back
-        const minTime = Math.min(...parsed.map((s: any) => s.timestamp || now));
-        if (minTime <= now - 85 * dayMs) {
-          return parsed;
-        }
-      }
-    }
-  } catch {}
+  const purchases: VisitorSession[] = orders.map(o => ({
+    id: `order-ses-${o.id}`,
+    timestamp: o.placedAt || 0,
+    path: '/checkout',
+    trafficSource: 'Direct',
+    deviceType: 'Desktop',
+    country: o.shippingCountry || 'India',
+    funnelStep: 'purchase',
+    orderId: o.id,
+    orderTotal: o.total,
+  }));
 
-  const sessions: VisitorSession[] = [];
-
-  // Synthesize realistic historical visit telemetry over the last 90 days
-  const countries = ['USA', 'Canada', 'Germany', 'Mexico', 'France', 'India', 'United Kingdom', 'Belgium', 'Switzerland', 'Japan'];
-  const paths = [
-    '/products/traditional-wall-art',
-    '/products/grassfed-architectural-crest',
-    '/collections/sculptures',
-    '/collections/wall-art',
-    '/crafting-studio',
-    '/'
-  ];
-  const sources: ('Direct' | 'Search' | 'Social' | 'Referrals' | 'Email')[] = ['Direct', 'Search', 'Social', 'Referrals', 'Email'];
-  const socialSources: ('Facebook' | 'Twitter' | 'Instagram' | 'Pinterest' | 'Reddit')[] = ['Facebook', 'Twitter', 'Instagram', 'Pinterest', 'Reddit'];
-
-  for (let i = 89; i >= 0; i--) {
-    const dayStart = now - (i * dayMs);
-    // 25 to 55 visitors per day with realistic weekend/weekday variation
-    const dayOfWeek = new Date(dayStart).getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const visitorsCount = 28 + Math.floor(Math.sin(i * 0.35) * 8 + (isWeekend ? 14 : 4) + Math.random() * 10);
-
-    for (let v = 0; v < visitorsCount; v++) {
-      const ts = dayStart + Math.floor(Math.random() * dayMs);
-      const randCountry = countries[Math.floor(Math.random() * countries.length)];
-      const randPath = paths[Math.floor(Math.random() * paths.length)];
-      const randDevice = Math.random() > 0.42 ? 'Desktop' : (Math.random() > 0.22 ? 'Mobile' : 'Tablet');
-      const randSource = Math.random() > 0.4 ? 'Direct' : (Math.random() > 0.45 ? 'Search' : (Math.random() > 0.35 ? 'Social' : 'Referrals'));
-      const randSocial = randSource === 'Social' ? socialSources[Math.floor(Math.random() * socialSources.length)] : undefined;
-
-      const isCart = Math.random() < 0.16;
-      const isCheckout = isCart && Math.random() < 0.72;
-      const isPurchase = isCheckout && Math.random() < 0.62;
-
-      sessions.push({
-        id: `seed-${i}-${v}`,
-        timestamp: ts,
-        path: randPath,
-        trafficSource: randSource,
-        socialSource: randSocial,
-        deviceType: randDevice,
-        country: randCountry,
-        funnelStep: isPurchase ? 'purchase' : isCheckout ? 'checkout' : isCart ? 'cart' : 'view',
-      });
-    }
-  }
-
-  // Also link each real order to a purchase session
-  orders.forEach(o => {
-    const oTime = o.placedAt || new Date(o.createdAt || 0).getTime() || now;
-    sessions.push({
-      id: `order-ses-${o.id}`,
-      timestamp: oTime,
-      path: '/checkout',
-      trafficSource: (o as any).trafficSource || 'Direct',
-      socialSource: (o as any).socialSource,
-      deviceType: (o as any).deviceType || 'Desktop',
-      country: o.shippingCountry || 'USA',
-      funnelStep: 'purchase',
-      orderId: o.id,
-      orderTotal: o.total,
-    });
-  });
-
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-  } catch {}
-
-  return sessions;
+  return [...live, ...purchases];
 }
 
 /**
@@ -393,12 +330,12 @@ export function computeOverviewMetrics(
 
   // Filter orders in current and previous windows
   const currentOrders = orders.filter(o => {
-    const t = o.placedAt || new Date(o.createdAt || 0).getTime() || 0;
+    const t = o.placedAt || 0;
     return t >= currentStart && t <= currentEnd;
   });
 
   const previousOrders = orders.filter(o => {
-    const t = o.placedAt || new Date(o.createdAt || 0).getTime() || 0;
+    const t = o.placedAt || 0;
     return t >= previousStart && t <= previousEnd;
   });
 
@@ -413,8 +350,8 @@ export function computeOverviewMetrics(
     ? Math.round(((currentSalesTotal - previousSalesTotal) / previousSalesTotal) * 100 * 10) / 10 
     : (currentSalesTotal > 0 ? 100 : 0);
 
-  const onlineStoreSales = currentOrders.filter(o => !(o as any).socialSource).reduce((s, o) => s + (o.total || 0), 0);
-  const facebookSales = currentOrders.filter(o => (o as any).socialSource === 'Facebook').reduce((s, o) => s + (o.total || 0), 0);
+  const onlineStoreSales = currentOrders.filter(o => !(o as AttributedOrder).socialSource).reduce((s, o) => s + (o.total || 0), 0);
+  const facebookSales = currentOrders.filter(o => (o as AttributedOrder).socialSource === 'Facebook').reduce((s, o) => s + (o.total || 0), 0);
 
   // 2. Total online store visitors
   const currentVisitorsCount = currentSessions.length || 1;
@@ -506,13 +443,13 @@ export function computeOverviewMetrics(
       const label = `${hour12}${ampm}`;
 
       const hOrders = currentOrders.filter(o => {
-        const t = o.placedAt || new Date(o.createdAt || 0).getTime() || 0;
+        const t = o.placedAt || 0;
         return t >= bStart && t < bEnd;
       });
       const hSales = hOrders.reduce((s, o) => s + (o.total || 0), 0);
 
       const prevHOrders = previousOrders.filter(o => {
-        const t = o.placedAt || new Date(o.createdAt || 0).getTime() || 0;
+        const t = o.placedAt || 0;
         return t >= prevBStart && t < prevBEnd;
       });
       const prevHSales = prevHOrders.reduce((s, o) => s + (o.total || 0), 0);
@@ -580,13 +517,13 @@ export function computeOverviewMetrics(
       const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
       const bOrders = currentOrders.filter(o => {
-        const t = o.placedAt || new Date(o.createdAt || 0).getTime() || 0;
+        const t = o.placedAt || 0;
         return t >= bStart && t < bEnd;
       });
       const bSales = bOrders.reduce((s, o) => s + (o.total || 0), 0);
 
       const prevBOrders = previousOrders.filter(o => {
-        const t = o.placedAt || new Date(o.createdAt || 0).getTime() || 0;
+        const t = o.placedAt || 0;
         return t >= prevBStart && t < prevBEnd;
       });
       const prevBSales = prevBOrders.reduce((s, o) => s + (o.total || 0), 0);
@@ -772,13 +709,13 @@ export function computeOverviewMetrics(
   // 13. Sales by Traffic Source (computed strictly from orders)
   const salesByTrafficMap = new Map<string, number>();
   currentOrders.forEach(o => {
-    const src = (o as any).trafficSource || 'Direct';
+    const src = (o as AttributedOrder).trafficSource || 'Direct';
     salesByTrafficMap.set(src, (salesByTrafficMap.get(src) || 0) + (o.total || 0));
   });
 
   const prevSalesByTrafficMap = new Map<string, number>();
   previousOrders.forEach(o => {
-    const src = (o as any).trafficSource || 'Direct';
+    const src = (o as AttributedOrder).trafficSource || 'Direct';
     prevSalesByTrafficMap.set(src, (prevSalesByTrafficMap.get(src) || 0) + (o.total || 0));
   });
 
@@ -815,7 +752,7 @@ export function computeOverviewMetrics(
   // 15. Sales by Social Source (computed strictly from orders)
   const salesBySocialMap = new Map<string, number>();
   currentOrders.forEach(o => {
-    const soc = (o as any).socialSource;
+    const soc = (o as AttributedOrder).socialSource;
     if (soc) {
       salesBySocialMap.set(soc, (salesBySocialMap.get(soc) || 0) + (o.total || 0));
     }
@@ -823,7 +760,7 @@ export function computeOverviewMetrics(
 
   const prevSalesBySocialMap = new Map<string, number>();
   previousOrders.forEach(o => {
-    const soc = (o as any).socialSource;
+    const soc = (o as AttributedOrder).socialSource;
     if (soc) {
       prevSalesBySocialMap.set(soc, (prevSalesBySocialMap.get(soc) || 0) + (o.total || 0));
     }
@@ -978,10 +915,10 @@ export function computeOverviewMetrics(
 
   // Campaign & Concierge Sales
   const curCampaignSales = currentOrders
-    .filter(o => (o as any).campaign || (o as any).couponCode || (o.items && o.items.some(i => i.customDesignRef || i.productId === 'custom-bespoke')))
+    .filter(o => (o as AttributedOrder).campaign || (o as AttributedOrder).couponCode || (o.items && o.items.some(i => i.customDesignRef || i.productId === 'custom-bespoke')))
     .reduce((s, o) => s + (o.total || 0), 0);
   const prevCampaignSales = previousOrders
-    .filter(o => (o as any).campaign || (o as any).couponCode || (o.items && o.items.some(i => i.customDesignRef || i.productId === 'custom-bespoke')))
+    .filter(o => (o as AttributedOrder).campaign || (o as AttributedOrder).couponCode || (o.items && o.items.some(i => i.customDesignRef || i.productId === 'custom-bespoke')))
     .reduce((s, o) => s + (o.total || 0), 0);
   const campaignSalesChange = prevCampaignSales > 0
     ? Math.round(((curCampaignSales - prevCampaignSales) / prevCampaignSales) * 100 * 10) / 10

@@ -3,27 +3,23 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { SiteHeader } from '@/components/shop/SiteHeader';
 import { SiteFooter } from '@/components/shop/SiteFooter';
 import { useCatalog } from '@/lib/catalogContext';
+import { useAuth } from '@/lib/auth/AuthProvider';
+import { useMyOrders } from '@/lib/data/orders';
+import { OrderProgress } from '@/components/shop/OrderProgress';
+import { ORDER_STATUS_LABELS, type OrderStatus } from '@/lib/orders/orderStateMachine';
+import { INDIAN_STATES_AND_UTS, isValidPincode, normalizeIndianMobile } from '@/lib/checkout/validation';
 import { ShapeThumb } from '@/components/shop/ShapeThumb';
 import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronUp, MapPin, Truck, Calendar, Package, AlertCircle, Layers, Sun, Moon, User, Lock, Settings, History, ShieldCheck, Mail, Phone, ArrowRight, Eye, EyeOff, X, PhoneCall, Heart, Activity, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
 import { auth, googleProvider } from '@/lib/firebase';
-import { signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { signInWithPopup, RecaptchaVerifier, type ConfirmationResult, signInWithPhoneNumber, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 
 export default function Account() {
-  const { 
-    orders, 
-    storeConfig, 
-    currentCustomer, 
-    loginCustomer, 
-    registerCustomer, 
-    logoutCustomer, 
-    updateCustomerProfile,
-    wishlist,
-    toggleWishlist,
-    products
-  } = useCatalog();
+  const { storeConfig, wishlist, toggleWishlist, products } = useCatalog();
+  const { user, profile: currentCustomer, signIn, register, signOut: logoutCustomer, updateProfile } = useAuth();
+  const { data: customerOrders = [], isLoading: ordersLoading, error: ordersError } = useMyOrders(user?.uid);
   
   const { theme, setTheme } = useTheme();
   const [searchParams] = useSearchParams();
@@ -34,7 +30,7 @@ export default function Account() {
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab === 'wishlist' || tab === 'orders' || tab === 'profile' || tab === 'security') {
-      setActiveTab(tab as any);
+      setActiveTab(tab);
     }
   }, [searchParams]);
   
@@ -53,7 +49,7 @@ export default function Account() {
   // Phone Auth Inputs
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpCode, setOtpCode] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState<any>(null);
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
@@ -63,7 +59,9 @@ export default function Account() {
       if (recaptchaVerifierRef.current) {
         try {
           recaptchaVerifierRef.current.clear();
-        } catch (_) {}
+        } catch {
+          // Nothing to clear: the verifier was never rendered or is already disposed.
+        }
       }
     };
   }, []);
@@ -74,8 +72,8 @@ export default function Account() {
     phone: '',
     address: '',
     city: '',
-    zip: '',
-    country: 'United States',
+    state: '',
+    pincode: '',
   });
 
   // Password Update form states
@@ -93,20 +91,20 @@ export default function Account() {
         phone: currentCustomer.phone || '',
         address: currentCustomer.address || '',
         city: currentCustomer.city || '',
-        zip: currentCustomer.zip || '',
-        country: currentCustomer.country || 'United States',
+        state: currentCustomer.state || '',
+        pincode: currentCustomer.pincode || '',
       });
     }
   }, [currentCustomer]);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: OrderStatus) => {
     switch (status) {
-      case 'Pending': return 'text-yellow-600 bg-yellow-500/10 border-yellow-500/20';
-      case 'Designing': return 'text-purple-600 bg-purple-500/10 border-purple-500/20';
-      case 'Cutting': return 'text-blue-600 bg-blue-500/10 border-blue-500/20';
-      case 'Finished': return 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20';
-      case 'Shipped': return 'text-indigo-600 bg-indigo-500/10 border-indigo-500/20';
+      case 'Pending_Payment': return 'text-yellow-600 bg-yellow-500/10 border-yellow-500/20';
+      case 'Paid': case 'In_Design': return 'text-purple-600 bg-purple-500/10 border-purple-500/20';
+      case 'Cutting': case 'Finishing': case 'Quality_Check': case 'Packed': return 'text-blue-600 bg-blue-500/10 border-blue-500/20';
+      case 'Shipped': case 'Out_For_Delivery': return 'text-indigo-600 bg-indigo-500/10 border-indigo-500/20';
       case 'Delivered': return 'text-green-600 bg-green-500/10 border-green-500/20';
+      case 'Cancelled': case 'Payment_Failed': case 'Expired': return 'text-red-600 bg-red-500/10 border-red-500/20';
       default: return 'text-zinc-600 bg-zinc-500/10 border-zinc-500/20';
     }
   };
@@ -122,14 +120,19 @@ export default function Account() {
       toast.error('Please enter both email and password.');
       return;
     }
+    if (!emailOrPhone.includes('@')) {
+      toast.error('Please sign in with the email address on your account.');
+      return;
+    }
 
     setAuthLoading(true);
-    const success = await loginCustomer(emailOrPhone, password);
-    setAuthLoading(false);
-    if (success) {
-      toast.success(`Authenticated successfully!`);
-    } else {
-      toast.error('Invalid email or password credentials. Please verify your entries.');
+    try {
+      await signIn(emailOrPhone, password);
+      toast.success('Signed in.');
+    } catch {
+      toast.error('Invalid email or password. Please verify your entries.');
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -141,19 +144,21 @@ export default function Account() {
       return;
     }
 
-    setAuthLoading(true);
-    const success = await registerCustomer({
-      email,
-      phone,
-      name,
-      password
-    });
-    setAuthLoading(false);
+    if (phone && !normalizeIndianMobile(phone)) {
+      toast.error('Enter a valid 10-digit Indian mobile number or leave it blank.');
+      return;
+    }
 
-    if (success) {
-      toast.success('Account registered on Cloud Firestore!');
-    } else {
-      toast.error('Registration failed. This email may already be registered.');
+    setAuthLoading(true);
+    try {
+      await register({ email, phone: phone ? normalizeIndianMobile(phone) ?? phone : undefined, name, password });
+      toast.success('Account created.');
+    } catch (err) {
+      toast.error(err instanceof Error && /email-already-in-use/.test(err.message)
+        ? 'This email is already registered. Try signing in.'
+        : 'Registration failed. Please check your details and try again.');
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -162,8 +167,8 @@ export default function Account() {
     try {
       await signInWithPopup(auth, googleProvider);
       toast.success("Logged in via Google Authentication!");
-    } catch (e: any) {
-      toast.error(e.message || "Google sign-in was cancelled or failed.");
+    } catch (e: unknown) {
+      toast.error((e instanceof Error && e.message) || "Google sign-in was cancelled or failed.");
       console.error(e);
     }
   };
@@ -182,7 +187,9 @@ export default function Account() {
       if (recaptchaVerifierRef.current) {
         try {
           recaptchaVerifierRef.current.clear();
-        } catch (_) {}
+        } catch {
+          // Nothing to clear: the verifier was never rendered or is already disposed.
+        }
         recaptchaVerifierRef.current = null;
       }
 
@@ -199,14 +206,16 @@ export default function Account() {
       setConfirmationResult(confirmation);
       setShowOtpInput(true);
       toast.success("SMS confirmation code sent successfully!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (recaptchaVerifierRef.current) {
         try {
           recaptchaVerifierRef.current.clear();
-        } catch (_) {}
+        } catch {
+          // Nothing to clear: the verifier was never rendered or is already disposed.
+        }
         recaptchaVerifierRef.current = null;
       }
-      toast.error(err.message || "SMS send failed. Confirm number formatting.");
+      toast.error((err instanceof Error && err.message) || "SMS send failed. Confirm number formatting.");
       console.error(err);
     } finally {
       setSendingOtp(false);
@@ -227,7 +236,7 @@ export default function Account() {
       toast.success("Phone authenticated successfully!");
       setShowOtpInput(false);
       setConfirmationResult(null);
-    } catch (err: any) {
+    } catch {
       toast.error("Invalid verification code. Please request a new one.");
     } finally {
       setAuthLoading(false);
@@ -236,8 +245,24 @@ export default function Account() {
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateCustomerProfile(profileForm);
-    toast.success('Shipping address & profile updated on Cloud Firestore.');
+    if (profileForm.phone && !normalizeIndianMobile(profileForm.phone)) {
+      toast.error('Enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    if (profileForm.pincode && !isValidPincode(profileForm.pincode)) {
+      toast.error('Enter a valid 6-digit pincode.');
+      return;
+    }
+    try {
+      await updateProfile({
+        ...profileForm,
+        phone: profileForm.phone ? normalizeIndianMobile(profileForm.phone) ?? profileForm.phone : '',
+        country: 'India',
+      });
+      toast.success('Profile saved.');
+    } catch (err) {
+      toast.error(`Profile was not saved: ${err instanceof Error ? err.message : 'please try again.'}`);
+    }
   };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
@@ -265,16 +290,11 @@ export default function Account() {
         toast.success('Account password updated successfully.');
         setPasswordForm({ currentPass: '', newPass: '', confirmPass: '' });
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update password. Verify current credentials.");
+    } catch (err: unknown) {
+      toast.error((err instanceof Error && err.message) || "Failed to update password. Verify current credentials.");
       console.error(err);
     }
   };
-
-  // Filter orders by active customer's email
-  const customerOrders = orders.filter(
-    o => o.email.trim().toLowerCase() === (currentCustomer?.email || '').trim().toLowerCase()
-  );
 
   // AUTHENTICATION LOGIN / SIGN-UP CARD INTERFACE
   if (!currentCustomer) {
@@ -595,7 +615,7 @@ export default function Account() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
                   className={`w-full p-3 rounded text-xs uppercase tracking-wider font-semibold flex items-center gap-3 transition-all ${
                     isSelected
                       ? 'bg-oxblood/5 text-oxblood border-l-2 border-oxblood'
@@ -636,7 +656,13 @@ export default function Account() {
                 <p className="text-xs text-muted-foreground">Inspect tracking details, receipts, and custom commission canvas designs.</p>
               </div>
 
-              {customerOrders.length === 0 ? (
+              {ordersLoading ? (
+                <p className="text-sm text-muted-foreground py-10 text-center">Loading your orders…</p>
+              ) : ordersError ? (
+                <div className="text-center py-12 border border-destructive/30 rounded bg-destructive/5 text-sm text-destructive">
+                  We could not load your orders: {ordersError.message}
+                </div>
+              ) : customerOrders.length === 0 ? (
                 <div className="text-center py-20 border border-dashed border-border rounded bg-card/40 noise-overlay">
                   <Package className="w-10 h-10 mx-auto mb-4 text-muted-foreground/40" />
                   <p className="text-muted-foreground mb-6 font-serif-italic text-sm">No orders recorded under this account yet.</p>
@@ -646,7 +672,7 @@ export default function Account() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {customerOrders.slice().reverse().map(o => {
+                  {customerOrders.map(o => {
                     const isExpanded = expandedOrderId === o.id;
                     const totalItemsCount = o.items.reduce((sum, i) => sum + i.quantity, 0);
                     
@@ -664,9 +690,9 @@ export default function Account() {
                         >
                           <div className="space-y-1">
                             <div className="flex items-center gap-3">
-                              <span className="font-mono text-sm font-semibold text-brass">{o.id}</span>
+                              <span className="font-mono text-sm font-semibold text-brass">{o.orderNumber || o.id}</span>
                               <span className={`px-2.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded-full border ${getStatusColor(o.status)}`}>
-                                {o.status}
+                                {ORDER_STATUS_LABELS[o.status]}
                               </span>
                             </div>
                             <div className="text-xs text-muted-foreground">
@@ -688,77 +714,11 @@ export default function Account() {
                         {/* EXPANDED DETAILED BODY */}
                         {isExpanded && (
                           <div className="border-t border-border/50 bg-background-warm/30 p-5 space-y-6 animate-fade-in">
-                            {/* Order Status Stepper */}
-                            <div className="space-y-4 bg-muted/20 border border-border/40 p-5 rounded-md noise-overlay">
+                            <div className="space-y-4 bg-muted/20 border border-border/40 p-5 rounded-md">
                               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 border-b border-border/20 pb-2">
-                                <History className="w-3.5 h-3.5" /> Workshop Pipeline Status
+                                <History className="w-3.5 h-3.5" /> Order progress
                               </h4>
-                              
-                              <div className="hidden sm:flex items-center justify-between relative mt-4">
-                                {/* Back line */}
-                                <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-0.5 bg-border/60 z-0" />
-                                
-                                {(() => {
-                                  const statusList = ['Pending', 'Designing', 'Cutting', 'Finished', 'Shipped', 'Delivered'];
-                                  const currentIdx = statusList.indexOf(o.status);
-                                  
-                                  return statusList.map((stepStatus, idx) => {
-                                    const stepLabel = stepStatus === 'Pending' ? 'Received' : stepStatus;
-                                    const isCompleted = idx <= currentIdx;
-                                    const isActive = idx === currentIdx;
-                                    
-                                    return (
-                                      <div key={stepStatus} className="flex flex-col items-center relative z-10 text-center space-y-1">
-                                        <div 
-                                          className={cn(
-                                            "w-7 h-7 rounded-full flex items-center justify-center border text-[10px] font-bold font-mono transition-all duration-300",
-                                            isCompleted 
-                                              ? "bg-oxblood border-oxblood text-ivory shadow-soft scale-110" 
-                                              : "bg-background border-border text-muted-foreground"
-                                          )}
-                                        >
-                                          {isCompleted && !isActive ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : idx + 1}
-                                        </div>
-                                        <span className={cn("text-[9px] uppercase tracking-wider font-semibold", isCompleted ? "text-oxblood" : "text-muted-foreground")}>
-                                          {stepLabel}
-                                        </span>
-                                      </div>
-                                    );
-                                  });
-                                })()}
-                              </div>
-
-                              {/* Mobile Stepper View */}
-                              <div className="flex sm:hidden flex-col gap-4 relative pl-4 mt-2 border-l border-border/60">
-                                {(() => {
-                                  const statusList = ['Pending', 'Designing', 'Cutting', 'Finished', 'Shipped', 'Delivered'];
-                                  const currentIdx = statusList.indexOf(o.status);
-                                  
-                                  return statusList.map((stepStatus, idx) => {
-                                    const stepLabel = stepStatus === 'Pending' ? 'Order Received' : stepStatus;
-                                    const isCompleted = idx <= currentIdx;
-                                    const isActive = idx === currentIdx;
-                                    
-                                    return (
-                                      <div key={stepStatus} className="flex items-center gap-3 relative">
-                                        <div 
-                                          className={cn(
-                                            "absolute -left-[23px] w-4.5 h-4.5 rounded-full flex items-center justify-center border text-[8px] font-bold font-mono bg-background",
-                                            isCompleted 
-                                              ? "border-oxblood text-oxblood bg-oxblood/10 scale-105" 
-                                              : "border-border text-muted-foreground"
-                                          )}
-                                        >
-                                          {isCompleted && !isActive ? <Check className="w-2.5 h-2.5 stroke-[2.5]" /> : idx + 1}
-                                        </div>
-                                        <span className={cn("text-xs uppercase tracking-widest font-semibold", isCompleted ? "text-oxblood font-bold" : "text-muted-foreground")}>
-                                          {stepLabel}
-                                        </span>
-                                      </div>
-                                    );
-                                  });
-                                })()}
-                              </div>
+                              <OrderProgress status={o.status} />
                             </div>
 
                             {/* 1. Itemized List */}
@@ -808,9 +768,9 @@ export default function Account() {
                                   <MapPin className="w-3.5 h-3.5" /> Shipping Address
                                 </h5>
                                 <div className="text-muted-foreground leading-relaxed pl-5">
-                                  <p className="font-semibold text-foreground">{o.shippingName}</p>
+                                  <p className="font-semibold text-foreground">{o.customerName}</p>
                                   <p>{o.shippingAddress}</p>
-                                  <p>{o.shippingCity}, {o.shippingZip}</p>
+                                  <p>{o.shippingCity}, {o.shippingState} {o.shippingPincode}</p>
                                   <p>{o.shippingCountry}</p>
                                 </div>
                               </div>
@@ -822,24 +782,24 @@ export default function Account() {
                                     <Truck className="w-3.5 h-3.5" /> Order Tracking
                                   </h5>
                                   <Link 
-                                    to={`/track-order?id=${o.id}`}
+                                    to={`/track-order?id=${o.orderNumber || o.id}`}
                                     className="text-[10px] text-brass hover:text-oxblood font-semibold tracking-wider uppercase inline-flex items-center gap-1 transition"
                                   >
                                     Live Telemetry &rarr;
                                   </Link>
                                 </div>
-                                {o.trackingNumber ? (
+                                {o.tracking?.number ? (
                                   <div className="text-muted-foreground leading-relaxed pl-5 space-y-1">
-                                    <p>Carrier: <span className="font-semibold text-foreground capitalize">{o.trackingCarrier || 'Local Post'}</span></p>
-                                    <p>Code: <span className="font-mono text-foreground font-semibold">{o.trackingNumber}</span></p>
-                                    {o.estimatedDelivery && (
+                                    <p>Carrier: <span className="font-semibold text-foreground capitalize">{o.tracking?.carrier || 'Courier'}</span></p>
+                                    <p>Code: <span className="font-mono text-foreground font-semibold">{o.tracking?.number}</span></p>
+                                    {o.tracking?.estimatedDelivery && (
                                       <p className="flex items-center gap-1 text-emerald-600 mt-1">
-                                        <Calendar className="w-3 h-3" /> Delivery: {o.estimatedDelivery}
+                                        <Calendar className="w-3 h-3" /> Delivery: {o.tracking?.estimatedDelivery}
                                       </p>
                                     )}
                                     <div className="pt-2">
                                       <Link
-                                        to={`/track-order?id=${o.id}`}
+                                        to={`/track-order?id=${o.orderNumber || o.id}`}
                                         className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-oxblood border border-oxblood/20 bg-oxblood/5 hover:bg-oxblood hover:text-white px-3 py-1.5 rounded transition uppercase tracking-wider"
                                       >
                                         <Activity className="w-3 h-3" /> Dedicated Tracking Portal
@@ -856,7 +816,7 @@ export default function Account() {
                                       </div>
                                     </div>
                                     <Link
-                                      to={`/track-order?id=${o.id}`}
+                                      to={`/track-order?id=${o.orderNumber || o.id}`}
                                       className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-oxblood border border-oxblood/20 bg-oxblood/5 hover:bg-oxblood hover:text-white px-3 py-1.5 rounded transition uppercase tracking-wider"
                                     >
                                       <Activity className="w-3 h-3" /> Track Atelier Milestones &rarr;
@@ -901,7 +861,7 @@ export default function Account() {
                       type="text" 
                       value={profileForm.phone}
                       onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
-                      placeholder="+32..."
+                      placeholder="10-digit mobile"
                       className="w-full bg-background border border-border rounded px-3 py-2 text-sm outline-none focus:border-oxblood font-mono"
                     />
                   </div>
@@ -927,23 +887,27 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">ZIP / Postal Code</label>
+                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Pincode</label>
                     <input 
                       type="text" 
-                      value={profileForm.zip}
-                      onChange={e => setProfileForm({ ...profileForm, zip: e.target.value })}
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={profileForm.pincode}
+                      onChange={e => setProfileForm({ ...profileForm, pincode: e.target.value })}
                       className="w-full bg-background border border-border rounded px-3 py-2 text-sm outline-none focus:border-oxblood font-mono"
                     />
                   </div>
 
                   <div className="space-y-1 md:col-span-2">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Country</label>
-                    <input 
-                      type="text" 
-                      value={profileForm.country}
-                      onChange={e => setProfileForm({ ...profileForm, country: e.target.value })}
+                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">State / UT</label>
+                    <select
+                      value={profileForm.state}
+                      onChange={e => setProfileForm({ ...profileForm, state: e.target.value })}
                       className="w-full bg-background border border-border rounded px-3 py-2 text-sm outline-none focus:border-oxblood"
-                    />
+                    >
+                      <option value="">Select state</option>
+                      {INDIAN_STATES_AND_UTS.map(st => <option key={st} value={st}>{st}</option>)}
+                    </select>
                   </div>
                 </div>
 

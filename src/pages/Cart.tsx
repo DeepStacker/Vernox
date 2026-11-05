@@ -25,10 +25,10 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { RecentlyViewed } from '@/components/shop/RecentlyViewed';
 
-import { calculateCouponDiscount } from '@/lib/couponValidator';
+import { previewCoupon } from '@/lib/data/couponPreview';
 
 export default function Cart() {
-  const { storeConfig, products, coupons } = useCatalog();
+  const { storeConfig, products } = useCatalog();
   const { items, updateQty, remove, subtotal, clear, appliedCoupon, applyCoupon, removeCoupon } = useCart();
   const navigate = useNavigate();
 
@@ -39,24 +39,8 @@ export default function Cart() {
   const threshold = storeConfig.freeShippingThreshold || 5000;
   const shipping = subtotal > threshold || subtotal === 0 ? 0 : storeConfig.shippingFee;
 
-  // Real-time calculation of coupon discount against current cart items
-  const couponResult = appliedCoupon
-    ? calculateCouponDiscount({
-        code: appliedCoupon.code,
-        cartSubtotal: subtotal,
-        cartItems: items.map(i => ({
-          productId: i.productId,
-          productSlug: i.productSlug,
-          unitPrice: i.unitPrice,
-          quantity: i.quantity,
-        })),
-        currency: storeConfig.currency || '₹',
-      }, coupons)
-    : null;
-
-  const discountAmount = (couponResult && couponResult.isValid)
-    ? couponResult.discountAmount
-    : (appliedCoupon?.discountAmount || 0);
+  // The server decides the discount; the cart shows the amount from the last validation.
+  const discountAmount = appliedCoupon?.discountAmount || 0;
 
   const discountedSubtotal = Math.max(0, subtotal - discountAmount);
   const tax = discountedSubtotal * (storeConfig.taxRate / 100);
@@ -65,37 +49,32 @@ export default function Cart() {
   const progressPercent = Math.min(100, Math.round((subtotal / threshold) * 100));
   const remainingForFreeShipping = Math.max(0, threshold - subtotal);
 
-  const handleApplyPromo = (e: React.FormEvent) => {
+  const handleApplyPromo = async (e: React.FormEvent) => {
     e.preventDefault();
     setPromoError('');
     const clean = promoCode.trim().toUpperCase();
     if (!clean) return;
 
-    const result = calculateCouponDiscount({
-      code: clean,
-      cartSubtotal: subtotal,
-      cartItems: items.map(i => ({
-        productId: i.productId,
-        productSlug: i.productSlug,
-        unitPrice: i.unitPrice,
-        quantity: i.quantity,
-      })),
-      currency: storeConfig.currency || '₹',
-    }, coupons);
-
-    if (result.isValid) {
-      applyCoupon({
-        code: result.couponCode || clean,
-        discountAmount: result.discountAmount,
-        discountType: result.discountType,
-        discountValue: result.discountValue,
-        description: result.description,
-      });
-      toast.success(`Coupon ${result.couponCode || clean} applied! Saved ${storeConfig.currency || '₹'}${result.discountAmount.toFixed(2)}`);
-      setPromoCode('');
-    } else {
-      setPromoError(result.error || 'Invalid coupon code.');
-      toast.error(result.error || 'The entered promo code is not recognized.');
+    try {
+      const result = await previewCoupon({ code: clean, subtotal, items });
+      if (result.isValid) {
+        applyCoupon({
+          code: result.couponCode || clean,
+          discountAmount: result.discountAmount,
+          discountType: result.discountType,
+          discountValue: result.discountValue,
+          description: result.description,
+        });
+        toast.success(`Coupon ${result.couponCode || clean} applied! Saved ${storeConfig.currency || '₹'}${result.discountAmount.toFixed(2)}`);
+        setPromoCode('');
+      } else {
+        setPromoError(result.error || 'Invalid coupon code.');
+        toast.error(result.error || 'The entered promo code is not recognized.');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not check the coupon right now.';
+      setPromoError(message);
+      toast.error(message);
     }
   };
 
@@ -520,4 +499,4 @@ export default function Cart() {
       <SiteFooter />
     </div>
   );
-}
+}
