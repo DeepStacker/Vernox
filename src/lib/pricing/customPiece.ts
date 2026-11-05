@@ -28,17 +28,20 @@ export type CustomPieceLimits = { minDimensionMm: number; maxWidthMm: number; ma
 /** Production days for studio pieces when `settings/store.customLeadTimeDays` is not set. */
 export const DEFAULT_CUSTOM_LEAD_TIME_DAYS = 7;
 
+// Defaults are anchored to the sample catalogue (45 × 45 cm ≈ ₹2,499, 90 × 90 cm ≈ ₹8,099, i.e. about
+// ₹632 + ₹0.92/cm²) with ~20% for custom design work, and a premium for copper-alloy finishes.
+// Owner to confirm; real rates belong in settings/store.customPieces.
 const STANDARD = (label: string): CustomFinishRate => ({
   label,
-  setupFeePaise: 14_900,
-  ratePaisePerCm2: 2.5, // ₹250 per m²
-  minimumPaise: 14_900,
+  setupFeePaise: 75_000, // ₹750
+  ratePaisePerCm2: 110, // ₹1.10 per cm² (₹11,000 per m²)
+  minimumPaise: 149_900, // ₹1,499
 });
 const PREMIUM = (label: string): CustomFinishRate => ({
   label,
-  setupFeePaise: 14_900,
-  ratePaisePerCm2: 4.5, // ₹450 per m²
-  minimumPaise: 14_900,
+  setupFeePaise: 75_000,
+  ratePaisePerCm2: 140, // ₹1.40 per cm²
+  minimumPaise: 149_900,
 });
 
 /**

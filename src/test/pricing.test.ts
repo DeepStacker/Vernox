@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_CUSTOM_FINISH_RATES } from '../lib/pricing/customPiece';
 import { describe, expect, it } from 'vitest';
 import { checkoutRequestSchema } from '../../api/_lib/checkout';
 import { ApiError } from '../../api/_lib/errors';
@@ -84,17 +85,19 @@ describe('catalog line pricing', () => {
 describe('custom piece pricing', () => {
   it('uses setup fee + area × finish rate, rounded to whole paise', () => {
     const steel = priceCustomLine({ productId: CUSTOM_PRODUCT_ID, widthMm: 300, heightMm: 300, finish: 'steel', quantity: 1 }, TEST_CONFIG);
-    expect(steel.unitPricePaise).toBe(14_900 + 900 * 2.5);
+    const std = DEFAULT_CUSTOM_FINISH_RATES.steel;
+    const premium = DEFAULT_CUSTOM_FINISH_RATES.brass;
+    expect(steel.unitPricePaise).toBe(Math.max(std.minimumPaise, Math.round(std.setupFeePaise + 900 * std.ratePaisePerCm2)));
     const brass = priceCustomLine({ productId: CUSTOM_PRODUCT_ID, widthMm: 600, heightMm: 400, finish: 'brass', quantity: 3 }, TEST_CONFIG);
-    expect(brass.unitPricePaise).toBe(14_900 + 2_400 * 4.5);
+    expect(brass.unitPricePaise).toBe(Math.round(premium.setupFeePaise + 2_400 * premium.ratePaisePerCm2));
     expect(brass.lineTotalPaise).toBe(brass.unitPricePaise * 3);
     expect(brass.isCustom).toBe(true);
   });
 
   it('applies the per-finish minimum', () => {
-    const config = mergeStoreConfig(TEST_CONFIG, { customPieces: { steel: { minimum: 500 } } });
+    const config = mergeStoreConfig(TEST_CONFIG, { customPieces: { steel: { minimum: 5_000 } } });
     const line = priceCustomLine({ productId: CUSTOM_PRODUCT_ID, widthMm: 100, heightMm: 100, finish: 'steel', quantity: 1 }, config);
-    expect(line.unitPricePaise).toBe(50_000);
+    expect(line.unitPricePaise).toBe(500_000);
   });
 
   it('rejects missing/out-of-range dimensions and unknown finishes', () => {

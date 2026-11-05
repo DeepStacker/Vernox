@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_CUSTOM_FINISH_RATES } from '../lib/pricing/customPiece';
 import { describe, expect, it } from 'vitest';
 import { checkoutRequestSchema, createCheckoutIntent, type PrepaidCheckoutResponse } from '../../api/_lib/checkout';
 import { ApiError } from '../../api/_lib/errors';
@@ -57,7 +58,10 @@ describe('checkout intent', () => {
       items: [{ productId: 'custom-bespoke', widthMm: 300, heightMm: 300, finish: 'steel', quantity: 1, customDesignRef: 'design-abc', unitPrice: 1 }],
     });
     const res = await createCheckoutIntent(deps(store), req, null);
-    expect(res.pricing.items[0].unitPrice).toBe(171.5);
+    // Server price from the shared rate table; the client's unitPrice: 1 is ignored.
+    const steel = DEFAULT_CUSTOM_FINISH_RATES.steel;
+    const expectedPaise = Math.max(steel.minimumPaise, Math.round(steel.setupFeePaise + 900 * steel.ratePaisePerCm2));
+    expect(res.pricing.items[0].unitPrice).toBe(expectedPaise / 100);
     const order = store.read(`orders/${res.orderId}`)!;
     expect((order.items as Array<Record<string, unknown>>)[0]).toMatchObject({ customDesignRef: 'design-abc', isCustom: true });
     expect(order.userId).toBeNull();
