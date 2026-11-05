@@ -8,12 +8,12 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 - **Blocked cases:** a case marked `Blocked: Phase N` depends on a feature that is not built yet. The phases come from `ROADMAP.md`:
   1. Foundation
   2. India commerce (pincode serviceability, COD, GST invoice, courier, notifications, cancellation, returns)
-  3. Operations consoles (production, QC, shipping, finance, support, B2B)
+  3. Operations consoles. 3a (done): role home, production, QC and packing, support, trade enquiries, catalog manager, staff screen. 3b (pending): shipping, finance, returns
   4. Storefront redesign
   5. UAT
 
   Do not execute a blocked case until its phase ships; re-baseline it then. Cases with no marker are testable on the current build.
-- **Roles:** the admin role names below are logical roles. Until Phase 3 splits consoles, some of them are performed by the current admin console with the matching permission set (see Section 12, role permission tests).
+- **Roles:** the admin role names below are logical roles. Production, QC and packing, Support and Trade enquiries have their own consoles since Phase 3a; Shipping and Finance still use the generic Orders and Analytics tabs until Phase 3b (see Section 12, role permission tests).
 - **Test data:** use the test cards, UPI IDs and netbanking banks published by the payment gateway for test mode. Never use real card data.
 - **Sign-off:** launch requires all non-blocked cases to pass, and all blocked cases to pass after their phase ships.
 
@@ -91,19 +91,35 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 
 | ID | Case | Preconditions | Steps | Expected result | Result |
 |---|---|---|---|---|---|
-| CM-01 | Create product with variants and images | Catalog role | Admin > Products > New: name, slug, category, description, 3 sizes, 3 finishes, price per variant, 4 images, stock | Saved; appears in admin list with all variants and images | |
+| CM-01 | Create product with variants and images | Catalog role | Admin > Catalog > New product: name, slug, category, description, 3 sizes (label, width, height, price difference), 3 finishes, MRP, lead time, HSN, 2 image URLs, stock | Saved; appears in the admin list with price and stock; live preview shows unit price, MRP and discount per size; image previews render | |
 | CM-02 | Slug uniqueness | Existing slug | Create product with the same slug | Rejected with clear error | |
-| CM-03 | Validation | None | Save with empty name, negative price, zero sizes | Field errors; nothing saved | |
+| CM-03 | Validation | None | Save with empty name, price 0, MRP below price, no finishes, no sizes, bad HSN, `javascript:` image URL | Field-level errors; nothing saved | |
 | CM-04 | Publish to storefront | Draft product | Publish | Appears in `/shop`, correct category, PDP loads, in sitemap after next build | |
 | CM-05 | Unpublish | Live product | Unpublish | Disappears from shop and search; direct PDP URL shows not found; existing orders unaffected | |
 | CM-06 | Edit price | Live product in a customer's cart | Change price | New price on shop and PDP; cart reprices or warns at checkout | |
 | CM-07 | Stock adjustment | Tracked product | Set stock to 0, then 10 | Storefront reflects out of stock then in stock; change audited | |
-| CM-08 | Image upload limits | None | Upload oversized and non-image file | Rejected with message; valid image optimized | |
+| CM-08 | Image upload limits | None | Upload oversized and non-image file | Rejected with message; valid image optimized | Blocked: Phase 3b (file upload needs storage.rules; product images are URL-based today) |
 | CM-09 | Coupons | Catalog or marketing permission | Create percent and flat coupons with min order, expiry, usage limit | Coupons behave per CG-11 and CG-12 | |
 | CM-10 | Hero slider | None | Edit slider slide and order | Home reflects change | |
 | CM-11 | Review moderation | Pending review (CS-07) | Approve, then reject another | Approved appears on PDP and updates rating; rejected never appears | |
 | CM-12 | Audit trail | Actions above done | Open audit log | Each action recorded with user, time, before and after | |
-| CM-13 | Product with DXF template | Production-ready design | Attach cut template to product | Template available to Production on resulting orders | Blocked: Phase 3 |
+| CM-13 | Product with DXF template | Production-ready design | Attach cut template to product | Template available to Production on resulting orders | Blocked: Phase 3b |
+| CM-14 | Sample products | Seeded sample catalog | Catalog > filter "Sample products"; edit one, untick "Sample product", save | Sample badge and banner count drop; filter no longer lists it | |
+| CM-15 | Server-known finishes only | None | Open the finish chips on a product | Only the standard finish ids are offered (legacy ids appear only on products already using them) | |
+| CM-16 | Stock and low-stock view | Products with stock 0, 3, 20 | Use +/- buttons; filters "Low stock" and "Out of stock" | Counts update and persist; untracked products are never "out of stock" | |
+| CM-17 | Duplicate product | Existing product | Duplicate, save with a new slug | New product created with the same sizes and finishes | |
+
+## 3a. Role home and trade enquiries
+
+| ID | Case | Preconditions | Steps | Expected result | Result |
+|---|---|---|---|---|---|
+| RH-01 | Production home | Production login | Open Home | Counts per stage, oldest-first queue with SLA badges, "Assigned to me", overdue warning; no revenue figures | |
+| RH-02 | Support home | Support login | Open Home | Open orders and new trade enquiries counts with links | |
+| RH-03 | Catalog home | Catalog login | Open Home | Out of stock, low stock and sample product counts | |
+| RH-04 | Analytics is real | Order manager or Finance | Open Analytics for 7, 30, 90 days | Paid orders, revenue, average order value, status counts, top products and daily revenue match the Orders list; no cost, margin or profit figures; a notice appears when loaded orders do not cover the range | |
+| B2B-01 | List and filter | Enquiries from CG-29 | Trade enquiries; filter each status | Newest first; counts per status | |
+| B2B-02 | Change status | Support or Order manager | Mark Contacted, Quoted, Won, Lost | Persisted after reload | |
+| B2B-03 | No access | Production, Shipping, Finance, Catalog logins | Look for Trade enquiries | Tab absent; direct Firestore read refused | |
 
 ## 4. Order manager
 
@@ -113,48 +129,52 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | OM-02 | Filter and search orders | Many orders | Filter by status, date; search order number, phone | Correct results | |
 | OM-03 | Order detail | Any order | Open detail | Items with variants and custom design files, address, payment reference, timeline | |
 | OM-04 | Verify payment state | Paid and failed orders | Compare with gateway dashboard | Statuses match exactly | |
-| OM-05 | Move order to production | Paid order | Confirm order | Status moves to "In production"; Production queue shows it | Blocked: Phase 3 |
-| OM-06 | Hold order | Paid order | Put on hold with reason | Status "On hold"; reason visible; Production cannot start it | Blocked: Phase 3 |
+| OM-05 | Move order to production | Paid order | Open Production console as Order manager; move the order to "In Design" | Order shows in the In Design column; timeline records the user | |
+| OM-06 | Hold order | Paid order | Put on hold with reason | Status "On hold"; reason visible; Production cannot start it | Blocked: Phase 3b (no hold status in the state machine yet) |
 | OM-07 | Edit address before dispatch | Order not shipped | Change address and pincode | Saved, audited; shipping rate recomputed | Blocked: Phase 2 |
 | OM-08 | Cancel order | Paid order, not in production | Cancel with reason | Cancelled; stock restored; refund task created | Blocked: Phase 2 |
 | OM-09 | Invalid status jump | Any order | Try Delivered from Paid | Refused; only valid transitions offered | |
-| OM-10 | Custom design review | Studio order | Open design, check dimensions, material, holes | Matches what customer ordered; can request clarification | Blocked: Phase 3 |
+| OM-10 | Custom design review | Studio order | Production console > open order > check item specs and "customer design" label; download DXF and SVG | Dimensions, material and finish match what the customer ordered; manufacturability warnings (if any) listed. Requesting clarification is not built (use order notes) | |
 
 ## 5. Production / workshop
 
 | ID | Case | Preconditions | Steps | Expected result | Result |
 |---|---|---|---|---|---|
-| PR-01 | Production queue | Confirmed orders | Open production console | Only orders in production listed, oldest due first | Blocked: Phase 3 |
-| PR-02 | Download DXF | Order with design | Download DXF | File opens in CAD/CAM; units mm; layers `0_CUT_INTERNAL`, `1_CUT_PERIMETER`; dimensions match order | Blocked: Phase 3 |
-| PR-03 | Download work order PDF | Same | Download spec sheet | Material, thickness, finish, quantity, order number, QC traveler present | Blocked: Phase 3 |
-| PR-04 | Stage progression | Order in queue | Mark Cutting, Deburring, Finishing, Coating in order | Each stage timestamped with operator; customer timeline updates | Blocked: Phase 3 |
-| PR-05 | Skip stage refused | Order at Cutting | Try to mark Coating | Refused | Blocked: Phase 3 |
-| PR-06 | Material shortage | Low raw stock | Flag shortage on order | Order flagged; Order manager notified | Blocked: Phase 3 |
-| PR-07 | Rework | Failed QC (QC-02) | Send back for rework | Order returns to the right stage with reason | Blocked: Phase 3 |
-| PR-08 | Operator cannot see finance | Production login | Open finance pages directly by URL | Access denied | Blocked: Phase 3 |
+| PR-01 | Production queue | Paid orders | Open Production console | Orders listed in columns Waiting to start, In Design, Cutting, Finishing, Quality Check; oldest first in each; SLA badge shows days left or overdue against product lead time (default 7) | |
+| PR-02 | Download DXF | Order with design | Open order > DXF | File downloads; opens in CAD/CAM; units mm; layers `0_CUT_INTERNAL`, `1_CUT_PERIMETER`; dimensions match order; customer design (not a bare outline) for studio orders | |
+| PR-03 | Download work order PDF and job sheet | Same | Download PDF; press the print icon on the card | PDF has material, thickness, finish, order number; job sheet prints one page per order with barcode, items, size, finish, material and checklists | |
+| PR-04 | Stage progression | Order in queue | Claim, then move Waiting to start > In Design > Cutting > Finishing > Quality Check | Each move recorded in the timeline with the operator email; card shows "Assigned to you"; buttons are at least 44 px tall | |
+| PR-05 | Skip stage refused | Order at Cutting | Look for a button to jump to Quality Check or Packed | Only the next stage is offered; production cannot move Quality Check to Packed (QC console does) | |
+| PR-06 | Material shortage | Low raw stock | Add an internal note "Material shortage: ..." | Note saved with author and time and visible to Order manager. Flag and notification are not built | |
+| PR-07 | Rework | Failed QC (QC-02) | Open the order in Production | Order is in Cutting or Finishing as chosen at QC; the failure reason is in the QC log (QC-02) | |
+| PR-08 | Operator cannot see finance | Production login | Open Analytics, Customers, Team, Settings by navigation; check customer details in the console | Tabs absent; production screens show no customer name, email, phone or address | |
+| PR-09 | Mine only and search | Several orders, some claimed | Toggle "Mine only"; search an order number | Only matching orders shown | |
+| PR-10 | Manufacturability warning | Studio order with a feature below minimum width | Open order detail | Warning listed under the item | |
+| PR-11 | Notes are preserved | Order with QC data | Add a production note; then edit notes in Orders > Inspector and save | QC results and package data are still present afterwards | |
 
 ## 6. QC and packing
 
 | ID | Case | Preconditions | Steps | Expected result | Result |
 |---|---|---|---|---|---|
-| QC-01 | QC pass | Item finished | Complete checklist (dimensions, edge quality, finish, hardware), photo, pass | Status "Ready to pack"; photo stored | Blocked: Phase 3 |
-| QC-02 | QC fail | Item finished | Fail with reason and photo | Status "Rework"; Production notified | Blocked: Phase 3 |
-| QC-03 | Mandatory checklist | None | Try to pass with items unchecked | Refused | Blocked: Phase 3 |
-| QC-04 | Packing | Item passed QC | Record packaging type, weight, dimensions, print packing slip | Status "Packed"; weights stored for shipping | Blocked: Phase 3 |
-| QC-05 | Packing slip contents | Same | Print slip | Order number, items, customer name, no price on slip for gift orders | Blocked: Phase 3 |
+| QC-01 | QC pass | Order in Quality Check | QC console: tick all five checks per item, Pass item; save package size and weight; Mark packed | Item shows Passed with user; order moves to Packed; package saved. Photo is a "photo taken" tick only (no upload yet) | |
+| QC-02 | QC fail | Order in Quality Check | Fail an item with a reason, choose Finishing or Cutting | Order moves back with the reason stored in the notes QC log; item results reset so rework is fully re-inspected | |
+| QC-03 | Mandatory checklist | None | Try to pass with any box unticked; try to fail without a reason; try Mark packed before all items pass or package details saved | Pass, fail and Mark packed stay disabled; a missing reason is refused | |
+| QC-04 | Packing | Item passed QC | Enter length, width, height (cm) and weight (kg), save; print packing slip | Order Packed; dimensions and weight stored in notes and shown on the Packed card and slip | |
+| QC-05 | Packing slip contents | Same | Print slip | Order number, barcode, items, sizes, finish, quantities, ship-to name and address, package size, "Handle with care". Prices are not printed | |
+| QC-06 | Packed list | Packed orders | Open QC console | Packed orders listed with package size or "No package details recorded" | |
 
 ## 7. Shipping
 
 | ID | Case | Preconditions | Steps | Expected result | Result |
 |---|---|---|---|---|---|
-| SH-01 | Rate and courier choice | Packed order | Open shipping console | Serviceable couriers with rates and ETA shown | Blocked: Phase 3 |
+| SH-01 | Rate and courier choice | Packed order | Open shipping console | Serviceable couriers with rates and ETA shown | Blocked: Phase 3b |
 | SH-02 | Book courier and AWB | Same | Book | AWB generated and stored; label printable; status "Shipped" | Blocked: Phase 2 |
 | SH-03 | Customer tracking | Shipped order | Customer opens `/track-order` | Shows courier, AWB, live status link | Blocked: Phase 2 |
 | SH-04 | Shipping notification | Shipped order | Check email, SMS or WhatsApp | Message with AWB and tracking link | Blocked: Phase 2 |
 | SH-05 | Courier status webhook | Shipped order | Send test webhook: In transit, Out for delivery, Delivered | Order timeline updates; Delivered closes order | Blocked: Phase 2 |
-| SH-06 | Delivery failed / RTO | Shipped order | Send NDR and RTO webhook | Order flagged; Support task created; customer informed | Blocked: Phase 3 |
-| SH-07 | COD remittance | COD order delivered | Record courier remittance | Matches COD amount; Finance sees it | Blocked: Phase 3 |
-| SH-08 | Cancel shipment | Booked, not picked up | Cancel AWB | AWB cancelled at courier; order returns to "Packed" | Blocked: Phase 3 |
+| SH-06 | Delivery failed / RTO | Shipped order | Send NDR and RTO webhook | Order flagged; Support task created; customer informed | Blocked: Phase 3b |
+| SH-07 | COD remittance | COD order delivered | Record courier remittance | Matches COD amount; Finance sees it | Blocked: Phase 3b |
+| SH-08 | Cancel shipment | Booked, not picked up | Cancel AWB | AWB cancelled at courier; order returns to "Packed" | Blocked: Phase 3b |
 
 ## 8. Finance
 
@@ -166,20 +186,23 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | FN-04 | Full refund | Paid order cancelled | Refund full | Gateway refund created; order shows Refunded; customer notified | Blocked: Phase 2 |
 | FN-05 | Partial refund | Paid order, one item returned | Refund part | Amount capped at paid total; remainder unchanged; audited | Blocked: Phase 2 |
 | FN-06 | Refund over limit | Paid order | Try refund above paid amount | Refused | Blocked: Phase 2 |
-| FN-07 | Gateway reconciliation | A day of orders | Compare gateway settlement report to the system | Every payment matched; unmatched list is empty or explained | Blocked: Phase 3 |
-| FN-08 | COD reconciliation | COD orders delivered | Compare courier remittance to orders | Differences listed | Blocked: Phase 3 |
-| FN-09 | Export | None | Export orders CSV for a date range | Complete, correct totals, no PII beyond need | Blocked: Phase 3 |
+| FN-07 | Gateway reconciliation | A day of orders | Compare gateway settlement report to the system | Every payment matched; unmatched list is empty or explained | Blocked: Phase 3b |
+| FN-08 | COD reconciliation | COD orders delivered | Compare courier remittance to orders | Differences listed | Blocked: Phase 3b |
+| FN-09 | Export | None | Export orders CSV for a date range | Complete, correct totals, no PII beyond need | Blocked: Phase 3b |
 
 ## 9. Support
 
 | ID | Case | Preconditions | Steps | Expected result | Result |
 |---|---|---|---|---|---|
-| SP-01 | Look up order | None | Search by order number, phone, email | Order and timeline found | |
-| SP-02 | Handle contact message | CG-30 done | Open message, reply, close | Status tracked | Blocked: Phase 3 |
-| SP-03 | Handle B2B enquiry to quote | CG-29 done | Open enquiry, prepare quote with price, lead time, validity, send | Customer receives quote; enquiry status "Quoted"; accept moves to order | Blocked: Phase 3 |
+| SP-01 | Look up order | None | Support console: search by order number, phone, email, pincode, name | Matching orders listed; detail shows customer, items, totals, timeline | |
+| SP-02 | Handle contact message | CG-30 done | Open message, reply, close | Status tracked | Blocked: Phase 3b (no ticket or message store; see ROADMAP "tickets") |
+| SP-03 | Handle B2B enquiry to quote | CG-29 done | Trade enquiries: open the enquiry, mark Contacted, then Quoted, Won or Lost | Status saved and shown in the list filter. Sending a quote document and converting to an order are not built | |
 | SP-04 | Process return request | CS-11 done | Approve, arrange pickup, mark received, trigger refund or replacement | Each step logged; refund via FN-04 or FN-05; replacement creates a new production order | Blocked: Phase 2 |
 | SP-05 | Reject return | CS-11 done | Reject with reason | Customer informed with reason | Blocked: Phase 2 |
-| SP-06 | Support cannot refund | Support login | Try to issue refund | Refused unless permission granted | Blocked: Phase 3 |
+| SP-06 | Support cannot refund | Support login | Look for refund actions; try a status change or note | No refund or status controls; notes box shows a read-only message | |
+| SP-07 | Customer summary and snippets | Customer with 2 orders | Open an order in Support | Order count, lifetime value and last order shown; Status, Delay and (when tracking exists) Tracking snippets can be copied; WhatsApp opens `wa.me/91<phone>` with the text | |
+| SP-08 | Order not in the loaded page | Older order | Search its order number or email, then "Search all orders" | Order found | |
+| SP-09 | Internal note | Order manager login | Add a note on an order | Appears with author and UTC time; support role sees notes read-only | |
 
 ## 10. Super admin
 
@@ -190,6 +213,8 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | SA-03 | Audit logs | Actions performed | Filter by user and action | Complete and tamper-evident | |
 | SA-04 | Deactivate admin user | Active staff user | Deactivate | Session ends; cannot sign in | |
 | SA-05 | Last super admin safeguard | One super admin | Try to remove own super admin role | Refused | |
+| SA-06 | Invite staff by email | Person has no storefront account | Team > assign role to their email | Error says no account exists; after they sign up, assignment succeeds | |
+| SA-07 | Role change takes effect after sign-in | Staff member signed in | Change their role; they sign out and in | New consoles appear; demotion applies at once because sessions end | |
 
 ## 11. Business flow: end to end
 
@@ -197,14 +222,14 @@ Run these as scripted scenarios across roles. Each step references the case that
 
 | ID | Scenario | Steps (role: case) | Expected result | Result |
 |---|---|---|---|---|
-| E2E-01 | Catalog product, UPI, delivered | Catalog: CM-01, CM-04. Guest: CG-05, CG-08, CG-11, CG-15. Order: OM-01, OM-05. Production: PR-02, PR-04. QC: QC-01, QC-04. Shipping: SH-02. Courier webhook: SH-05. Finance: FN-02. | Order flows Paid, In production, Packed, Shipped, Delivered with invoice; every status visible to the customer | Blocked: Phase 3 |
-| E2E-02 | Custom studio design order | Guest: CG-26 then CG-16. Order: OM-10. Production: PR-02. Then as E2E-01 from QC | The DXF matches the ordered design; delivered product matches dimensions within tolerance | Blocked: Phase 3 |
+| E2E-01 | Catalog product, UPI, delivered | Catalog: CM-01, CM-04. Guest: CG-05, CG-08, CG-11, CG-15. Order: OM-01, OM-05. Production: PR-02, PR-04. QC: QC-01, QC-04. Shipping: SH-02. Courier webhook: SH-05. Finance: FN-02. | Order flows Paid, In production, Packed, Shipped, Delivered with invoice; every status visible to the customer | Blocked: Phase 3b |
+| E2E-02 | Custom studio design order | Guest: CG-26 then CG-16. Order: OM-10. Production: PR-02. Then as E2E-01 from QC | The DXF matches the ordered design; delivered product matches dimensions within tolerance | Blocked: Phase 3b |
 | E2E-03 | Payment abandon then release | Guest: CG-21 | Stock reserved at checkout start, released after timeout; second customer can buy last unit | Blocked: Phase 2 |
 | E2E-04 | Cancellation with refund | Customer: CS-09. Finance: FN-04 | Stock restored, full refund, notification | Blocked: Phase 2 |
 | E2E-05 | Return, partial refund | Customer: CS-11. Support: SP-04. Finance: FN-05, FN-03 | Credit note and partial refund reconcile (FN-07) | Blocked: Phase 2 |
 | E2E-06 | Replacement for damaged item | Customer: CS-11. Support: SP-04 (replacement) | New production order linked to original at zero price | Blocked: Phase 2 |
-| E2E-07 | COD order to remittance | Guest: CG-18. Ship: SH-02, SH-05, SH-07. Finance: FN-08 | COD collected amount reconciles | Blocked: Phase 3 |
-| E2E-08 | B2B enquiry to paid order | Guest: CG-29. Support: SP-03. Customer pays quote | Quote converts to order with agreed price | Blocked: Phase 3 |
+| E2E-07 | COD order to remittance | Guest: CG-18. Ship: SH-02, SH-05, SH-07. Finance: FN-08 | COD collected amount reconciles | Blocked: Phase 3b |
+| E2E-08 | B2B enquiry to paid order | Guest: CG-29. Support: SP-03. Customer pays quote | Quote converts to order with agreed price | Blocked: Phase 3b |
 | E2E-09 | Review lifecycle | Customer: CS-07. Catalog: CM-11 | Review public only after approval; rating updates | |
 
 ## 12. Role permission negative tests
@@ -215,13 +240,14 @@ Each role must be refused actions that belong to other roles. Test by UI (action
 |---|---|---|---|
 | RP-01 | Catalog manager | View customer PII beyond what is needed; change order status; issue refunds; edit roles | |
 | RP-02 | Order manager | Edit product price or stock; issue refunds; edit roles | |
-| RP-03 | Production | See customer phone, email or payment data; edit orders other than stage updates; refund | Blocked: Phase 3 |
-| RP-04 | QC and packing | Edit order data; start or skip production stages; refund | Blocked: Phase 3 |
-| RP-05 | Shipping | Change prices; refund; edit products; see payment details | Blocked: Phase 3 |
-| RP-06 | Finance | Edit products; change production or shipping status; edit roles | Blocked: Phase 3 |
-| RP-07 | Support | Edit products; refund without permission; change roles; delete orders | Blocked: Phase 3 |
+| RP-03 | Production | See customer phone, email or payment data in the console; edit orders other than stage, assignment and notes; refund; open Analytics, Customers, Team | |
+| RP-04 | QC and packing (production role) | Move Quality Check to Packed without a complete checklist and package details; edit prices; refund | |
+| RP-05 | Shipping | See Production, QC, Support or Trade tabs; change prices; refund; edit products | |
+| RP-06 | Finance | See Production, QC, Support or Trade tabs; edit products; change order status; edit roles | |
+| RP-07 | Support | Edit products; change order status or add notes; refund; change roles; open Production, QC or Team | |
 | RP-08 | Any admin | Escalate own role by API call | |
 | RP-09 | Signed-out user | Open `/admin` or call admin APIs | Redirected to sign-in; API returns 401 | |
+| RP-11 | Catalog manager | Open Production, QC, Support or Trade enquiries | |
 | RP-10 | Customer | Open `/admin` or call admin APIs | Refused with 403 | |
 
 ## 13. Security negative tests

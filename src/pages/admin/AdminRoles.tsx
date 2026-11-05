@@ -21,6 +21,8 @@ const CAPABILITIES: Array<{ name: string; key: keyof RolePermissions }> = [
   { name: 'Coupons', key: 'canManageCoupons' },
   { name: 'Review moderation', key: 'canModerateReviews' },
   { name: 'Customer support', key: 'canManageSupport' },
+  { name: 'Order status and notes', key: 'canUpdateOrders' },
+  { name: 'Trade enquiries', key: 'canReadB2b' },
   { name: 'Store settings', key: 'canManageSettings' },
   { name: 'Staff and roles', key: 'canManageStaff' },
   { name: 'Audit logs', key: 'canViewAuditLogs' },
@@ -64,8 +66,15 @@ export function AdminRoles() {
     <div className="space-y-8 animate-fade-in">
       <div>
         <h2 className="font-display text-3xl text-oxblood-deep">Team Roles & Access</h2>
-        <p className="text-muted-foreground text-sm">Assign staff roles to existing accounts. Changes apply when the person next signs in or refreshes.</p>
+        <p className="text-muted-foreground text-sm">Give a person a staff role, change it, or revoke it.</p>
       </div>
+
+      <ol className="bg-muted/30 border border-border/70 rounded-xl p-4 text-xs text-muted-foreground list-decimal list-inside space-y-1">
+        <li><strong>Invite:</strong> ask the person to create an account on the storefront with their work email first. A role can only be given to an email that already exists; otherwise the server answers "No account exists for that user".</li>
+        <li><strong>Assign:</strong> enter that email and pick a role below. Change a role from the list; revoke removes all staff access.</li>
+        <li><strong>Apply:</strong> the person must <strong>sign out and sign in again</strong> before a new role takes effect. Demotions and revocations apply immediately because their sessions are ended.</li>
+        <li>You cannot change your own role; ask another super admin.</li>
+      </ol>
 
       <form onSubmit={handleInvite} className="bg-card border border-border/70 rounded-xl p-5 shadow-soft flex flex-col md:flex-row gap-3 md:items-end">
         <div className="flex-1 space-y-1.5">

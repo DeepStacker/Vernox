@@ -9,10 +9,15 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth/AuthProvider';
-import { canAccessTab, formatRole, type StaffRole } from '@/lib/auth/permissions';
+import { canAccessTab, formatRole, type AdminTabId, type StaffRole } from '@/lib/auth/permissions';
 import { useAdminData } from '@/lib/data/adminData';
 import { safeLocal } from '@/lib/safeStorage';
-import { AdminOverview } from './admin/AdminOverview';
+import { RoleHome } from './admin/overview/RoleHome';
+import { MetricsDashboard } from './admin/overview/MetricsDashboard';
+import { ProductionConsole } from './admin/production/ProductionConsole';
+import { QcConsole } from './admin/qc/QcConsole';
+import { SupportConsole } from './admin/support/SupportConsole';
+import { B2bInquiries } from './admin/b2b/B2bInquiries';
 import { AdminOrders } from './admin/AdminOrders';
 import { AdminProducts } from './admin/AdminProducts';
 import { AdminCoupons } from './admin/AdminCoupons';
@@ -27,27 +32,13 @@ import { AdminCommandPalette } from '@/components/admin/AdminCommandPalette';
 import { 
   Home, ShoppingCart, Package, Users, BarChart3, Megaphone, 
   Tag, Settings, Palette, SlidersHorizontal, Bell, MessageSquare, 
-  ShieldCheck, FileText, Headphones, HelpCircle, LogOut, Search, 
+  ShieldCheck, FileText, Headphones, Hammer, ClipboardCheck, Briefcase, HelpCircle, LogOut, Search, 
   ExternalLink, Menu, X, ChevronRight, PanelLeftClose, PanelLeftOpen, 
   Lock, ArrowLeft, KeyRound
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export type AdminTab = 
-  | 'home'
-  | 'orders' 
-  | 'products' 
-  | 'customers' 
-  | 'analytics' 
-  | 'marketing' 
-  | 'coupons'
-  | 'custom-orders'
-  | 'hero-slider'
-  | 'reviews' 
-  | 'notifications'
-  | 'roles' 
-  | 'audit' 
-  | 'settings';
+type AdminTab = AdminTabId;
 
 function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; displayName: string; onSignOut: () => void }) {
   const { orders, products } = useAdminData();
@@ -121,6 +112,10 @@ function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; display
       badge: lowStockCount > 0 ? `${lowStockCount} low` : undefined,
       badgeColor: 'bg-[#3D2817] text-[#E8A34E] border border-[#855324]/60'
     },
+    { id: 'production' as AdminTab, label: 'Production', icon: Hammer },
+    { id: 'qc' as AdminTab, label: 'QC & Packing', icon: ClipboardCheck },
+    { id: 'support' as AdminTab, label: 'Support', icon: Headphones },
+    { id: 'b2b' as AdminTab, label: 'Trade Enquiries', icon: Briefcase },
     { id: 'customers' as AdminTab, label: 'Customers', icon: Users },
     { id: 'analytics' as AdminTab, label: 'Analytics', icon: BarChart3 },
     { id: 'marketing' as AdminTab, label: 'Marketing', icon: Megaphone },
@@ -442,12 +437,15 @@ function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; display
         {/* Content Viewport */}
         <main className="flex-1 min-w-0 min-h-0 overflow-y-auto p-4 sm:p-6 md:p-8 bg-[#FAF7F2] text-[#1C1615]">
           {activeTab === 'home' && allowed('home') && (
-            <AdminOverview initialViewMode="operations" onSelectTab={(tab) => selectTab(tab as AdminTab)} />
+            <RoleHome role={role} onSelectTab={selectTab} />
           )}
 
-          {activeTab === 'analytics' && allowed('analytics') && (
-            <AdminOverview initialViewMode="financials" onSelectTab={(tab) => selectTab(tab as AdminTab)} />
-          )}
+          {activeTab === 'analytics' && allowed('analytics') && <MetricsDashboard />}
+
+          {activeTab === 'production' && allowed('production') && <ProductionConsole />}
+          {activeTab === 'qc' && allowed('qc') && <QcConsole />}
+          {activeTab === 'support' && allowed('support') && <SupportConsole />}
+          {activeTab === 'b2b' && allowed('b2b') && <B2bInquiries />}
 
           {activeTab === 'orders' && allowed('orders') && (
             <AdminOrders onSelectTab={(tab) => selectTab(tab as AdminTab)} />
@@ -530,7 +528,7 @@ function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; display
 
               {/* Navigation Items */}
               <nav className="flex flex-col gap-1 font-sans">
-                {allNavItems.map(tab => {
+                {allNavItems.filter(tab => allowed(tab.id)).map(tab => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
                   return (

@@ -100,6 +100,12 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
    courier integration, notifications, cancellation, refunds and returns.
 3. **Operations consoles:** production queue with real DXF, QC/packing, shipping, finance,
    support, B2B, with an enforced order state machine.
+   - **3a (done, branch `phase3a-consoles`):** role home dashboards; Production console (queue by stage, claim, stage moves,
+     production files, job sheet print); QC and packing console (checklist, rework, package data, packing slip); Support console
+     (search, timeline, notes, WhatsApp snippets); Trade enquiries; catalog manager (full product form, sizes preview, sample filter);
+     staff screen guidance; analytics reduced to real order metrics. QC and package data live in `orders.notes` (DATABASE.md).
+   - **3b (pending):** shipping console (needs Phase 2 shipments), finance console (refunds, invoices, reconciliation, CSV export),
+     returns console. Reuse `src/pages/admin/shared` and `src/lib/orders/productionQueue.ts`.
 4. **Storefront redesign:** simpler navigation, shop by room/theme, filters, PDP with MRP,
    delivery estimate, room view and trust, SEO and performance.
 5. **UAT:** scripted end-to-end scenarios per role (see `UAT.md` once written) on a staging project.
@@ -127,3 +133,20 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
 - Shop filters are URL-driven (`src/lib/storefront/listing.ts`); contact details come from `settings/store` (`supportEmail`, `supportPhone`, `whatsappNumber`, `supportHours`, `workshopAddress`) via `src/lib/storefront/contact.ts`.
 - Light theme only (the old `.dark` block duplicated the light values). Legacy colour tokens remain as aliases for account, checkout and admin screens.
 - Not built (no backend yet): newsletter signup, contact-form storage (the form opens email/WhatsApp), review submission, EMI messaging, save-for-later.
+
+## Phase 3a follow-ups
+
+- `TODO(catalog-images)`: product images are URL fields. File upload needs `storage.rules` (owned by the commerce backend work) and an
+  upload field in `src/pages/admin/catalog/ProductFormDialog.tsx`; QC "photo taken" is a tick for the same reason (store the photo
+  in Storage and keep its URL in the `qc` block).
+- `TODO(support-tickets)`: there is no ticketing backend; support notes live on the order. Proposed `tickets/{id}` collection:
+  `{ orderId?, customerEmail, channel (whatsapp|email|phone|contact_form), subject, status (open|waiting|resolved), assignedTo,
+  messages[{ at, by, direction, text }], createdAt, updatedAt }`, readable by `customers.read`, writable by a new `tickets.write`
+  permission (support, order manager) so support no longer needs `orders.update_status` just to leave a note; contact-form
+  submissions would create tickets.
+- Support role cannot add order notes today (no `orders.update_status`; rules allow order updates only to production, shipping,
+  order manager and admins). The `tickets` collection above is the intended fix.
+- `defaultLeadTimeDays` (SLA fallback, default 7) is read from `settings/store` when present; add it to the settings form and the
+  `StoreConfig` type when `src/types` is next touched.
+- Workshop queues load up to 200 orders per status group; move to counters or a dedicated `workshop` index if volume exceeds that.
+- Hold status and material-shortage flag (UAT OM-06, PR-06) need new order statuses in the shared state machine.

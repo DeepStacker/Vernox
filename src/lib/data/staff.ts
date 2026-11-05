@@ -37,7 +37,7 @@ export function useStaffMutations() {
     queryKey: STAFF_KEY,
     mutationFn: vars => adminAction('SET_STAFF_ROLE', vars),
     failureMessage: 'Could not update staff role',
-    successMessage: 'Staff role updated',
+    successMessage: 'Role saved. The person must sign out and back in for a new role to apply.',
   });
   return { setStaffRole: setRole.run };
 }

@@ -178,21 +178,22 @@ export async function fetchPublicOrderStatus(orderId: string, email: string): Pr
 
 export const adminOrdersKey = (status?: OrderStatus) => ['admin', 'orders', status ?? 'all'] as const;
 
-/** Paginated, optionally status-filtered order feed. Disabled unless the caller is staff. */
-export function useAdminOrders(enabled: boolean, status?: OrderStatus) {
+/**
+ * Pages of orders for staff. All admin order feeds share the `['admin', 'orders', ...]` key prefix
+ * and the same page shape so the optimistic update in useOrderMutations patches every one of them.
+ */
+function useOrderFeed(key: readonly unknown[], enabled: boolean, buildConstraints: () => QueryConstraint[], pageSize: number) {
   const q = useInfiniteQuery({
-    queryKey: adminOrdersKey(status),
+    queryKey: key,
     enabled,
     staleTime: 15_000,
     initialPageParam: null as QueryDocumentSnapshot<DocumentData> | null,
     queryFn: async ({ pageParam }) => {
-      const constraints: QueryConstraint[] = [];
-      if (status) constraints.push(where('status', '==', status));
-      constraints.push(orderBy('placedAt', 'desc'));
+      const constraints = [...buildConstraints()];
       if (pageParam) constraints.push(startAfter(pageParam));
-      constraints.push(limit(ADMIN_ORDERS_PAGE_SIZE));
+      constraints.push(limit(pageSize));
       const snap = await getDocs(query(collection(db, 'orders'), ...constraints));
-      return { orders: snap.docs.map(fromSnapshot), cursor: snap.docs.length === ADMIN_ORDERS_PAGE_SIZE ? snap.docs[snap.docs.length - 1] : null };
+      return { orders: snap.docs.map(fromSnapshot), cursor: snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1] : null };
     },
     getNextPageParam: last => last.cursor,
   });
@@ -207,6 +208,43 @@ export function useAdminOrders(enabled: boolean, status?: OrderStatus) {
     loadMore: () => q.fetchNextPage(),
     refetch: () => q.refetch(),
   };
+}
+
+/** Paginated, optionally status-filtered order feed. Disabled unless the caller is staff. */
+export function useAdminOrders(enabled: boolean, status?: OrderStatus) {
+  return useOrderFeed(adminOrdersKey(status), enabled, () => {
+    const constraints: QueryConstraint[] = [];
+    if (status) constraints.push(where('status', '==', status));
+    constraints.push(orderBy('placedAt', 'desc'));
+    return constraints;
+  }, ADMIN_ORDERS_PAGE_SIZE);
+}
+
+/**
+ * Status names that may still be stored on older orders (see LEGACY_STATUS_MAP in
+ * orderStateMachine). A Firestore `in` filter must list them or those orders would be invisible.
+ */
+const STORED_ALIASES: Partial<Record<OrderStatus, string[]>> = { In_Design: ['Designing'], Finishing: ['Finished'] };
+
+export const WORKSHOP_QUEUE_LIMIT = 200;
+
+/** Orders currently in any of the given statuses (workshop queues). Uses the (status, placedAt) index. */
+export function useAdminOrdersInStatuses(enabled: boolean, statuses: readonly OrderStatus[]) {
+  const values = statuses.flatMap(s => [s, ...(STORED_ALIASES[s] ?? [])]);
+  return useOrderFeed(['admin', 'orders', 'in', ...values], enabled, () => [
+    where('status', 'in', values),
+    orderBy('placedAt', 'desc'),
+  ], WORKSHOP_QUEUE_LIMIT);
+}
+
+/** Exact lookups for support when the loaded orders do not contain the order (order number or email). */
+export async function searchOrdersRemote(term: string): Promise<Order[]> {
+  const t = term.trim();
+  if (!t) return [];
+  const byField = t.includes('@')
+    ? query(collection(db, 'orders'), where('email', '==', t.toLowerCase()), orderBy('placedAt', 'desc'), limit(50))
+    : query(collection(db, 'orders'), where('orderNumber', '==', t.toUpperCase()), limit(5));
+  return (await getDocs(byField)).docs.map(fromSnapshot);
 }
 
 /** Customers are derived from loaded orders; there is no client read of the users collection. */

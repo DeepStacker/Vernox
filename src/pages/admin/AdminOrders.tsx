@@ -15,12 +15,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { useAdminData } from '@/lib/data/adminData';
 import { useOrderMutations } from '@/lib/data/orders';
-import { buildCamDocument, hasCustomDesign } from '@/lib/orders/camDocument';
+import { hasCustomDesign } from '@/lib/orders/camDocument';
+import { downloadProductionFile } from '@/lib/orders/camDownload';
+import { freeText, withFreeText } from '@/lib/orders/orderNotes';
 import {
   ORDER_STATUS_LABELS, isRevenueStatus, nextClientStatuses, type OrderStatus,
 } from '@/lib/orders/orderStateMachine';
 import type { Order } from '@/types/store';
-import { exportDocumentAsSVG, exportDocumentAsDXF, exportDocumentAsPDF } from '@/lib/exportCAM';
 import { 
   Search, Filter as FilterIcon, Download, ChevronLeft, ChevronRight, 
   Check, CheckSquare, Square, X, MoreHorizontal, ArrowUpRight,
@@ -82,7 +83,8 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
       setTrackingNumber(inspectingOrder.tracking?.trackingNumber || '');
       setEstimatedDelivery(inspectingOrder.tracking?.estimatedDelivery || '');
       setAssignedTo(inspectingOrder.assignedTo || '');
-      setAdminNotes(inspectingOrder.adminNotes || '');
+      // The structured QC/package block in `notes` is edited only by the QC console.
+      setAdminNotes(freeText(inspectingOrder.adminNotes));
     }
   }, [inspectingOrder]);
 
@@ -243,10 +245,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
   // 1-Click CAM export: customer designs are exported as designed; catalog items use their outline.
   const handleDownloadCAM = (order: Order, item: Order['items'][0], format: 'svg' | 'dxf' | 'pdf') => {
     try {
-      const { doc, source } = buildCamDocument(order.orderNumber || order.id, item);
-      if (format === 'svg') exportDocumentAsSVG(doc);
-      else if (format === 'dxf') exportDocumentAsDXF(doc);
-      else exportDocumentAsPDF(doc);
+      const source = downloadProductionFile(order, item, format);
       toast.success(
         `${format.toUpperCase()} generated for ${item.productName}` +
           (source === 'customer-design' ? ' from the customer design' : ' from the catalog outline'),
@@ -863,7 +862,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
                       const saved = await persist(inspectingOrder, {
                         tracking: { carrier: trackingCarrier, trackingNumber, estimatedDelivery },
                         assignedTo,
-                        notes: adminNotes,
+                        notes: withFreeText(inspectingOrder.adminNotes, adminNotes),
                       });
                       if (saved) toast.success('Logistics and notes saved');
                     }}

@@ -31,6 +31,14 @@ items[{ productId, quantity }] }`, `reservationExpiresAt` (ms, placed + 15 min),
 `STOCK_SHORTFALL_AFTER_LATE_PAYMENT`, `COUPON_LIMIT_EXCEEDED_AT_PAYMENT`, `DUPLICATE_PAYMENT`), `placedAt`/`createdAt`/`updatedAt` (ms).
 Staff-editable (rules): `status` (fulfilment moves only), `statusHistory`, `assignedTo`, `tracking{ carrier, trackingNumber, url }`,
 `notes`, `updatedAt`.
+`notes` is a string with two parts (parser: `src/lib/orders/orderNotes.ts`): free text (one `[YYYY-MM-DD HH:mm UTC <email>] text`
+line per internal note) and, as the LAST line, an optional structured block `#vernox:v1 <compact JSON>`:
+`{"qc":{"<itemId>":{"outcome":"pass|fail","checks":{"dimensions","finish","edges","hardware","photo": bool},"at","by","reason?"}},
+"qcLog":[{"itemId","outcome","at","by","reason?"}] (last 50, append-only),"package":{"lengthCm","widthCm","heightCm","weightKg","at","by"}}`.
+`qc` holds the latest result per item and is cleared when QC fails an order (so rework is re-inspected); `qcLog` keeps every
+attempt with its reason; `package` is read by the shipping step (Phase 3b). A block that does not parse is kept as plain text and
+never discarded. Staff write it through the console helpers only; any editor of `notes` must go through `withFreeText`/`appendNote`
+so the block survives. Plain legacy notes need no migration.
 Display copies written once at creation for the existing admin UI (do not use for money logic): `subtotal`, `discount`,
 `shipping`, `tax`, `total` (₹), `items[].unitPrice/lineTotal/productName`, `shippingName/Address/City/State/Zip/Country`, `phone`, `couponCode`.
 
@@ -58,7 +66,8 @@ Subcollection `customer_usage/{sha256(email)}`: `{ count }` (server only).
 - `wishlists/{uid}` — owner only.
 - `reviews/{id}` — public read when `status == 'published'`; signed-in users create with `userId == uid`, `status: 'pending'`;
   moderation by `reviews.moderate` roles. List queries from the storefront must filter `status == 'published'`.
-- `b2b_inquiries/{id}` — validated public create (shape of `B2BTradeModal`), read by `b2b.read` roles.
+- `b2b_inquiries/{id}` — validated public create (shape of `B2BTradeModal`, `status: 'pending_review'`), read and updated by `b2b.read` roles. The
+  admin screen moves `status` through `pending_review → contacted → quoted → won | lost`; no other field is written.
 - `admin_users` — legacy, closed.
 
 ## Indexes
