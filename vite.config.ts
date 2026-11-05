@@ -1,90 +1,29 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import createOrderHandler from "./api/create-order";
-import checkoutIntentHandler from "./api/checkout-intent";
-import verifyPaymentHandler from "./api/verify-payment";
-import validateCouponHandler from "./api/validate-coupon";
-import adminHandler from "./api/admin";
 import { DEFAULT_SITE_URL } from "./src/lib/seo/defaultSiteUrl";
 
-function apiMiddlewarePlugin(env: Record<string, string>): Plugin {
+/**
+ * Serves /api/* in `vite dev` through the same router as the Node server (server/apiRouter.ts).
+ * Loaded with ssrLoadModule so API code is never bundled into this config or the client build,
+ * and edits to api/ apply without restarting. Skipped when BACKEND_URL proxies to a container.
+ */
+function apiMiddlewarePlugin(): Plugin {
   return {
     name: "api-middleware",
+    apply: "serve",
     configureServer(server) {
-      if (process.env.BACKEND_URL) {
-        // Backend container handles /api proxying
-        return;
-      }
-
-      server.middlewares.use((req, res, next) => {
-        if (!req.url || !req.url.startsWith("/api/")) {
-          return next();
+      if (process.env.BACKEND_URL) return;
+      // Server code reads secrets from process.env; load .env* files (all keys, not only VITE_*).
+      Object.assign(process.env, loadEnv(server.config.mode, process.cwd(), ""));
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith("/api/") && req.url !== "/health") return next();
+        try {
+          const { handleApiRequest } = await server.ssrLoadModule("/server/apiRouter.ts");
+          await handleApiRequest(req, res);
+        } catch (err) {
+          next(err);
         }
-
-        // Populate process.env with freshly loaded environment variables
-        const currentEnv = loadEnv(process.env.NODE_ENV || 'development', process.cwd(), '');
-        Object.assign(process.env, currentEnv);
-
-        const url = req.url.split("?")[0];
-        let bodyBuffer = "";
-
-        req.on("data", (chunk) => {
-          bodyBuffer += chunk;
-        });
-
-        req.on("end", async () => {
-          let parsedBody = {};
-          try {
-            if (bodyBuffer) parsedBody = JSON.parse(bodyBuffer);
-          } catch (e) {
-            // Ignore json parse error
-          }
-
-          const vercelReq = Object.assign(req, {
-            body: parsedBody,
-            query: {},
-          });
-
-          const vercelRes = Object.assign(res, {
-            status(statusCode: number) {
-              res.statusCode = statusCode;
-              return vercelRes;
-            },
-            json(data: any) {
-              res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify(data));
-              return vercelRes;
-            },
-          });
-
-          try {
-            if (url === "/api/health" || url === "/health") {
-              res.statusCode = 200;
-              res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() }));
-            } else if (url === "/api/checkout-intent") {
-              await checkoutIntentHandler(vercelReq as any, vercelRes as any);
-            } else if (url === "/api/validate-coupon") {
-              await validateCouponHandler(vercelReq as any, vercelRes as any);
-            } else if (url === "/api/admin") {
-              await adminHandler(vercelReq as any, vercelRes as any);
-            } else if (url === "/api/create-order") {
-              await createOrderHandler(vercelReq as any, vercelRes as any);
-            } else if (url === "/api/verify-payment") {
-              await verifyPaymentHandler(vercelReq as any, vercelRes as any);
-            } else {
-              res.statusCode = 404;
-              res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify({ error: "Endpoint not found" }));
-            }
-          } catch (err: any) {
-            console.error("API middleware error:", err);
-            res.statusCode = 500;
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ error: err.message || "Internal server error" }));
-          }
-        });
       });
     },
   };
@@ -130,7 +69,7 @@ export default defineConfig(({ mode }) => {
           }
         : {}),
     },
-    plugins: [react(), apiMiddlewarePlugin(env), siteUrlHtmlPlugin(env)].filter(Boolean),
+    plugins: [react(), apiMiddlewarePlugin(), siteUrlHtmlPlugin(env)].filter(Boolean),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

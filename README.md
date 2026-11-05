@@ -23,7 +23,8 @@ Vernox is a professional web-based tool for designing and visualizing custom met
 ### Local Development
 1. Clone the repository
 2. Install dependencies: `npm install`
-3. Start the dev server: `npm run dev`
+3. Copy `.env.example` to `.env.local` and fill in the Firebase service account and Razorpay test keys (see DEPLOYMENT.md).
+4. Start the dev server: `npm run dev`. It serves the storefront and `/api/*` on http://localhost:8080; the API runs through `server/apiRouter.ts`, the same router the Docker backend uses. Without Firebase credentials, API calls fail with `CONFIG_ERROR` by design.
 
 ### Package manager
 npm is the only supported package manager (`package-lock.json` is the single lockfile; Dockerfiles use `npm ci`). Do not commit `bun.lock`, `bun.lockb` or `yarn.lock`.
