@@ -127,6 +127,24 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
 - **Courier:** Shiprocket (pincode serviceability, AWB, labels, tracking webhooks, COD remittance).
 - **COD:** offered on catalogue items only, with a COD fee; custom studio designs are prepaid only.
 
+## Decision: room scanning and interior planning (2026-11-05)
+
+The owner proposed scanning a whole home from a phone video (QR → camera) into a 3D model for
+interior planning with real materials. Decision: **do not build the full scanner now; earn it in
+stages, each gated on measured results.**
+
+Why: browser-only video-to-3D is not reliable on most phones; accurate scanning needs a native app
+(Apple RoomPlan, LiDAR iPhones only) or cloud reconstruction with per-scan GPU cost; an interior
+planner with a materials library is a separate product. For wall art, a true-scale preview on the
+customer's own wall answers the buying question at a fraction of the cost.
+
+| Stage | Scope | Gate to start the next stage |
+|---|---|---|
+| 1 (in progress) | View on your wall: calibrated room scenes, own-wall photo with scale calibration, true-scale AR (generated GLB/USDZ via model-viewer), fit recommendation; usage analytics | AR/preview users convert measurably better than non-users |
+| 2 (queued) | "My Space": customers save walls (photos + measurements) to their account; paid design consultation (price and credit-against-purchase configurable); designer workspace to propose pieces | Consultations sell and lead to orders |
+| 3 (pilot) | Small iOS app/App Clip with RoomPlan (LiDAR) opened by QR; room model viewed on the web; place Vernox pieces on any wall, try paint colours. Android: guided photos + measurements or a licensed scanning SDK (pricing to verify) | Pilot lifts conversion or order value |
+| 4 (only if 3 succeeds) | Full interior planner with materials; license a platform rather than build | — |
+
 ## Still needed from the owner
 
 - Firebase service-account credentials for the server, and a staging Firebase project for UAT.
