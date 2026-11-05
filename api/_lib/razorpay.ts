@@ -71,13 +71,21 @@ export function createRazorpayRefundGateway(): RefundGateway {
   };
 }
 
+/** Credentials are read on first use, so flows that never charge (COD) work without Razorpay configured. */
 export function createRazorpayGateway(): PaymentGateway {
-  const { keyId, keySecret } = getRazorpayCredentials();
-  const client = new Razorpay({ key_id: keyId, key_secret: keySecret });
+  let client: Razorpay | null = null;
+  const getClient = () => {
+    if (!client) {
+      const { keyId, keySecret } = getRazorpayCredentials();
+      client = new Razorpay({ key_id: keyId, key_secret: keySecret });
+    }
+    return client;
+  };
   return {
     async createOrder({ amountPaise, currency, receipt, notes }) {
+      const razorpay = getClient();
       try {
-        const order = await client.orders.create({ amount: amountPaise, currency, receipt, notes });
+        const order = await razorpay.orders.create({ amount: amountPaise, currency, receipt, notes });
         return { id: order.id, amount: Number(order.amount), currency: order.currency };
       } catch (err) {
         throw new ApiError(502, 'PAYMENT_PROVIDER_ERROR', 'The payment provider could not start this payment. Please try again.', providerFailure(err));

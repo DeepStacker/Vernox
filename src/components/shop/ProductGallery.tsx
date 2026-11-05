@@ -3,8 +3,8 @@ import { Maximize2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Picture, SITE_IMAGES } from '@/components/shop/Picture';
 import { ProductVisual } from '@/components/shop/ProductVisual';
-import { RoomVisualizer } from '@/components/experience/RoomVisualizer';
-import type { Product, ProductSize } from '@/lib/catalog';
+import { WallPreview } from '@/components/wall-preview';
+import type { FinishId, Product, ProductSize } from '@/lib/catalog';
 import { cn } from '@/lib/utils';
 
 type View = 'product' | 'closeup' | 'room' | 'wall';
@@ -15,6 +15,9 @@ interface Props {
   size: ProductSize;
   /** Plate scale for the chosen size (0..1); the product view morphs to it. */
   plateScale?: number;
+  /** The wall preview can pick a size ("Will it fit?") or finish; the page owns that state. */
+  onChooseSize?: (size: ProductSize) => void;
+  onFinishChange?: (finish: FinishId) => void;
 }
 
 const ROOM_PHOTO = {
@@ -23,7 +26,7 @@ const ROOM_PHOTO = {
 } as const;
 
 /** Product views: the design, a close-up, a sample room photo and the to-scale wall view. Click the stage to zoom. */
-export function ProductGallery({ product, finish, size, plateScale = 1 }: Props) {
+export function ProductGallery({ product, finish, size, plateScale = 1, onChooseSize, onFinishChange }: Props) {
   const [view, setView] = useState<View>('product');
   const [zoom, setZoom] = useState(false);
   const roomPhoto = ROOM_PHOTO[product.rooms?.[0] ?? 'living'];
@@ -36,7 +39,9 @@ export function ProductGallery({ product, finish, size, plateScale = 1 }: Props)
   ];
 
   const stage = (large: boolean) => {
-    if (view === 'wall') return <RoomVisualizer shapeId={product.shapeId} finish={finish} widthMm={size.widthMm} heightMm={size.heightMm} />;
+    if (view === 'wall') {
+      return <WallPreview product={product} size={size} finish={finish as FinishId} onChooseSize={onChooseSize} onFinishChange={onFinishChange} />;
+    }
     if (view === 'room') {
       return (
         <div>

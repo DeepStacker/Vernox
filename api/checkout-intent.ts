@@ -20,7 +20,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['POST']);
     const body = parseBody(req, checkoutRequestSchema);
-    const { keyId } = getRazorpayCredentials();
+    // COD never reaches Razorpay; requiring its keys here would take COD down with a payment misconfiguration.
+    const keyId = body.paymentMethod === 'cod' ? '' : getRazorpayCredentials().keyId;
     const store = getStore();
     await enforceRateLimit(store, req, RATE_LIMITS.checkoutIntent);
     if (body.paymentMethod === 'cod') {

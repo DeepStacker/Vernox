@@ -124,7 +124,14 @@ export default function ProductDetail() {
         <PageHeader crumbs={[{ label: 'Shop', to: '/shop' }, ...(category ? [{ label: category.name, to: `/shop?category=${category.id}` }] : []), { label: product.name }]} />
 
         <div className="grid gap-8 lg:grid-cols-2">
-          <ProductGallery product={product} finish={activeFinish} size={size} plateScale={plateScale} />
+          <ProductGallery
+            product={product}
+            finish={activeFinish}
+            size={size}
+            plateScale={plateScale}
+            onChooseSize={chosen => setSizeIndex(Math.max(0, product.sizes.findIndex(s => s.label === chosen.label)))}
+            onFinishChange={setFinish}
+          />
 
           <div className="space-y-5">
             <div>
