@@ -120,3 +120,10 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
 - Shiprocket account API credentials; email and SMS/WhatsApp notification providers.
 - Business GSTIN, state of registration and HSN codes for the products.
 - Real catalogue, photographs and price list before launch.
+
+## Storefront redesign notes (phase 4, first pass)
+
+- Catalogue in `src/lib/catalog.ts` is SAMPLE data (`isSample: true`), seeded by `scripts/seed-firestore.ts`; the storefront reads Firestore. Replace products, prices and photography (`TODO(catalogue)`) before launch.
+- Shop filters are URL-driven (`src/lib/storefront/listing.ts`); contact details come from `settings/store` (`supportEmail`, `supportPhone`, `whatsappNumber`, `supportHours`, `workshopAddress`) via `src/lib/storefront/contact.ts`.
+- Light theme only (the old `.dark` block duplicated the light values). Legacy colour tokens remain as aliases for account, checkout and admin screens.
+- Not built (no backend yet): newsletter signup, contact-form storage (the form opens email/WhatsApp), review submission, EMI messaging, save-for-later.

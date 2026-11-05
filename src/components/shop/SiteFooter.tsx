@@ -1,199 +1,95 @@
 import { Link } from 'react-router-dom';
-import { Instagram, Facebook, ArrowUpRight } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
+import { useCatalog } from '@/lib/catalogContext';
+import { resolveContact, whatsappLink } from '@/lib/storefront/contact';
+import { MobileBottomNav } from '@/components/shop/MobileBottomNav';
+
+const COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
+  {
+    title: 'Shop',
+    links: [
+      { label: 'All designs', to: '/shop' },
+      { label: 'Spiritual & Mandala', to: '/shop?category=spiritual' },
+      { label: 'Name plates', to: '/shop?category=nameplates' },
+      { label: 'Festive & Gifting', to: '/shop?category=festive' },
+      { label: 'Design your own', to: '/studio' },
+    ],
+  },
+  {
+    title: 'Help',
+    links: [
+      { label: 'Track order', to: '/track-order' },
+      { label: 'Shipping & delivery', to: '/shipping' },
+      { label: 'Returns & replacement', to: '/returns' },
+      { label: 'FAQs', to: '/faqs' },
+      { label: 'Contact us', to: '/contact' },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { label: 'About Vernox', to: '/about' },
+      { label: 'Corporate & bulk orders', to: '/trade' },
+      { label: 'Privacy policy', to: '/privacy' },
+      { label: 'Terms of sale', to: '/terms' },
+    ],
+  },
+];
+
+const PAYMENT_METHODS = ['UPI', 'Cards', 'Net banking', 'Wallets', 'COD*'];
 
 export function SiteFooter() {
+  const { storeConfig } = useCatalog();
+  const contact = resolveContact(storeConfig);
+  const wa = whatsappLink(contact, 'Hi Vernox, I need help with my order.');
+
   return (
-    <footer className="bg-burgundy text-cream border-t border-dusty-pink/30 w-full max-w-full overflow-hidden">
-      {/* Main Luxury Minimalist Footer Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14 lg:py-20 w-full min-w-0">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 lg:gap-8">
-          {/* Brand Info & Statement */}
-          <div className="lg:col-span-1 space-y-4">
-            <Link to="/" className="inline-block group">
-              <span className="font-editorial text-2xl tracking-[0.24em] font-normal uppercase text-cream group-hover:text-dusty-pink transition-colors">
-                VERNOX
-              </span>
-              <span className="block text-[8px] uppercase tracking-[0.32em] text-dusty-pink font-sans mt-1">
-                Art & Sculptures
-              </span>
-            </Link>
-            <p className="text-xs text-cream/75 leading-relaxed font-sans pr-2">
-              Curated wall art, modernist sculptures, and decorative statement pieces designed for timeless architectural spaces.
+    <>
+      <footer className="mt-16 border-t border-border bg-secondary pb-safe-nav lg:pb-0">
+        <div className="container grid gap-10 py-12 md:grid-cols-[1.4fr_repeat(3,1fr)]">
+          <div className="space-y-3">
+            <span className="font-brand text-2xl">Vernox</span>
+            <p className="max-w-xs text-sm text-muted-foreground">
+              Laser-cut metal wall art, made to order in India. Delivered across the country.
             </p>
-            <div className="pt-2 text-[10px] uppercase tracking-[0.2em] text-dusty-pink font-mono">
-              Contemporary Art & Sculptures
+            <ul className="space-y-1 text-sm">
+              <li>{contact.email}</li>
+              <li>{contact.phone}</li>
+              <li className="text-muted-foreground">{contact.hours}</li>
+            </ul>
+            {wa ? (
+              <a href={wa} target="_blank" rel="noopener noreferrer" className="btn-secondary mt-2 py-2">
+                <MessageCircle className="h-4 w-4" aria-hidden="true" /> Chat on WhatsApp
+              </a>
+            ) : (
+              <p className="text-sm text-muted-foreground">WhatsApp: [number to be added in store settings]</p>
+            )}
+          </div>
+
+          {COLUMNS.map(col => (
+            <nav key={col.title} aria-label={col.title}>
+              <h2 className="eyebrow mb-3 font-sans">{col.title}</h2>
+              <ul className="space-y-2">
+                {col.links.map(l => (
+                  <li key={l.to}><Link to={l.to} className="text-sm text-foreground hover:text-burgundy hover:underline">{l.label}</Link></li>
+                ))}
+              </ul>
+            </nav>
+          ))}
+        </div>
+
+        <div className="border-t border-border">
+          <div className="container flex flex-col gap-3 py-5 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-wrap items-center gap-2" aria-label="Payment methods accepted">
+              {PAYMENT_METHODS.map(m => <span key={m} className="rounded border border-border bg-card px-2 py-1 font-medium text-foreground">{m}</span>)}
+              <span>*COD on ready designs only</span>
             </div>
-          </div>
-
-          {/* Column 1: SHOP */}
-          <div>
-            <h4 className="text-[11px] uppercase tracking-[0.26em] font-semibold text-dusty-pink mb-5 border-b border-dusty-pink/20 pb-2">
-              SHOP
-            </h4>
-            <ul className="space-y-3 text-xs text-cream/80 font-sans">
-              <li>
-                <Link to="/shop/wall-art" className="hover:text-dusty-pink transition-colors">
-                  Wall Art
-                </Link>
-              </li>
-              <li>
-                <Link to="/shop/sculptures" className="hover:text-dusty-pink transition-colors">
-                  Sculptures
-                </Link>
-              </li>
-              <li>
-                <Link to="/shop/showpieces" className="hover:text-dusty-pink transition-colors">
-                  Showpieces
-                </Link>
-              </li>
-              <li>
-                <Link to="/shop/office" className="hover:text-dusty-pink transition-colors">
-                  Office Décor
-                </Link>
-              </li>
-              <li>
-                <Link to="/shop" className="hover:text-dusty-pink transition-colors">
-                  New Arrivals
-                </Link>
-              </li>
-              <li>
-                <Link to="/customize" className="hover:text-dusty-pink transition-colors">
-                  Crafting Studio (Custom CAD)
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Column 2: CUSTOMER CARE */}
-          <div>
-            <h4 className="text-[11px] uppercase tracking-[0.26em] font-semibold text-dusty-pink mb-5 border-b border-dusty-pink/20 pb-2">
-              CUSTOMER CARE
-            </h4>
-            <ul className="space-y-3 text-xs text-cream/80 font-sans">
-              <li>
-                <Link to="/track-order" className="hover:text-dusty-pink transition-colors font-medium text-cream">
-                  Track Order
-                </Link>
-              </li>
-              <li>
-                <Link to="/shipping" className="hover:text-dusty-pink transition-colors">
-                  Shipping & Crating
-                </Link>
-              </li>
-              <li>
-                <Link to="/returns" className="hover:text-dusty-pink transition-colors">
-                  Returns & Guarantee
-                </Link>
-              </li>
-              <li>
-                <Link to="/faqs" className="hover:text-dusty-pink transition-colors">
-                  FAQs & Hanging
-                </Link>
-              </li>
-              <li>
-                <Link to="/contact" className="hover:text-dusty-pink transition-colors">
-                  Concierge Contact
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Column 3: ABOUT */}
-          <div>
-            <h4 className="text-[11px] uppercase tracking-[0.26em] font-semibold text-dusty-pink mb-5 border-b border-dusty-pink/20 pb-2">
-              ABOUT
-            </h4>
-            <ul className="space-y-3 text-xs text-cream/80 font-sans">
-              <li>
-                <Link to="/about" className="hover:text-dusty-pink transition-colors">
-                  Our Story & Heritage
-                </Link>
-              </li>
-              <li>
-                <Link to="/shop" className="hover:text-dusty-pink transition-colors">
-                  Curated Collections
-                </Link>
-              </li>
-              <li>
-                <Link to="/customize" className="hover:text-dusty-pink transition-colors">
-                  Custom CAD Studio
-                </Link>
-              </li>
-              <li>
-                <Link to="/trade" className="hover:text-dusty-pink transition-colors">
-                  Architect & Trade B2B
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Column 4: SOCIAL */}
-          <div>
-            <h4 className="text-[11px] uppercase tracking-[0.26em] font-semibold text-dusty-pink mb-5 border-b border-dusty-pink/20 pb-2">
-              SOCIAL
-            </h4>
-            <ul className="space-y-3 text-xs text-cream/80 font-sans">
-              <li>
-                <a
-                  href="https://instagram.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-dusty-pink transition-colors inline-flex items-center gap-1.5"
-                >
-                  <Instagram className="w-3.5 h-3.5 text-dusty-pink" />
-                  <span>Instagram</span>
-                  <ArrowUpRight className="w-3 h-3 text-cream/40" />
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://pinterest.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-dusty-pink transition-colors inline-flex items-center gap-1.5"
-                >
-                  <span className="w-3.5 h-3.5 text-dusty-pink font-serif font-bold text-[13px] leading-none flex items-center justify-center">P</span>
-                  <span>Pinterest</span>
-                  <ArrowUpRight className="w-3 h-3 text-cream/40" />
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://facebook.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-dusty-pink transition-colors inline-flex items-center gap-1.5"
-                >
-                  <Facebook className="w-3.5 h-3.5 text-dusty-pink" />
-                  <span>Facebook</span>
-                  <ArrowUpRight className="w-3 h-3 text-cream/40" />
-                </a>
-              </li>
-            </ul>
+            <p>Secure payments · Made in India · GSTIN: [to be added]</p>
+            <p>© {new Date().getFullYear()} Vernox. All rights reserved.</p>
           </div>
         </div>
-      </div>
-
-      {/* Bottom Legal & Craftsmanship Bar */}
-      <div className="border-t border-dusty-pink/20 py-8 bg-burgundy-hover text-xs text-cream/70 w-full max-w-full overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left w-full min-w-0">
-          <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.14em] sm:tracking-[0.22em] text-cream/80 font-sans max-w-full break-words">
-            © {new Date().getFullYear()} VERNOX · ALL RIGHTS RESERVED · MINIMAL ART & STATEMENT OBJECTS
-          </div>
-
-          <div className="flex flex-wrap justify-center items-center gap-3 sm:gap-6 text-[9px] sm:text-[10px] uppercase tracking-[0.16em] sm:tracking-[0.2em] font-sans">
-            <Link to="/privacy" className="hover:text-dusty-pink transition-colors">
-              Privacy Policy
-            </Link>
-            <span className="text-dusty-pink/40">·</span>
-            <Link to="/terms" className="hover:text-dusty-pink transition-colors">
-              Terms of Service
-            </Link>
-            <span className="text-dusty-pink/40">·</span>
-            <span className="text-dusty-pink">Insured Worldwide Delivery</span>
-          </div>
-        </div>
-      </div>
-    </footer>
+      </footer>
+      <MobileBottomNav />
+    </>
   );
 }

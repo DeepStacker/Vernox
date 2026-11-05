@@ -7,9 +7,9 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "2rem",
+      padding: { DEFAULT: "1rem", sm: "1.5rem", lg: "2rem" },
       screens: {
-        "2xl": "1400px",
+        "2xl": "1280px",
       },
     },
     extend: {
@@ -94,6 +94,10 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+      },
+      boxShadow: {
+        soft: "0 1px 2px hsl(var(--foreground) / 0.06), 0 4px 16px hsl(var(--foreground) / 0.06)",
+        luxe: "0 8px 30px hsl(var(--foreground) / 0.12)",
       },
       borderRadius: {
         lg: "var(--radius)",
