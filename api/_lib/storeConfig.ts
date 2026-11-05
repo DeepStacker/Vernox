@@ -27,16 +27,17 @@
 import type { StoreSettingsDoc } from '../../src/types/settings';
 import { isNonNegativeFinite, paiseToRupees, rupeesToPaise } from './money';
 import type { DocData, DocStore } from './store';
+import {
+  CUSTOM_PIECE_LIMITS,
+  DEFAULT_CUSTOM_FINISH_RATES,
+  DEFAULT_CUSTOM_LEAD_TIME_DAYS,
+  resolveCustomFinishRates,
+  type CustomFinishRate,
+} from '../../src/lib/pricing/customPiece';
 
-export interface CustomFinishRate {
-  label: string;
-  /** Fixed per-piece setup (CAM programming, handling), paise. */
-  setupFeePaise: number;
-  /** Plate area rate, paise per cm² of the bounding rectangle (may be fractional). */
-  ratePaisePerCm2: number;
-  /** Floor for the unit price, paise. */
-  minimumPaise: number;
-}
+// Custom-piece rates and limits live in the shared module so the studio's displayed price
+// is computed by the same code the server charges with.
+export { CUSTOM_PIECE_LIMITS, DEFAULT_CUSTOM_FINISH_RATES, type CustomFinishRate };
 
 export interface SellerDetails {
   legalName: string;
@@ -85,43 +86,6 @@ export interface StoreConfig {
   };
 }
 
-export const CUSTOM_PIECE_LIMITS = { minDimensionMm: 100, maxWidthMm: 3000, maxHeightMm: 1500 } as const;
-
-const STANDARD = (label: string): CustomFinishRate => ({
-  label,
-  setupFeePaise: 14_900,
-  ratePaisePerCm2: 2.5, // ₹250 per m²
-  minimumPaise: 14_900,
-});
-const PREMIUM = (label: string): CustomFinishRate => ({
-  label,
-  setupFeePaise: 14_900,
-  ratePaisePerCm2: 4.5, // ₹450 per m²
-  minimumPaise: 14_900,
-});
-
-/**
- * Default rates for Crafting Studio pieces, keyed by the studio's MetalFinish id
- * (src/lib/cadEngineTypes.ts). The numbers preserve the formula the studio used
- * to display (₹149 + area × ₹250/m², ₹450/m² for copper-alloy finishes); the
- * business should set real rates in `settings/store.customPieces`.
- */
-export const DEFAULT_CUSTOM_FINISH_RATES: Record<string, CustomFinishRate> = {
-  steel: STANDARD('Mild steel'),
-  natural_mill: STANDARD('Natural mill'),
-  black_patina: STANDARD('Black patina'),
-  brushed_hairline: STANDARD('Brushed hairline'),
-  mirror_polish: STANDARD('Mirror polish'),
-  stainless: STANDARD('Stainless steel'),
-  corten: STANDARD('Corten'),
-  corten_rust: STANDARD('Corten rust'),
-  brass: PREMIUM('Brass'),
-  antique_brass: PREMIUM('Antique brass'),
-  copper: PREMIUM('Copper'),
-  verdigris: PREMIUM('Verdigris'),
-  gold: PREMIUM('Gold'),
-};
-
 const EMPTY_SELLER: SellerDetails = {
   legalName: '',
   tradeName: '',
@@ -169,7 +133,7 @@ export function defaultStoreConfig(env: NodeJS.ProcessEnv = process.env): StoreC
     },
     fulfilment: {
       defaultLeadTimeDays: Math.floor(envNumber(env, 'STORE_DEFAULT_LEAD_TIME_DAYS', 3)),
-      customLeadTimeDays: Math.floor(envNumber(env, 'STORE_CUSTOM_LEAD_TIME_DAYS', 7)),
+      customLeadTimeDays: Math.floor(envNumber(env, 'STORE_CUSTOM_LEAD_TIME_DAYS', DEFAULT_CUSTOM_LEAD_TIME_DAYS)),
       manualTransitDays: Math.floor(envNumber(env, 'STORE_MANUAL_TRANSIT_DAYS', 5)),
       returnWindowDays: Math.floor(envNumber(env, 'STORE_RETURN_WINDOW_DAYS', 7)),
     },
@@ -177,19 +141,6 @@ export function defaultStoreConfig(env: NodeJS.ProcessEnv = process.env): StoreC
     seller: { ...EMPTY_SELLER },
     customPieces: { ...CUSTOM_PIECE_LIMITS, finishes: { ...DEFAULT_CUSTOM_FINISH_RATES } },
   };
-}
-
-function mergeFinishRate(base: CustomFinishRate | undefined, raw: unknown, finishId: string): CustomFinishRate | null {
-  if (!raw || typeof raw !== 'object') return base ?? null;
-  const r = raw as Record<string, unknown>;
-  const pick = (key: string, current: number | undefined, toPaise: (n: number) => number) =>
-    isNonNegativeFinite(r[key]) ? toPaise(r[key] as number) : current;
-  const setupFeePaise = pick('setupFee', base?.setupFeePaise, rupeesToPaise);
-  const ratePaisePerCm2 = pick('ratePerCm2', base?.ratePaisePerCm2, n => n * 100);
-  const minimumPaise = pick('minimum', base?.minimumPaise, rupeesToPaise);
-  if (setupFeePaise === undefined || ratePaisePerCm2 === undefined || minimumPaise === undefined) return null;
-  const label = typeof r.label === 'string' && r.label.trim() ? r.label.trim() : base?.label ?? finishId;
-  return { label, setupFeePaise, ratePaisePerCm2, minimumPaise };
 }
 
 /** Applies validated overrides from `settings/store`; invalid fields are ignored and logged. */
@@ -255,12 +206,9 @@ export function mergeStoreConfig(defaults: StoreConfig, doc: DocData | null): St
     if (config.seller.gstin && !GSTIN_PATTERN.test(config.seller.gstin)) warn('seller.gstin');
   }
   if (doc.customPieces && typeof doc.customPieces === 'object') {
-    for (const [finishId, raw] of Object.entries(doc.customPieces as Record<string, unknown>)) {
-      const id = finishId.trim().toLowerCase();
-      const merged = mergeFinishRate(config.customPieces.finishes[id], raw, id);
-      if (merged) config.customPieces.finishes[id] = merged;
-      else warn(`customPieces.${finishId}`);
-    }
+    config.customPieces.finishes = resolveCustomFinishRates(doc.customPieces, config.customPieces.finishes, id =>
+      warn(`customPieces.${id}`),
+    );
   }
   return config;
 }
