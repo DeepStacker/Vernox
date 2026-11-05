@@ -37,7 +37,8 @@ describe('production queue', () => {
   });
 
   it('limits rework targets by the state machine and role', () => {
-    expect(reworkTargetsFor('Quality_Check', ROLE_PERMISSIONS.production)).toEqual(['Finishing']);
+    // QC can send work back to finishing or, for cutting defects, to cutting (src/types/orderStatus.ts).
+    expect(reworkTargetsFor('Quality_Check', ROLE_PERMISSIONS.production)).toEqual(['Cutting', 'Finishing']);
     expect(reworkTargetsFor('Quality_Check', ROLE_PERMISSIONS.support)).toEqual([]);
   });
 

@@ -85,7 +85,20 @@ export interface StoreConfig {
   freeShippingThreshold: number;
   shippingFee: number;
   adminEmail?: string;
+  /** Cash on delivery (display; the server enforces eligibility). */
+  codEnabled?: boolean;
+  codFee?: number;
+  codMaxOrderValue?: number;
+  returnWindowDays?: number;
+  /** Storefront contact details. */
+  whatsappNumber?: string;
+  supportPhone?: string;
+  supportEmail?: string;
+  supportHours?: string;
+  workshopAddress?: string;
 }
+
+export type { SellerSettings, StoreSettingsDoc } from './settings';
 
 export interface OrderItem {
   id: string;
@@ -164,6 +177,14 @@ export interface PublicOrderSummary {
   statusHistory?: Array<{ status: OrderStatus; at: number }>;
   shippingCity?: string;
   shippingState?: string;
+  /** Phase 2 fields of the API response (see API.md, GET /api/order-status). */
+  paymentMethod?: 'prepaid' | 'cod' | 'replacement';
+  /** Set once the order is dispatched; download via GET /api/invoice. */
+  invoiceNumber?: string | null;
+  /** True while the customer may still cancel online (POST /api/order-cancel). */
+  canCancel?: boolean;
+  /** Epoch ms until which POST /api/return-request is accepted, or null. */
+  returnEligibleUntil?: number | null;
 }
 
 export interface StaffMember {

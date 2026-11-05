@@ -40,6 +40,12 @@ export function planRelease(tx: StoreTransaction, order: OrderDoc): Promise<Stoc
   return planFor(tx, order.stockReservation.items, false);
 }
 
+/** Reads needed to put committed stock back (cancellation before dispatch). Empty unless committed. */
+export function planRestock(tx: StoreTransaction, order: OrderDoc): Promise<StockPlan> {
+  if (order.stockReservation?.status !== 'committed') return Promise.resolve({ items: [], shortfalls: [] });
+  return planFor(tx, order.stockReservation.items, false);
+}
+
 /** Reads needed to take stock again for an order whose reservation was already released (late payment). */
 export function planRecommit(tx: StoreTransaction, order: OrderDoc): Promise<StockPlan> {
   if (order.stockReservation?.status !== 'released') return Promise.resolve({ items: [], shortfalls: [] });

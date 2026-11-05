@@ -6,9 +6,11 @@
  * permission map in src/types/admin.ts. Password accounts must have a verified
  * email before any staff role is honoured.
  */
+import crypto from 'crypto';
 import type { VercelRequest } from '@vercel/node';
 import type { Auth, DecodedIdToken } from 'firebase-admin/auth';
 import { isStaffRole, roleHasPermission, type Permission, type StaffRole } from '../../src/types/admin';
+import { getCronSecret } from './config';
 import { ApiError } from './errors';
 import { getHeader } from './http';
 
@@ -79,4 +81,13 @@ export async function requireStaff(
   const token = bearerToken(req);
   if (!token) throw new ApiError(401, 'UNAUTHENTICATED', 'Sign in with a staff account.');
   return authoriseStaff(await verify(verifier, token, true), permission);
+}
+
+/** Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`; compared in constant time. */
+export function requireCron(req: VercelRequest): void {
+  const expected = Buffer.from(`Bearer ${getCronSecret()}`);
+  const received = Buffer.from(getHeader(req, 'authorization') ?? '');
+  if (!(received.length === expected.length && crypto.timingSafeEqual(received, expected))) {
+    throw new ApiError(401, 'UNAUTHENTICATED', 'Invalid cron credentials.');
+  }
 }

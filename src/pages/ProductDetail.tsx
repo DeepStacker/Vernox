@@ -15,6 +15,7 @@ import { productJsonLd, useSeo } from '@/lib/seo';
 import { formatINR } from '@/lib/storefront/format';
 import { trackStoreEvent } from '@/lib/storeAnalytics';
 import { cn } from '@/lib/utils';
+import { DeliveryEstimate } from '@/components/shop/DeliveryEstimate';
 import NotFound from '@/pages/NotFound';
 
 export default function ProductDetail() {
@@ -114,11 +115,8 @@ export default function ProductDetail() {
 
             <div className="space-y-1">
               <PriceTag product={product} size={size} large />
-              <p className="text-sm text-muted-foreground">
-                Price excludes GST. GST at {gstRate}% is added at checkout (about {formatINR(inclusive)} in total for this size). Final amount is shown at checkout.
-              </p>
-              {/* Delivery estimate component is merged here later; keep exactly one slot. */}
-              <div data-slot="delivery-estimate" />
+              <p className="text-sm text-muted-foreground">+ {gstRate}% GST · {formatINR(inclusive)} incl. GST</p>
+              <DeliveryEstimate productId={product.id} className="pt-2" />
             </div>
 
             <ul className="space-y-1.5 rounded-lg bg-secondary p-3 text-sm">

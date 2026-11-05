@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// Vernox Cloud Storage security rules.
+//
+// returns/{orderId}/{file}: photos for a return request (api/_lib/returns.ts).
+//  - Create: the signed-in order owner, or a signed-in user whose verified email
+//    is the order's email (guest checkouts sign in with that email). Images only,
+//    at most 5 MB, at most 6 per order (enforced by /api/return-request).
+//  - Read: the same customer, or staff who can read orders (mirrors
+//    canReadOrders() in firestore.rules / STAFF_ROLE_PERMISSIONS 'orders.read').
+//  - Files are immutable once uploaded; nothing else in the bucket is accessible.
+// Cross-service reads (firestore.get) require the Storage service agent to have
+// Firestore read access — Firebase grants it when these rules are first deployed.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function emailTrusted() {
+      return request.auth.token.get('firebase', {}).get('sign_in_provider', '') != 'password'
+        || request.auth.token.get('email_verified', false) == true;
+    }
+
+    function isStaffOrderReader() {
+      return request.auth != null && emailTrusted()
+        && request.auth.token.get('role', '') in ['super_admin', 'admin', 'order_manager', 'production', 'shipping', 'finance', 'support'];
+    }
+
+    function orderOf(orderId) {
+      return firestore.get(/databases/(default)/documents/orders/$(orderId)).data;
+    }
+
+    function ownsOrder(orderId) {
+      return request.auth != null && (
+        orderOf(orderId).userId == request.auth.uid
+        || (request.auth.token.get('email_verified', false) == true
+            && request.auth.token.get('email', '').lower() == orderOf(orderId).email)
+      );
+    }
+
+    match /returns/{orderId}/{fileName} {
+      allow read: if ownsOrder(orderId) || isStaffOrderReader();
+      allow create: if ownsOrder(orderId)
+        && fileName.matches('^[A-Za-z0-9_.-]{1,120}$')
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp|heic|heif)');
+      allow update, delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

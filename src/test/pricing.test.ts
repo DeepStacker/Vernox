@@ -52,21 +52,21 @@ describe('productFromDoc', () => {
 
 describe('catalog line pricing', () => {
   it('prices by size label from the product document', () => {
-    const line = priceCatalogLine({ productId: 'p-01', sizeLabel: 'medium · 50CM', finish: 'Brass', quantity: 2 }, frame);
+    const line = priceCatalogLine({ productId: 'p-01', sizeLabel: 'medium · 50CM', finish: 'Brass', quantity: 2 }, frame, TEST_CONFIG);
     expect(line.unitPricePaise).toBe(26_900);
     expect(line.lineTotalPaise).toBe(53_800);
     expect(line.finish).toBe('brass');
   });
 
   it('falls back to exact dimensions when no label is given', () => {
-    const line = priceCatalogLine({ productId: 'p-01', widthMm: 300, heightMm: 300, finish: 'gold', quantity: 1 }, frame);
+    const line = priceCatalogLine({ productId: 'p-01', widthMm: 300, heightMm: 300, finish: 'gold', quantity: 1 }, frame, TEST_CONFIG);
     expect(line.unitPricePaise).toBe(18_900);
   });
 
   it('rejects unknown sizes, finishes and products', () => {
-    expectApiError(() => priceCatalogLine({ productId: 'p-01', sizeLabel: 'Huge', finish: 'gold', quantity: 1 }, frame), 'INVALID_ITEM');
-    expectApiError(() => priceCatalogLine({ productId: 'p-01', sizeLabel: 'Small · 30cm', finish: 'copper', quantity: 1 }, frame), 'INVALID_ITEM');
-    expectApiError(() => priceCatalogLine({ productId: 'nope', finish: 'steel', quantity: 1 }, null), 'INVALID_ITEM');
+    expectApiError(() => priceCatalogLine({ productId: 'p-01', sizeLabel: 'Huge', finish: 'gold', quantity: 1 }, frame, TEST_CONFIG), 'INVALID_ITEM');
+    expectApiError(() => priceCatalogLine({ productId: 'p-01', sizeLabel: 'Small · 30cm', finish: 'copper', quantity: 1 }, frame, TEST_CONFIG), 'INVALID_ITEM');
+    expectApiError(() => priceCatalogLine({ productId: 'nope', finish: 'steel', quantity: 1 }, null, TEST_CONFIG), 'INVALID_ITEM');
   });
 
   it('ignores any client-supplied unitPrice (the request schema strips it)', () => {
@@ -120,11 +120,13 @@ describe('custom piece pricing', () => {
 });
 
 describe('order totals', () => {
-  const line = (paise: number) => priceCatalogLine({ productId: 'x', finish: 'steel', quantity: 1 }, productFromDoc('x', { price: paise / 100 }));
+  const line = (paise: number) => priceCatalogLine({ productId: 'x', finish: 'steel', quantity: 1 }, productFromDoc('x', { price: paise / 100 }), TEST_CONFIG);
 
-  it('charges shipping below the threshold and computes GST on the discounted subtotal', () => {
+  it('charges shipping below the threshold and taxes it with the goods (composite supply)', () => {
     const totals = computeTotals([line(8_900)], 0, TEST_CONFIG);
-    expect(totals).toMatchObject({ subtotalPaise: 8_900, shippingPaise: 4_000, taxPaise: 1_602, totalPaise: 14_502 });
+    // GST 18% of ₹89 = 16.02 plus 18% of ₹40 shipping = 7.20
+    expect(totals).toMatchObject({ subtotalPaise: 8_900, shippingPaise: 4_000, taxPaise: 2_322, totalPaise: 15_222 });
+    expect(totals.taxBreakdown.charges).toEqual([{ kind: 'shipping', taxablePaise: 4_000, gstRateBps: 1_800, taxPaise: 720 }]);
   });
 
   it('gives free shipping at exactly the threshold (>=)', () => {

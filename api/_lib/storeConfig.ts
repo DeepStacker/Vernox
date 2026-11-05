@@ -12,8 +12,20 @@
  *                                        which shipping is free (`>=`)
  *   customPieces: { [finishId]: { label, setupFee, ratePerCm2, minimum } }
  *                                        per-finish overrides merged over DEFAULT_CUSTOM_FINISH_RATES
+ *   codEnabled: boolean                  cash on delivery offered at all (catalogue-only carts)
+ *   codFee: number                       COD handling fee, its own taxable line
+ *   codMaxOrderValue: number             COD is refused when the order total (incl. GST) exceeds it
+ *   codMaxOpenOrdersPerPhone: number     undelivered COD orders allowed per mobile number
+ *   returnWindowDays: number             days after delivery a return may be requested
+ *   defaultLeadTimeDays: number          production days for catalogue items without leadTimeDays
+ *   customLeadTimeDays: number           production days for Crafting Studio pieces
+ *   manualTransitDays: number            courier transit estimate when Shiprocket is not configured
+ *   defaultHsnCode: string               HSN for products without hsnCode (owner must confirm)
+ *   seller: { legalName, tradeName, gstin, address, city, state, stateCode, pincode, email, phone }
+ *                                        supplier block printed on GST invoices
  */
-import { isNonNegativeFinite, rupeesToPaise } from './money';
+import type { StoreSettingsDoc } from '../../src/types/settings';
+import { isNonNegativeFinite, paiseToRupees, rupeesToPaise } from './money';
 import type { DocData, DocStore } from './store';
 
 export interface CustomFinishRate {
@@ -26,6 +38,34 @@ export interface CustomFinishRate {
   minimumPaise: number;
 }
 
+export interface SellerDetails {
+  legalName: string;
+  tradeName: string;
+  gstin: string;
+  address: string;
+  city: string;
+  state: string;
+  /** Two-digit GST state code (e.g. "29" Karnataka); compared with the buyer's to pick CGST+SGST vs IGST. */
+  stateCode: string;
+  pincode: string;
+  email: string;
+  phone: string;
+}
+
+export interface CodConfig {
+  enabled: boolean;
+  feePaise: number;
+  maxOrderValuePaise: number;
+  maxOpenOrdersPerPhone: number;
+}
+
+export interface FulfilmentConfig {
+  defaultLeadTimeDays: number;
+  customLeadTimeDays: number;
+  manualTransitDays: number;
+  returnWindowDays: number;
+}
+
 export interface StoreConfig {
   currency: 'INR';
   /** GST in basis points (1800 = 18%). */
@@ -33,6 +73,10 @@ export interface StoreConfig {
   shippingFeePaise: number;
   freeShippingThresholdPaise: number;
   reservationTtlMs: number;
+  cod: CodConfig;
+  fulfilment: FulfilmentConfig;
+  defaultHsnCode: string;
+  seller: SellerDetails;
   customPieces: {
     minDimensionMm: number;
     maxWidthMm: number;
@@ -78,6 +122,30 @@ export const DEFAULT_CUSTOM_FINISH_RATES: Record<string, CustomFinishRate> = {
   gold: PREMIUM('Gold'),
 };
 
+const EMPTY_SELLER: SellerDetails = {
+  legalName: '',
+  tradeName: '',
+  gstin: '',
+  address: '',
+  city: '',
+  state: '',
+  stateCode: '',
+  pincode: '',
+  email: '',
+  phone: '',
+};
+
+/** 2-digit state code + 10-char PAN + entity digit + 'Z' + checksum. */
+export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
+function envBoolean(env: NodeJS.ProcessEnv, name: string, fallback: boolean): boolean {
+  const raw = env[name]?.trim().toLowerCase();
+  if (!raw) return fallback;
+  if (raw === 'true' || raw === '1') return true;
+  if (raw === 'false' || raw === '0') return false;
+  throw new Error(`${name} must be true or false`);
+}
+
 function envNumber(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
   const raw = env[name];
   if (raw === undefined || raw.trim() === '') return fallback;
@@ -93,6 +161,20 @@ export function defaultStoreConfig(env: NodeJS.ProcessEnv = process.env): StoreC
     shippingFeePaise: rupeesToPaise(envNumber(env, 'STORE_SHIPPING_FEE_INR', 150)),
     freeShippingThresholdPaise: rupeesToPaise(envNumber(env, 'STORE_FREE_SHIPPING_THRESHOLD_INR', 5000)),
     reservationTtlMs: 15 * 60 * 1000,
+    cod: {
+      enabled: envBoolean(env, 'STORE_COD_ENABLED', true),
+      feePaise: rupeesToPaise(envNumber(env, 'STORE_COD_FEE_INR', 49)),
+      maxOrderValuePaise: rupeesToPaise(envNumber(env, 'STORE_COD_MAX_ORDER_VALUE_INR', 10000)),
+      maxOpenOrdersPerPhone: Math.floor(envNumber(env, 'STORE_COD_MAX_OPEN_ORDERS_PER_PHONE', 2)),
+    },
+    fulfilment: {
+      defaultLeadTimeDays: Math.floor(envNumber(env, 'STORE_DEFAULT_LEAD_TIME_DAYS', 3)),
+      customLeadTimeDays: Math.floor(envNumber(env, 'STORE_CUSTOM_LEAD_TIME_DAYS', 7)),
+      manualTransitDays: Math.floor(envNumber(env, 'STORE_MANUAL_TRANSIT_DAYS', 5)),
+      returnWindowDays: Math.floor(envNumber(env, 'STORE_RETURN_WINDOW_DAYS', 7)),
+    },
+    defaultHsnCode: env.STORE_DEFAULT_HSN_CODE?.trim() || '8306',
+    seller: { ...EMPTY_SELLER },
     customPieces: { ...CUSTOM_PIECE_LIMITS, finishes: { ...DEFAULT_CUSTOM_FINISH_RATES } },
   };
 }
@@ -115,6 +197,9 @@ export function mergeStoreConfig(defaults: StoreConfig, doc: DocData | null): St
   if (!doc) return defaults;
   const config: StoreConfig = {
     ...defaults,
+    cod: { ...defaults.cod },
+    fulfilment: { ...defaults.fulfilment },
+    seller: { ...defaults.seller },
     customPieces: { ...defaults.customPieces, finishes: { ...defaults.customPieces.finishes } },
   };
   const warn = (field: string) => console.warn(`[storeConfig] ignoring invalid settings/store.${field}`);
@@ -133,6 +218,42 @@ export function mergeStoreConfig(defaults: StoreConfig, doc: DocData | null): St
       config.freeShippingThresholdPaise = rupeesToPaise(doc.freeShippingThreshold);
     } else warn('freeShippingThreshold');
   }
+  if (doc.codEnabled !== undefined) {
+    if (typeof doc.codEnabled === 'boolean') config.cod.enabled = doc.codEnabled;
+    else warn('codEnabled');
+  }
+  if (doc.codFee !== undefined) {
+    if (isNonNegativeFinite(doc.codFee)) config.cod.feePaise = rupeesToPaise(doc.codFee);
+    else warn('codFee');
+  }
+  if (doc.codMaxOrderValue !== undefined) {
+    if (isNonNegativeFinite(doc.codMaxOrderValue)) config.cod.maxOrderValuePaise = rupeesToPaise(doc.codMaxOrderValue);
+    else warn('codMaxOrderValue');
+  }
+  const wholeDays = (field: string, apply: (n: number) => void, max = 365) => {
+    const value = doc[field];
+    if (value === undefined) return;
+    if (isNonNegativeFinite(value) && Number.isInteger(value) && value <= max) apply(value);
+    else warn(field);
+  };
+  wholeDays('codMaxOpenOrdersPerPhone', n => (config.cod.maxOpenOrdersPerPhone = n), 50);
+  wholeDays('returnWindowDays', n => (config.fulfilment.returnWindowDays = n), 90);
+  wholeDays('defaultLeadTimeDays', n => (config.fulfilment.defaultLeadTimeDays = n), 90);
+  wholeDays('customLeadTimeDays', n => (config.fulfilment.customLeadTimeDays = n), 90);
+  wholeDays('manualTransitDays', n => (config.fulfilment.manualTransitDays = n), 30);
+  if (doc.defaultHsnCode !== undefined) {
+    if (typeof doc.defaultHsnCode === 'string' && /^[0-9]{4,8}$/.test(doc.defaultHsnCode.trim())) {
+      config.defaultHsnCode = doc.defaultHsnCode.trim();
+    } else warn('defaultHsnCode');
+  }
+  if (doc.seller && typeof doc.seller === 'object') {
+    const raw = doc.seller as Record<string, unknown>;
+    for (const key of Object.keys(EMPTY_SELLER) as Array<keyof SellerDetails>) {
+      if (typeof raw[key] === 'string') config.seller[key] = (raw[key] as string).trim();
+    }
+    config.seller.gstin = config.seller.gstin.toUpperCase();
+    if (config.seller.gstin && !GSTIN_PATTERN.test(config.seller.gstin)) warn('seller.gstin');
+  }
   if (doc.customPieces && typeof doc.customPieces === 'object') {
     for (const [finishId, raw] of Object.entries(doc.customPieces as Record<string, unknown>)) {
       const id = finishId.trim().toLowerCase();
@@ -142,6 +263,34 @@ export function mergeStoreConfig(defaults: StoreConfig, doc: DocData | null): St
     }
   }
   return config;
+}
+
+/**
+ * `settings/store` document for a fresh project, derived from the same defaults
+ * the API uses (env STORE_* or built-ins), so the seed can never drift from them.
+ * Seller and contact fields start empty for the owner to fill in.
+ */
+export function defaultSettingsDoc(config: StoreConfig = defaultStoreConfig()): StoreSettingsDoc {
+  return {
+    gstRatePercent: config.gstRateBps / 100,
+    shippingFee: paiseToRupees(config.shippingFeePaise),
+    freeShippingThreshold: paiseToRupees(config.freeShippingThresholdPaise),
+    codEnabled: config.cod.enabled,
+    codFee: paiseToRupees(config.cod.feePaise),
+    codMaxOrderValue: paiseToRupees(config.cod.maxOrderValuePaise),
+    codMaxOpenOrdersPerPhone: config.cod.maxOpenOrdersPerPhone,
+    returnWindowDays: config.fulfilment.returnWindowDays,
+    defaultLeadTimeDays: config.fulfilment.defaultLeadTimeDays,
+    customLeadTimeDays: config.fulfilment.customLeadTimeDays,
+    manualTransitDays: config.fulfilment.manualTransitDays,
+    defaultHsnCode: config.defaultHsnCode,
+    seller: { ...EMPTY_SELLER },
+    whatsappNumber: '',
+    supportPhone: '',
+    supportEmail: '',
+    supportHours: '',
+    workshopAddress: '',
+  };
 }
 
 export async function loadStoreConfig(store: DocStore, env: NodeJS.ProcessEnv = process.env): Promise<StoreConfig> {

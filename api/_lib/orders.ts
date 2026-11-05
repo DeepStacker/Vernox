@@ -9,8 +9,8 @@
  */
 import crypto from 'crypto';
 import { paiseToRupees } from './money';
-import type { OrderStatus, StatusHistoryEntry } from './orderLifecycle';
-import type { OrderTotals, PricedLine } from './pricing';
+import { CUSTOMER_CANCELLABLE_STATUSES, type OrderStatus, type StatusHistoryEntry } from './orderLifecycle';
+import type { LineTax, OrderTotals, PricedLine } from './pricing';
 import type { DocData } from './store';
 
 export interface CustomerDetails {
@@ -40,7 +40,15 @@ export interface OrderItemSnapshot {
   lineTotal: number; // ₹ display copy
   isCustom: boolean;
   customDesignRef: string | null;
+  hsnCode: string;
+  gstRateBps: number;
+  /** Share of the order discount, taxable value and GST of this line (see pricing.computeTotals). */
+  discountPaise: number;
+  taxablePaise: number;
+  taxPaise: number;
 }
+
+export type PaymentMethod = 'prepaid' | 'cod' | 'replacement';
 
 export type ReservationStatus = 'held' | 'released' | 'committed' | 'none';
 
@@ -53,6 +61,24 @@ export interface RefundRecord {
   refundId: string;
   amountPaise: number;
   at: number;
+}
+
+/** Courier shipment (api/_lib/shipping/shipments.ts). */
+export interface ShipmentRecord {
+  provider: 'shiprocket' | 'manual';
+  status: 'created' | 'awb_assigned' | 'pickup_scheduled' | 'in_transit' | 'delivered' | 'rto' | 'cancelled';
+  shipmentId: string | null;
+  providerOrderId: string | null;
+  awb: string | null;
+  courier: string | null;
+  trackingUrl: string | null;
+  labelUrl: string | null;
+  manifestUrl: string | null;
+  pickupScheduledAt: string | null;
+  lastEvent: { status: string; at: string } | null;
+  error: string | null;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface OrderDoc {
@@ -75,6 +101,23 @@ export interface OrderDoc {
   razorpayPaymentId: string | null;
   refunds: RefundRecord[];
   refundedPaise: number;
+  /** Refunds requested from the provider but not yet processed (counted against the refund ceiling). */
+  refundPendingPaise?: number;
+  paymentMethod: PaymentMethod;
+  /** Normalised 10-digit mobile number, for COD abuse limits. */
+  phoneKey: string;
+  /** Production days promised at checkout (max over lines). */
+  leadTimeDays?: number;
+  shipment?: ShipmentRecord | null;
+  invoiceId?: string | null;
+  invoiceNumber?: string | null;
+  deliveredAt?: number | null;
+  /** COD cash collected by the courier on delivery (paise). */
+  codCollectedPaise?: number;
+  codCollectedAt?: number | null;
+  /** Replacement orders point at the order they replace. */
+  parentOrderId?: string | null;
+  replacementOrderId?: string | null;
   flags: string[];
   placedAt: number;
   createdAt: number;
@@ -95,6 +138,12 @@ export interface OrderDoc {
   tracking?: { carrier?: string; trackingNumber?: string; url?: string } | null;
 }
 
+/** Indian mobile as 10 digits (strips +91 / 0 and separators); other formats are returned digits-only. */
+export function phoneKey(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length > 10 && /^(91|0)/.test(digits) ? digits.slice(-10) : digits;
+}
+
 const ORDER_NUMBER_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /** Human-facing order number, e.g. VX-20261105-7KQ2MZ. Also used as the Razorpay receipt (≤ 40 chars). */
@@ -105,7 +154,7 @@ export function generateOrderNumber(now: number): string {
   return `VX-${date}-${suffix}`;
 }
 
-export function snapshotItem(line: PricedLine): OrderItemSnapshot {
+export function snapshotItem(line: PricedLine, tax: LineTax): OrderItemSnapshot {
   return {
     productId: line.productId,
     name: line.name,
@@ -122,6 +171,11 @@ export function snapshotItem(line: PricedLine): OrderItemSnapshot {
     lineTotal: paiseToRupees(line.lineTotalPaise),
     isCustom: line.isCustom,
     customDesignRef: line.customDesignRef,
+    hsnCode: line.hsnCode,
+    gstRateBps: tax.gstRateBps,
+    discountPaise: tax.discountPaise,
+    taxablePaise: tax.taxablePaise,
+    taxPaise: tax.taxPaise,
   };
 }
 
@@ -137,31 +191,47 @@ export function buildOrderDoc(params: {
   idempotencyKey: string;
   reservationTtlMs: number;
   now: number;
+  paymentMethod?: PaymentMethod;
+  leadTimeDays?: number;
+  parentOrderId?: string | null;
 }): OrderDoc {
   const { customer, totals, now } = params;
+  const paymentMethod = params.paymentMethod ?? 'prepaid';
+  // Prepaid orders hold stock until paid; COD and replacement orders commit it immediately.
+  const status: OrderStatus = paymentMethod === 'prepaid' ? 'Pending_Payment' : paymentMethod === 'cod' ? 'Confirmed_COD' : 'Paid';
+  const reservationStatus: ReservationStatus =
+    params.reservedItems.length === 0 ? 'none' : paymentMethod === 'prepaid' ? 'held' : 'committed';
   return {
     id: params.id,
     orderNumber: params.orderNumber,
-    status: 'Pending_Payment',
-    statusHistory: [{ status: 'Pending_Payment', at: now, by: 'customer' }],
+    status,
+    statusHistory: [
+      { status, at: now, by: paymentMethod === 'replacement' ? 'system' : 'customer', ...(paymentMethod === 'replacement' ? { note: `replacement for ${params.parentOrderId}` } : {}) },
+    ],
     userId: params.userId,
     email: customer.email,
     customer,
-    items: params.lines.map(snapshotItem),
+    items: params.lines.map((line, idx) => snapshotItem(line, totals.taxBreakdown.lines[idx])),
     currency: 'INR',
     amounts: totals,
     coupon: params.coupon,
     couponCode: params.coupon?.code ?? null,
-    stockReservation: {
-      status: params.reservedItems.length > 0 ? 'held' : 'none',
-      items: params.reservedItems,
-    },
-    reservationExpiresAt: now + params.reservationTtlMs,
+    stockReservation: { status: reservationStatus, items: params.reservedItems },
+    reservationExpiresAt: paymentMethod === 'prepaid' ? now + params.reservationTtlMs : 0,
     idempotencyKey: params.idempotencyKey,
     razorpayOrderId: null,
     razorpayPaymentId: null,
     refunds: [],
     refundedPaise: 0,
+    refundPendingPaise: 0,
+    paymentMethod,
+    phoneKey: phoneKey(customer.phone),
+    ...(params.leadTimeDays !== undefined ? { leadTimeDays: params.leadTimeDays } : {}),
+    shipment: null,
+    invoiceId: null,
+    invoiceNumber: null,
+    deliveredAt: null,
+    parentOrderId: params.parentOrderId ?? null,
     flags: [],
     placedAt: now,
     createdAt: now,
@@ -191,6 +261,7 @@ export function pricingPayload(order: Pick<OrderDoc, 'amounts' | 'items'>) {
     subtotal: paiseToRupees(a.subtotalPaise),
     discount: paiseToRupees(a.discountPaise),
     shipping: paiseToRupees(a.shippingPaise),
+    codFee: paiseToRupees(a.codFeePaise ?? 0),
     tax: paiseToRupees(a.taxPaise),
     total: paiseToRupees(a.totalPaise),
     items: order.items.map(i => ({
@@ -203,8 +274,18 @@ export function pricingPayload(order: Pick<OrderDoc, 'amounts' | 'items'>) {
   };
 }
 
+/** Tracking block for customers: the courier shipment when there is one, else staff-entered tracking. */
+function publicTracking(order: OrderDoc) {
+  if (order.shipment?.awb) {
+    return { carrier: order.shipment.courier, trackingNumber: order.shipment.awb, url: order.shipment.trackingUrl };
+  }
+  return order.tracking
+    ? { carrier: order.tracking.carrier ?? null, trackingNumber: order.tracking.trackingNumber ?? null, url: order.tracking.url ?? null }
+    : null;
+}
+
 /** Guest-safe order view: no address line, phone, payment ids, design files or internal flags. */
-export function publicOrderSummary(order: OrderDoc) {
+export function publicOrderSummary(order: OrderDoc, returnWindowDays?: number) {
   const { items: pricedItems, ...totals } = pricingPayload(order);
   return {
     orderId: order.id,
@@ -221,13 +302,14 @@ export function publicOrderSummary(order: OrderDoc) {
       isCustom: i.isCustom,
     })),
     timeline: (order.statusHistory ?? []).map(h => ({ status: h.status, at: h.at })),
-    tracking: order.tracking
-      ? {
-          carrier: order.tracking.carrier ?? null,
-          trackingNumber: order.tracking.trackingNumber ?? null,
-          url: order.tracking.url ?? null,
-        }
-      : null,
+    paymentMethod: order.paymentMethod ?? 'prepaid',
+    tracking: publicTracking(order),
+    invoiceNumber: order.invoiceNumber ?? null,
+    canCancel: CUSTOMER_CANCELLABLE_STATUSES.includes(order.status),
+    returnEligibleUntil:
+      order.status === 'Delivered' && order.deliveredAt && returnWindowDays !== undefined
+        ? order.deliveredAt + returnWindowDays * 24 * 3600_000
+        : null,
     shipTo: { name: order.customer?.name ?? order.shippingName, city: order.customer?.city ?? order.shippingCity },
   };
 }

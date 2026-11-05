@@ -1,95 +1,36 @@
 /**
- * Order state machine (pure). Every status change made by the API goes through
- * canTransition(); firestore.rules mirror the staff-settable subset.
- *
- *   Pending_Payment ──► Paid ──► Designing ──► Cutting ──► Finished ──► Shipped ──► Delivered
- *        │  ▲
- *        │  └── late payment (Payment_Failed / Expired → Paid, stock re-committed)
- *        ├──► Payment_Failed   (payment.failed webhook; reservation released)
- *        ├──► Expired          (reservation TTL passed; cron releases stock)
- *        ├──► Cancelled        (provider order creation failed; staff)
- *        └──► Payment_Discrepancy (captured amount/currency ≠ order; manual review)
- *   any paid state ──► Partially_Refunded ──► Refunded   (refund.processed webhook)
+ * Server view of the order state machine. Statuses and transitions are defined
+ * once in src/types/orderStatus.ts (shared with the browser and mirrored in
+ * firestore.rules); every status change the API makes goes through canTransition(),
+ * usually via orderTransitions.ts.
  */
+import { PAID_STATUSES, toOrderStatus, type OrderStatus } from '../../src/types/orderStatus';
 
-export const ORDER_STATUSES = [
-  'Pending_Payment',
-  'Paid',
-  'Payment_Failed',
-  'Payment_Discrepancy',
-  'Expired',
-  'Cancelled',
-  'Designing',
-  'Cutting',
-  'Finished',
-  'Shipped',
-  'Delivered',
-  'Partially_Refunded',
-  'Refunded',
-] as const;
-
-export type OrderStatus = (typeof ORDER_STATUSES)[number];
-
-/** Statuses in which money has been captured. */
-export const PAID_STATUSES: readonly OrderStatus[] = [
-  'Paid',
-  'Designing',
-  'Cutting',
-  'Finished',
-  'Shipped',
-  'Delivered',
-  'Partially_Refunded',
-  'Refunded',
-];
-
-/** Fulfilment statuses staff may set (via UPDATE_ORDER_STATUS or, per firestore.rules, directly). */
-export const STAFF_SETTABLE_STATUSES: readonly OrderStatus[] = [
-  'Designing',
-  'Cutting',
-  'Finished',
-  'Shipped',
-  'Delivered',
-  'Cancelled',
-];
-
-const FULFILMENT_FLOW: OrderStatus[] = ['Paid', 'Designing', 'Cutting', 'Finished', 'Shipped', 'Delivered'];
-
-const TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
-  Pending_Payment: ['Paid', 'Payment_Failed', 'Expired', 'Cancelled', 'Payment_Discrepancy'],
-  Payment_Failed: ['Paid', 'Expired', 'Cancelled', 'Payment_Discrepancy'],
-  Expired: ['Paid', 'Payment_Discrepancy'],
-  Payment_Discrepancy: ['Cancelled', 'Refunded', 'Partially_Refunded'],
-  Cancelled: ['Refunded', 'Partially_Refunded'],
-  Paid: ['Designing', 'Cancelled', 'Partially_Refunded', 'Refunded'],
-  Designing: ['Cutting', 'Cancelled', 'Partially_Refunded', 'Refunded'],
-  Cutting: ['Finished', 'Cancelled', 'Partially_Refunded', 'Refunded'],
-  Finished: ['Shipped', 'Cancelled', 'Partially_Refunded', 'Refunded'],
-  Shipped: ['Delivered', 'Partially_Refunded', 'Refunded'],
-  Delivered: ['Partially_Refunded', 'Refunded'],
-  Partially_Refunded: ['Partially_Refunded', 'Refunded', ...FULFILMENT_FLOW.slice(1)],
-  Refunded: [],
-};
-
-export function isOrderStatus(value: unknown): value is OrderStatus {
-  return typeof value === 'string' && (ORDER_STATUSES as readonly string[]).includes(value);
-}
-
-export function canTransition(from: unknown, to: OrderStatus): boolean {
-  return isOrderStatus(from) && TRANSITIONS[from].includes(to);
-}
+export {
+  CUSTOMER_CANCELLABLE_STATUSES,
+  ORDER_STATUSES,
+  PAID_STATUSES,
+  STAFF_SETTABLE_STATUSES,
+  STAFF_WORKSHOP_MOVES,
+  canTransition,
+  isOrderStatus,
+  toOrderStatus,
+  type OrderStatus,
+} from '../../src/types/orderStatus';
 
 export function isPaidStatus(status: unknown): boolean {
-  return isOrderStatus(status) && PAID_STATUSES.includes(status);
+  const current = toOrderStatus(status);
+  return current !== null && PAID_STATUSES.includes(current);
 }
 
 export interface StatusHistoryEntry {
   status: OrderStatus;
   at: number;
-  by: string; // 'system' | 'customer' | 'razorpay' | staff uid
+  by: string; // 'system' | 'customer' | 'razorpay' | 'courier' | staff uid
   note?: string;
 }
 
-/** Refund status from cumulative refunded amount. */
-export function refundStatus(refundedPaise: number, totalPaise: number): OrderStatus {
-  return refundedPaise >= totalPaise ? 'Refunded' : 'Partially_Refunded';
+/** Refund status from cumulative refunded amount against the amount actually collected. */
+export function refundStatus(refundedPaise: number, collectedPaise: number): OrderStatus {
+  return refundedPaise >= collectedPaise ? 'Refunded' : 'Partially_Refunded';
 }

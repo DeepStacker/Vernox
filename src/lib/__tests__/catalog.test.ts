@@ -12,12 +12,13 @@ describe('sample catalogue', () => {
   });
 
   it('is priceable by the server for every size and finish, at the price the storefront shows', () => {
+    const taxConfig = defaultStoreConfig();
     for (const p of products) {
       const record = productFromDoc(p.id, { ...p } as never);
       expect(record, p.slug).not.toBeNull();
       for (const size of p.sizes) {
         for (const finish of p.finishes) {
-          const line = priceCatalogLine({ productId: p.id, sizeLabel: size.label, finish, quantity: 1 }, record);
+          const line = priceCatalogLine({ productId: p.id, sizeLabel: size.label, finish, quantity: 1 }, record, taxConfig);
           expect(line.unitPricePaise, `${p.slug} ${size.label}`).toBe(unitPrice(p, size) * 100);
         }
       }

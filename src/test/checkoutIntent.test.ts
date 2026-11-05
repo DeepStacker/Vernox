@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { checkoutRequestSchema, createCheckoutIntent } from '../../api/_lib/checkout';
+import { checkoutRequestSchema, createCheckoutIntent, type PrepaidCheckoutResponse } from '../../api/_lib/checkout';
 import { ApiError } from '../../api/_lib/errors';
 import { checkoutRequest, deps, seededStore } from './support/serverFixtures';
 
@@ -149,7 +149,7 @@ describe('checkout intent', () => {
     store.seed('coupons/c1', { code: 'WELCOME10', discountType: 'percentage', discountValue: 10, isActive: true, usedCount: 0, maxUsageCount: 1 });
     const res = await createCheckoutIntent(deps(store), checkoutRequest({ couponCode: 'welcome10' }), null);
     expect(res.pricing).toMatchObject({ subtotal: 538, discount: 53.8, tax: 87.16, total: 571.36 });
-    expect(res.amount).toBe(57_136);
+    expect((res as PrepaidCheckoutResponse).amount).toBe(57_136);
     expect(store.read('coupons/c1')!.usedCount).toBe(0);
     expect(store.read(`orders/${res.orderId}`)!.coupon).toEqual({ id: 'c1', code: 'WELCOME10', discountPaise: 5_380 });
   });

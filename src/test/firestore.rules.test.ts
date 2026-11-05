@@ -65,7 +65,14 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     await assertFails(setDoc(doc(guest(), 'orders/o2'), { status: 'Paid', total: 1 }));
     await assertFails(setDoc(doc(as('alice'), 'orders/o2'), { userId: 'alice', status: 'Paid' }));
     const shipping = as('s', { role: 'shipping' });
-    await assertSucceeds(updateDoc(doc(shipping, 'orders/o1'), { status: 'Designing', updatedAt: 1 }));
+    await assertSucceeds(updateDoc(doc(shipping, 'orders/o1'), { status: 'In_Design', updatedAt: 1 }));
+    // Skipping stages, shipping and cancelling are API-only (invoice, stock, refunds, notifications).
+    await assertFails(updateDoc(doc(shipping, 'orders/o1'), { status: 'Packed', updatedAt: 1 }));
+    await assertFails(updateDoc(doc(shipping, 'orders/o1'), { status: 'Cancelled', updatedAt: 1 }));
+    // QC / packing notes: a string of at most 20 000 characters.
+    await assertSucceeds(updateDoc(doc(shipping, 'orders/o1'), { notes: 'QC pass', updatedAt: 2 }));
+    await assertFails(updateDoc(doc(shipping, 'orders/o1'), { notes: 'x'.repeat(20_001), updatedAt: 3 }));
+    await assertFails(updateDoc(doc(shipping, 'orders/o1'), { notes: { qc: true }, updatedAt: 4 }));
     await assertFails(updateDoc(doc(shipping, 'orders/o1'), { total: 1 }));
     await assertFails(updateDoc(doc(as('f', { role: 'finance' }), 'orders/o1'), { notes: 'x' }));
   });
@@ -85,6 +92,23 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     await assertFails(getDoc(doc(as('a', { role: 'admin' }), 'audit_logs/a1')));
     await assertSucceeds(getDoc(doc(as('a', { role: 'super_admin' }), 'audit_logs/a1')));
     await assertFails(getDoc(doc(as('a', { role: 'super_admin' }), 'idempotency/k')));
+  });
+
+  it('phase 2 collections are server-only, even for the order owner and super_admin', async () => {
+    const owner = as('alice');
+    const boss = as('a', { role: 'super_admin' });
+    for (const path of ['invoices/o1', 'credit_notes/c1', 'counters/invoice_2026-27', 'refunds/r1', 'returns/o1',
+      'notifications_outbox/o1_shipped', 'courier_events/e1', 'serviceability_cache/manual_560001', 'integrations/shiprocket']) {
+      await assertFails(getDoc(doc(owner, path)));
+      await assertFails(getDoc(doc(boss, path)));
+      await assertFails(setDoc(doc(boss, path), { forged: true }));
+    }
+  });
+
+  it('settings/store is public read, settings-role write', async () => {
+    await assertSucceeds(getDoc(doc(guest(), 'settings/store')));
+    await assertFails(setDoc(doc(as('alice'), 'settings/store'), { codFee: 0 }));
+    await assertSucceeds(setDoc(doc(as('a', { role: 'admin' }), 'settings/store'), { codFee: 49 }));
   });
 
   it('reviews: create pending as self; moderation by moderators only', async () => {

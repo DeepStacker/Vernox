@@ -13,14 +13,24 @@ import { z } from 'zod';
 import { STAFF_ROLES, isStaffRole, roleHasPermission, type Permission, type StaffMember } from '../src/types/admin';
 import { auditInTransaction, buildAuditEntry, recordAudit } from './_lib/audit';
 import { requireStaff, type StaffUser } from './_lib/auth';
+import { cancelOrder } from './_lib/cancellation';
 import { normaliseCouponCode } from './_lib/coupons';
 import { ApiError, badRequest, sendError } from './_lib/errors';
 import { getAdminAuth, getStore } from './_lib/firebaseAdmin';
+import { invoicePath, type TaxDocument } from './_lib/gst/invoice';
 import { clientIp } from './_lib/http';
-import { canTransition, STAFF_SETTABLE_STATUSES, type OrderStatus } from './_lib/orderLifecycle';
+import { rupeesToPaise } from './_lib/money';
+import { STAFF_SETTABLE_STATUSES, type OrderStatus } from './_lib/orderLifecycle';
+import { applyStatusChange, planStatusChange } from './_lib/orderTransitions';
 import { asOrder, orderPath } from './_lib/orders';
+import { createRazorpayRefundGateway } from './_lib/razorpay';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
-import { arrayUnion, type DocStore } from './_lib/store';
+import { createRefund, refundCeilingPaise } from './_lib/refunds';
+import { decideReturn, markReturnReceived, returnPath } from './_lib/returns';
+import { createShippingProvider } from './_lib/shipping';
+import { applyCourierStatus, cancelShipment, createShipment, getLabel } from './_lib/shipping/shipments';
+import type { DocStore } from './_lib/store';
+import { loadStoreConfig } from './_lib/storeConfig';
 
 interface ActionContext {
   store: DocStore;
@@ -83,6 +93,9 @@ const reviewSchema = z.object({
 });
 
 const idSchema = (key: string) => z.object({ [key]: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/) });
+
+const orderIdField = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
+const reasonField = z.string().trim().min(3).max(300);
 
 // ---------- actions ----------
 
@@ -194,18 +207,214 @@ const ACTIONS: Record<string, ActionDefinition> = {
       await ctx.store.runTransaction(async tx => {
         const order = asOrder(await tx.get(orderPath(p.orderId)));
         if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
-        if (!canTransition(order.status, p.status)) {
-          throw new ApiError(409, 'CONFLICT', `An order in status ${order.status} cannot move to ${p.status}.`);
-        }
-        tx.update(orderPath(order.id), {
-          status: p.status,
-          statusHistory: arrayUnion({ status: p.status, at: now, by: ctx.actor.uid, ...(p.note ? { note: p.note } : {}) }),
-          ...(p.tracking ? { tracking: p.tracking } : {}),
-          updatedAt: now,
-        });
+        const plan = await planStatusChange(tx, order, { to: p.status, by: ctx.actor.uid, note: p.note });
+        applyStatusChange(tx, plan, order, now, p.tracking ? { tracking: p.tracking } : {});
         auditInTransaction(ctx.store, tx, audit(ctx, 'ORDER_STATUS_UPDATED', 'order', order.id, { from: order.status, to: p.status }));
       });
       return { orderId: p.orderId, status: p.status };
+    },
+  },
+
+  // ---------- shipping (permission orders.tracking) ----------
+
+  CREATE_SHIPMENT: {
+    method: 'POST',
+    permission: 'orders.tracking',
+    async run(ctx) {
+      const p = parse(
+        z.object({
+          orderId: orderIdField,
+          package: z
+            .object({
+              lengthCm: z.number().positive().max(300),
+              breadthCm: z.number().positive().max(300),
+              heightCm: z.number().positive().max(300),
+              weightKg: z.number().positive().max(100),
+            })
+            .optional(),
+          manual: z
+            .object({
+              courier: z.string().trim().min(2).max(80),
+              awb: z.string().trim().regex(/^[A-Za-z0-9-]{4,40}$/),
+              trackingUrl: z.string().trim().url().max(500).optional(),
+            })
+            .optional(),
+        }),
+        ctx.params,
+      );
+      const config = await loadStoreConfig(ctx.store);
+      const shipment = await createShipment(ctx.store, createShippingProvider(ctx.store, config), config, {
+        orderId: p.orderId,
+        package: p.package,
+        manual: p.manual,
+        actor: ctx.actor,
+      });
+      const order = asOrder(await ctx.store.get(orderPath(p.orderId)));
+      return { shipment, status: order?.status ?? null, invoiceNumber: order?.invoiceNumber ?? null };
+    },
+  },
+
+  CANCEL_SHIPMENT: {
+    method: 'POST',
+    permission: 'orders.tracking',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: orderIdField, reason: reasonField }), ctx.params);
+      const config = await loadStoreConfig(ctx.store);
+      await cancelShipment(ctx.store, createShippingProvider(ctx.store, config), { orderId: p.orderId, reason: p.reason, actor: ctx.actor });
+      return { orderId: p.orderId };
+    },
+  },
+
+  GET_LABEL: {
+    method: 'GET',
+    permission: 'orders.tracking',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: orderIdField }), ctx.params);
+      const config = await loadStoreConfig(ctx.store);
+      return getLabel(ctx.store, createShippingProvider(ctx.store, config), p.orderId);
+    },
+  },
+
+  UPDATE_DELIVERY_STATUS: {
+    method: 'POST',
+    permission: 'orders.tracking',
+    async run(ctx) {
+      const p = parse(
+        z.object({
+          orderId: orderIdField,
+          status: z.enum(['Shipped', 'Out_For_Delivery', 'Delivered', 'RTO_Initiated', 'RTO_Delivered']),
+          note: z.string().trim().max(200).optional(),
+        }),
+        ctx.params,
+      );
+      const outcome = await applyCourierStatus(ctx.store, {
+        orderId: p.orderId,
+        target: p.status,
+        event: { status: `staff: ${p.note ?? p.status}`.slice(0, 200), at: new Date().toISOString() },
+        by: ctx.actor.uid,
+      });
+      if (outcome === 'no_shipment') throw new ApiError(409, 'CONFLICT', 'Create the shipment before updating delivery status.');
+      if (outcome === 'ignored') throw new ApiError(409, 'CONFLICT', `The order cannot move to ${p.status} from its current status.`);
+      await recordAudit(ctx.store, audit(ctx, 'DELIVERY_STATUS_UPDATED', 'order', p.orderId, { status: p.status }));
+      return { orderId: p.orderId, status: p.status };
+    },
+  },
+
+  // ---------- cancellation and refunds ----------
+
+  CANCEL_ORDER: {
+    method: 'POST',
+    permission: 'orders.update_status',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: orderIdField, reason: reasonField, refund: z.boolean().default(true) }), ctx.params);
+      if (p.refund && !roleHasPermission(ctx.actor.role, 'orders.refund')) {
+        throw new ApiError(403, 'FORBIDDEN', 'Your role cannot refund. Cancel with refund: false and ask finance to refund.');
+      }
+      const order = asOrder(await ctx.store.get(orderPath(p.orderId)));
+      const gateway = p.refund && order?.paymentMethod === 'prepaid' ? createRazorpayRefundGateway() : null;
+      const result = await cancelOrder(ctx.store, gateway, {
+        orderId: p.orderId,
+        reason: p.reason,
+        initiatedBy: 'staff',
+        actor: ctx.actor,
+        refund: p.refund,
+        ip: ctx.ip,
+      });
+      return { orderId: p.orderId, status: result.order.status, refund: result.refund, refundError: result.refundError };
+    },
+  },
+
+  CREATE_REFUND: {
+    method: 'POST',
+    permission: 'orders.refund',
+    async run(ctx) {
+      const p = parse(
+        z.object({
+          orderId: orderIdField,
+          amount: z.number().positive().max(10_000_000),
+          reason: reasonField,
+          method: z.enum(['razorpay', 'manual']).default('razorpay'),
+          reference: z.string().trim().min(4).max(80).optional(),
+          idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/).optional(),
+        }),
+        ctx.params,
+      );
+      const refund = await createRefund(ctx.store, p.method === 'razorpay' ? createRazorpayRefundGateway() : null, {
+        orderId: p.orderId,
+        amountPaise: rupeesToPaise(p.amount),
+        reason: p.reason,
+        method: p.method,
+        reference: p.reference,
+        idempotencyKey: p.idempotencyKey,
+        requestedBy: ctx.actor.uid,
+        source: 'staff',
+        actor: ctx.actor,
+        ip: ctx.ip,
+      });
+      return { refund };
+    },
+  },
+
+  GET_ORDER_DOCUMENTS: {
+    method: 'GET',
+    permission: 'orders.read',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: orderIdField }), ctx.params);
+      const order = asOrder(await ctx.store.get(orderPath(p.orderId)));
+      if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
+      const [invoiceDoc, creditNotes, refunds, ret] = await Promise.all([
+        ctx.store.get(invoicePath(order.id)),
+        ctx.store.query('credit_notes', { where: [{ field: 'orderId', op: '==', value: order.id }], limit: 50 }),
+        ctx.store.query('refunds', { where: [{ field: 'orderId', op: '==', value: order.id }], limit: 50 }),
+        ctx.store.get(returnPath(order.id)),
+      ]);
+      const invoice = invoiceDoc as unknown as TaxDocument | null;
+      return {
+        invoice: invoice ? { id: invoice.id, number: invoice.number, issuedAt: invoice.issuedAt, supplyType: invoice.supplyType, totals: invoice.totals } : null,
+        creditNotes: creditNotes.map(c => {
+          const d = c.data as unknown as TaxDocument;
+          return { id: d.id, number: d.number, issuedAt: d.issuedAt, refundId: d.refundId ?? null, totals: d.totals };
+        }),
+        refunds: refunds.map(r => r.data),
+        return: ret,
+        refundablePaise: refundCeilingPaise(order),
+        shipment: order.shipment ?? null,
+      };
+    },
+  },
+
+  // ---------- returns (permission orders.update_status; refunds stay with finance) ----------
+
+  APPROVE_RETURN: {
+    method: 'POST',
+    permission: 'orders.update_status',
+    async run(ctx) {
+      const p = parse(
+        z.object({ orderId: orderIdField, resolution: z.enum(['refund', 'replacement']), note: z.string().trim().max(300).optional() }),
+        ctx.params,
+      );
+      return decideReturn(ctx.store, { orderId: p.orderId, approve: true, resolution: p.resolution, note: p.note, actor: ctx.actor });
+    },
+  },
+
+  REJECT_RETURN: {
+    method: 'POST',
+    permission: 'orders.update_status',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: orderIdField, reason: reasonField }), ctx.params);
+      return decideReturn(ctx.store, { orderId: p.orderId, approve: false, note: p.reason, actor: ctx.actor });
+    },
+  },
+
+  MARK_RETURN_RECEIVED: {
+    method: 'POST',
+    permission: 'orders.update_status',
+    async run(ctx) {
+      const p = parse(
+        z.object({ orderId: orderIdField, restock: z.boolean().default(false), note: z.string().trim().max(300).optional() }),
+        ctx.params,
+      );
+      return markReturnReceived(ctx.store, { orderId: p.orderId, restock: p.restock, note: p.note, actor: ctx.actor });
     },
   },
 

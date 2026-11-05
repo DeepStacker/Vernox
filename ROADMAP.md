@@ -96,8 +96,15 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
 1. **Foundation (in progress):** server-authoritative orders, payments, stock and coupons via
    `firebase-admin`; locked rules; Firebase-token admin auth with role claims; remove fake data and
    bypasses; client data layer split; green type check, tests and lint.
-2. **India commerce:** real catalog and prices, PIN code and serviceability, COD, GST invoices,
-   courier integration, notifications, cancellation, refunds and returns.
+2. **India commerce (server and checkout done 2026-11-05):**
+   - Done: PIN serviceability + delivery estimate (`/api/serviceability`, `DeliveryEstimate` component, checkout check); COD
+     (catalogue-only, fee, limits, `Confirmed_COD`); GST invoices and credit notes (per-line tax, CGST/SGST vs IGST, FY numbering,
+     PDF); Shiprocket integration (AWB, pickup, label, manifest, tracking webhook, RTO) with a manual fallback; notification outbox
+     (Resend email, MSG91 SMS) with cron delivery; customer cancellation, staff refunds with webhook reconciliation, returns and
+     replacements; one shared order state machine (`src/types/orderStatus.ts`).
+   - Remaining: wire `DeliveryEstimate` into the PDP (storefront agent); customer UI for cancel / return / invoice download on
+     Account and Track Order; staff UIs for the new admin actions (Phase 3 consoles); WhatsApp channel; COD OTP confirmation;
+     storage-rules tests; real catalogue and prices; owner inputs below.
 3. **Operations consoles:** production queue with real DXF, QC/packing, shipping, finance,
    support, B2B, with an enforced order state machine.
    - **3a (done, branch `phase3a-consoles`):** role home dashboards; Production console (queue by stage, claim, stage moves,
@@ -124,7 +131,10 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
 
 - Firebase service-account credentials for the server, and a staging Firebase project for UAT.
 - Shiprocket account API credentials; email and SMS/WhatsApp notification providers.
-- Business GSTIN, state of registration and HSN codes for the products.
+- Business GSTIN, state of registration and HSN codes for the products (default HSN is 8306, alternative 7326 — confirm with the
+  CA), plus the GST treatment of shipping and the COD fee (implemented as taxable at the goods rate).
+- Resend account and verified sending domain; MSG91 account with DLT-registered sender ID and templates.
+- Shiprocket API user, pickup location nickname, COD enablement and webhook token.
 - Real catalogue, photographs and price list before launch.
 
 ## Storefront redesign notes (phase 4, first pass)
