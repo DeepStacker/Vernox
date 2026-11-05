@@ -2,6 +2,7 @@
  * Customer-side calls for the post-purchase APIs (API.md: order-status, order-cancel, return-request, invoice).
  * Access mirrors the server: a signed-in owner sends a bearer token; guests identify the order by its email.
  */
+import { fetchPublicOrderStatus } from '@/lib/data/orders';
 import { auth, app } from '@/lib/firebase';
 
 export interface OrderActionState {
@@ -39,19 +40,15 @@ async function readJson(res: Response): Promise<Record<string, unknown>> {
   return body;
 }
 
-/** Reads the action fields (canCancel, returnEligibleUntil, invoiceNumber, paymentMethod) straight from the API, which is authoritative. */
+/** The action fields (canCancel, returnEligibleUntil, invoiceNumber, paymentMethod) come from the same API summary as every other customer lookup. */
 export async function fetchOrderActionState(orderId: string, email?: string): Promise<OrderActionState> {
-  const params = new URLSearchParams({ orderId });
-  if (email) params.set('email', email);
-  const body = await readJson(await fetch(`/api/order-status?${params.toString()}`, { headers: await headers(false) }));
-  const o = (body.order ?? body) as Record<string, unknown>;
-  const tracking = (o.tracking ?? {}) as Record<string, unknown>;
+  const s = await fetchPublicOrderStatus(orderId, email);
   return {
-    paymentMethod: o.paymentMethod as OrderActionState['paymentMethod'],
-    invoiceNumber: (o.invoiceNumber as string | null | undefined) ?? null,
-    canCancel: o.canCancel === true,
-    returnEligibleUntil: typeof o.returnEligibleUntil === 'number' ? o.returnEligibleUntil : null,
-    trackingUrl: typeof tracking.url === 'string' ? tracking.url : typeof tracking.trackingUrl === 'string' ? tracking.trackingUrl : undefined,
+    paymentMethod: s.paymentMethod,
+    invoiceNumber: s.invoiceNumber ?? null,
+    canCancel: s.canCancel === true,
+    returnEligibleUntil: s.returnEligibleUntil ?? null,
+    trackingUrl: s.tracking?.url,
   };
 }
 

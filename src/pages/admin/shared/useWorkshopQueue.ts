@@ -4,7 +4,7 @@ import { useProducts } from '@/lib/data/products';
 import { DEFAULT_STORE_CONFIG, useStoreConfig } from '@/lib/data/settings';
 import { useAdminOrdersInStatuses } from '@/lib/data/orders';
 import type { OrderStatus } from '@/lib/orders/orderStateMachine';
-import { defaultLeadTimeDays, orderLeadTimeDays, slaState } from '@/lib/orders/productionQueue';
+import { defaultLeadTimeDays, orderLeadTimeDays, slaState, workshopQueryStatuses } from '@/lib/orders/productionQueue';
 import type { Order, Product } from '@/types/store';
 
 const NO_PRODUCTS: Product[] = [];
@@ -15,7 +15,7 @@ export function useWorkshopQueue(stages: readonly OrderStatus[]) {
   const products = useProducts().data ?? NO_PRODUCTS;
   const storeConfig = useStoreConfig().data ?? DEFAULT_STORE_CONFIG;
   const enabled = Boolean(permissions?.canManageProduction || permissions?.canManageOrders);
-  const feed = useAdminOrdersInStatuses(enabled, stages);
+  const feed = useAdminOrdersInStatuses(enabled, workshopQueryStatuses(stages));
   const defaultDays = defaultLeadTimeDays(storeConfig);
 
   const slaFor = useMemo(() => (order: Order) =>

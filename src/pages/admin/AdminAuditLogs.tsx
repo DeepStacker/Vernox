@@ -109,7 +109,7 @@ export function AdminAuditLogs() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="font-display text-3xl text-oxblood-deep">System Activity & Audit Logs</h2>
+          <h2 className="font-display text-3xl">Activity log</h2>
           <p className="text-muted-foreground text-sm">
             Tamper-evident administrative compliance trail tracking authentication, inventory adjustments, and catalog updates.
           </p>

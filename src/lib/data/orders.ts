@@ -8,16 +8,17 @@ import {
   useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData,
 } from '@tanstack/react-query';
 import {
-  collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter, updateDoc, where,
+  collection, doc, getDocs, limit, orderBy, query, startAfter, updateDoc, where,
   type DocumentData, type QueryDocumentSnapshot, type QueryConstraint,
 } from 'firebase/firestore';
 import { toast } from 'sonner';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { ROLE_PERMISSIONS, type StaffRole } from '@/lib/auth/permissions';
 import { assertClientTransition, normalizeOrderStatus, type OrderStatus } from '@/lib/orders/orderStateMachine';
 import type {
   CustomerAccount, Order, OrderItem, OrderTracking, PaymentStatus, PublicOrderSummary, StatusHistoryEntry,
 } from '@/types/store';
+import type { OrderOps } from '@/types/orderOps';
 import { logAudit } from './adminApi';
 import { errorMessage, stripUndefined } from './optimistic';
 
@@ -108,6 +109,50 @@ export function normalizeOrder(id: string, raw: Raw): Order {
     assignedTo: raw.assignedTo,
     adminNotes: raw.notes ?? raw.adminNotes,
     statusHistory: history,
+    ops: normalizeOps(raw),
+  };
+}
+
+const orNull = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
+const paise = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+
+/** Staff view of the server-written money, payment and shipment fields. Absent on pre-Phase-2 orders (defaults apply). */
+function normalizeOps(raw: Raw): OrderOps {
+  const a: Raw = raw.amounts ?? {};
+  const ship: Raw | null = raw.shipment && typeof raw.shipment === 'object' ? raw.shipment : null;
+  return {
+    paymentMethod: raw.paymentMethod === 'cod' || raw.paymentMethod === 'replacement' ? raw.paymentMethod : 'prepaid',
+    razorpayPaymentId: orNull(raw.razorpayPaymentId),
+    paidAt: toMillis(raw.paidAt) || null,
+    subtotalPaise: paise(a.subtotalPaise),
+    discountPaise: paise(a.discountPaise),
+    shippingPaise: paise(a.shippingPaise),
+    codFeePaise: paise(a.codFeePaise),
+    taxPaise: paise(a.taxPaise),
+    totalPaise: paise(a.totalPaise),
+    refundedPaise: paise(raw.refundedPaise),
+    refundPendingPaise: paise(raw.refundPendingPaise),
+    refunds: Array.isArray(raw.refunds)
+      ? raw.refunds.map((r: Raw) => ({ refundId: String(r.refundId ?? ''), amountPaise: paise(r.amountPaise), at: toMillis(r.at) }))
+      : [],
+    codCollectedPaise: paise(raw.codCollectedPaise),
+    codCollectedAt: toMillis(raw.codCollectedAt) || null,
+    deliveredAt: toMillis(raw.deliveredAt) || null,
+    invoiceNumber: orNull(raw.invoiceNumber),
+    flags: Array.isArray(raw.flags) ? raw.flags.filter((f: unknown): f is string => typeof f === 'string') : [],
+    shipment: ship
+      ? {
+          provider: ship.provider === 'shiprocket' ? 'shiprocket' : 'manual',
+          status: ship.status ?? 'created',
+          awb: orNull(ship.awb),
+          courier: orNull(ship.courier),
+          trackingUrl: orNull(ship.trackingUrl),
+          labelUrl: orNull(ship.labelUrl),
+          manifestUrl: orNull(ship.manifestUrl),
+          error: orNull(ship.error),
+        }
+      : null,
+    parentOrderId: orNull(raw.parentOrderId),
   };
 }
 
@@ -133,30 +178,17 @@ export function useMyOrders(uid: string | undefined) {
   });
 }
 
-export async function fetchOwnOrder(orderId: string): Promise<Order | null> {
-  const snap = await getDoc(doc(db, 'orders', orderId));
-  return snap.exists() ? normalizeOrder(snap.id, snap.data()) : null;
-}
-
-/** Guest-safe order lookup; the server only returns data when orderId and email match. */
-export async function fetchPublicOrderStatus(orderId: string, email: string): Promise<PublicOrderSummary> {
-  const params = new URLSearchParams({ orderId: orderId.trim(), email: email.trim() });
-  const res = await fetch(`/api/order-status?${params.toString()}`);
-  let body: Record<string, unknown> | null = null;
-  try {
-    body = (await res.json()) as Record<string, unknown>;
-  } catch {
-    body = null;
-  }
-  if (!res.ok || !body || body.success === false) {
-    const msg = (body?.message as string) || (res.status === 404 ? 'No order matches that number and email.' : `Lookup failed (${res.status}).`);
-    throw new Error(msg);
-  }
-  const order = (body.order ?? body) as Raw;
+/**
+ * Maps the `order` object of GET /api/order-status to the summary the storefront renders. The
+ * server owns canCancel and returnEligibleUntil (state machine and return window), so every
+ * customer lookup (guest or signed-in owner) reads them from here.
+ */
+export function parsePublicOrder(order: Raw, fallbackOrderId = ''): PublicOrderSummary {
   // /api/order-status returns `timeline` and `shipTo`; the other names cover the owner-read shape.
   const timeline = order.timeline ?? order.statusHistory;
+  const codFee = Number(order.pricing?.codFee ?? order.codFee);
   return {
-    orderId: String(order.orderId ?? order.id ?? orderId),
+    orderId: String(order.orderId ?? order.id ?? fallbackOrderId),
     orderNumber: String(order.orderNumber ?? ''),
     status: normalizeOrderStatus(order.status),
     placedAt: toMillis(order.placedAt) || undefined,
@@ -171,7 +203,34 @@ export async function fetchPublicOrderStatus(orderId: string, email: string): Pr
       : undefined,
     shippingCity: order.shipTo?.city ?? order.shippingCity ?? order.city,
     shippingState: order.shippingState ?? order.state,
+    paymentMethod: order.paymentMethod === 'cod' || order.paymentMethod === 'replacement' ? order.paymentMethod : 'prepaid',
+    invoiceNumber: typeof order.invoiceNumber === 'string' ? order.invoiceNumber : null,
+    canCancel: order.canCancel === true,
+    returnEligibleUntil: typeof order.returnEligibleUntil === 'number' ? order.returnEligibleUntil : null,
+    codFee: Number.isFinite(codFee) ? codFee : 0,
   };
+}
+
+/**
+ * Order lookup through /api/order-status. Guests identify the order with its email; a signed-in
+ * owner's bearer token is sent as well, so the email becomes optional for them.
+ */
+export async function fetchPublicOrderStatus(orderId: string, email?: string): Promise<PublicOrderSummary> {
+  const params = new URLSearchParams({ orderId: orderId.trim() });
+  if (email?.trim()) params.set('email', email.trim());
+  const user = auth.currentUser;
+  const res = await fetch(`/api/order-status?${params.toString()}`, user ? { headers: { Authorization: `Bearer ${await user.getIdToken()}` } } : undefined);
+  let body: Record<string, unknown> | null = null;
+  try {
+    body = (await res.json()) as Record<string, unknown>;
+  } catch {
+    body = null;
+  }
+  if (!res.ok || !body || body.success === false) {
+    const msg = (body?.message as string) || (res.status === 404 ? 'No order matches that number and email.' : `Lookup failed (${res.status}).`);
+    throw new Error(msg);
+  }
+  return parsePublicOrder((body.order ?? body) as Raw, orderId);
 }
 
 // ---------------------------------------------------------------- staff reads
@@ -245,6 +304,18 @@ export async function searchOrdersRemote(term: string): Promise<Order[]> {
     ? query(collection(db, 'orders'), where('email', '==', t.toLowerCase()), orderBy('placedAt', 'desc'), limit(50))
     : query(collection(db, 'orders'), where('orderNumber', '==', t.toUpperCase()), limit(5));
   return (await getDocs(byField)).docs.map(fromSnapshot);
+}
+
+/** Upper bound for one date-range export; the result says when it was truncated. */
+export const EXPORT_ORDER_LIMIT = 2000;
+
+/** Orders placed in [from, to] (epoch ms), oldest first, for finance exports. Uses the single-field `placedAt` index. */
+export async function fetchOrdersBetween(from: number, to: number): Promise<{ orders: Order[]; truncated: boolean }> {
+  const snap = await getDocs(
+    query(collection(db, 'orders'), where('placedAt', '>=', from), where('placedAt', '<=', to), orderBy('placedAt', 'asc'), limit(EXPORT_ORDER_LIMIT + 1)),
+  );
+  const orders = snap.docs.slice(0, EXPORT_ORDER_LIMIT).map(fromSnapshot);
+  return { orders, truncated: snap.docs.length > EXPORT_ORDER_LIMIT };
 }
 
 /** Customers are derived from loaded orders; there is no client read of the users collection. */

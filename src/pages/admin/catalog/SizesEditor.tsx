@@ -38,10 +38,10 @@ export function SizesEditor({ draft, gstRatePercent, currency, errors, onChange 
               {cm ? `${cm} · ` : ''}
               {p.price === null ? 'Enter price and difference to preview' : (
                 <>Unit price <strong className="text-foreground">{fmt(p.price)}</strong> + GST = {fmt(Math.round(p.price * (1 + gstRatePercent / 100)))}
-                  {p.mrp ? <> · MRP {fmt(p.mrp)} · <strong className="text-[#1D5E37]">{p.discountPercent}% off</strong></> : null}</>
+                  {p.mrp ? <> · MRP {fmt(p.mrp)} · <strong className="text-emerald-700">{p.discountPercent}% off</strong></> : null}</>
               )}
             </p>
-            {err && <p role="alert" className="text-xs text-[#9B1C2E]">{err}</p>}
+            {err && <p role="alert" className="text-xs text-destructive">{err}</p>}
           </div>
         );
       })}

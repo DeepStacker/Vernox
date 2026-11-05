@@ -45,7 +45,7 @@ export function AdminProducts() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="font-display text-3xl text-oxblood-deep">Catalog</h2>
+          <h2 className="font-display text-3xl">Catalog</h2>
           <p className="text-sm text-muted-foreground">{products.length} products, {products.reduce((n, p) => n + p.stock, 0)} units in stock.</p>
         </div>
         <button type="button" onClick={() => setForm({ open: true, product: null, template: null })}
@@ -55,7 +55,7 @@ export function AdminProducts() {
       </div>
 
       {sampleCount > 0 && (
-        <p className="rounded-lg border border-[#C6A15B]/40 bg-[#FFF8E6] p-3 text-sm text-[#8C6219]">
+        <p className="rounded-lg border border-amber-400/40 bg-amber-50 p-3 text-sm text-amber-800">
           {sampleCount} product(s) are sample placeholders. Use the "Sample products" filter to find them, replace the details and photos, then untick "Sample product" in the form.
         </p>
       )}
@@ -97,7 +97,7 @@ export function AdminProducts() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 font-semibold">
                         <span className="truncate">{p.name}</span>
-                        {p.isSample && <span className="shrink-0 rounded-full border border-[#C6A15B]/50 bg-[#FFF8E6] px-2 py-0.5 text-[10px] font-bold uppercase text-[#8C6219]">Sample</span>}
+                        {p.isSample && <span className="shrink-0 rounded-full border border-amber-400/50 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-800">Sample</span>}
                       </div>
                       <div className="font-mono text-[11px] text-muted-foreground">{p.slug}</div>
                     </div>

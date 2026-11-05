@@ -22,7 +22,7 @@ interface JobCardProps {
 export function JobCard({ order, sla, who, nextStage, canWrite, busy, onOpen, onClaim, onAdvance, onPrint }: JobCardProps) {
   const mine = isAssignedTo(order, who);
   return (
-    <article className={`rounded-xl border bg-card p-3 shadow-soft space-y-2 ${sla.level === 'overdue' ? 'border-[#9B1C2E]/50' : 'border-border/70'}`}>
+    <article className={`rounded-xl border bg-card p-3 shadow-soft space-y-2 ${sla.level === 'overdue' ? 'border-destructive/50' : 'border-border/70'}`}>
       <button type="button" onClick={onOpen} className="block w-full text-left">
         <div className="flex items-start justify-between gap-2">
           <span className="font-mono text-sm font-bold">{order.orderNumber || order.id}</span>

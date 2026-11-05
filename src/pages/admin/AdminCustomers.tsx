@@ -62,7 +62,7 @@ export function AdminCustomers() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="font-display text-3xl text-oxblood-deep">Customer Directory</h2>
+          <h2 className="font-display text-3xl">Customers</h2>
           <p className="text-muted-foreground text-sm">
             Overview of registered collectors, order frequency, lifetime spend, and geographical destinations.
           </p>

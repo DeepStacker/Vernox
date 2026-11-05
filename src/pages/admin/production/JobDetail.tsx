@@ -55,7 +55,7 @@ export function JobDetail({ order, products, onClose }: { order: Order | null; p
                       ))}
                     </div>
                     {warnings.length > 0 && (
-                      <ul className="space-y-1 text-xs text-[#8C6219]">
+                      <ul className="space-y-1 text-xs text-amber-800">
                         {warnings.map((w, i) => (
                           <li key={i} className="flex gap-1.5"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />{w}</li>
                         ))}

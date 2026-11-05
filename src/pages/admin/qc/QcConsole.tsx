@@ -27,11 +27,11 @@ export function QcConsole() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h2 className="font-display text-3xl text-oxblood-deep">Quality check and packing</h2>
+        <h2 className="font-display text-3xl">Quality check and packing</h2>
         <p className="text-sm text-muted-foreground">Inspect every item, record the package size and weight, then mark the order packed.</p>
       </div>
       {queue.error && (
-        <p role="alert" className="rounded-lg border border-[#9B1C2E]/30 bg-[#FDE8EC] p-3 text-sm text-[#9B1C2E]">Could not load orders: {queue.error.message}</p>
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">Could not load orders: {queue.error.message}</p>
       )}
       {queue.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
 

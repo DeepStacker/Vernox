@@ -8,12 +8,12 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 - **Blocked cases:** a case marked `Blocked: Phase N` depends on a feature that is not built yet. The phases come from `ROADMAP.md`:
   1. Foundation
   2. India commerce (pincode serviceability, COD, GST invoice, courier, notifications, cancellation, returns)
-  3. Operations consoles. 3a (done): role home, production, QC and packing, support, trade enquiries, catalog manager, staff screen. 3b (pending): shipping, finance, returns
+  3. Operations consoles. 3a (done): role home, production, QC and packing, support, trade enquiries, catalog manager, staff screen. 3b (done): shipping, finance, returns consoles, business settings, admin visual pass
   4. Storefront redesign
   5. UAT
 
   Do not execute a blocked case until its phase ships; re-baseline it then. Cases with no marker are testable on the current build.
-- **Roles:** the admin role names below are logical roles. Production, QC and packing, Support and Trade enquiries have their own consoles since Phase 3a; Shipping and Finance still use the generic Orders and Analytics tabs until Phase 3b (see Section 12, role permission tests).
+- **Roles:** the admin role names below are logical roles. Production, QC and packing, Support and Trade enquiries have their own consoles since Phase 3a; Shipping, Returns and Finance since Phase 3b (see Section 12, role permission tests).
 - **Test data:** use the test cards, UPI IDs and netbanking banks published by the payment gateway for test mode. Never use real card data.
 - **Sign-off:** launch requires all non-blocked cases to pass, and all blocked cases to pass after their phase ships.
 
@@ -169,14 +169,14 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 
 | ID | Case | Preconditions | Steps | Expected result | Result |
 |---|---|---|---|---|---|
-| SH-01 | Rate and courier choice | Packed order | Open shipping console | Serviceable couriers with rates and ETA shown | Blocked: Phase 3b |
-| SH-02 | Book courier and AWB | Same | Book | `CREATE_SHIPMENT` (Shiprocket): invoice issued, AWB, label and manifest stored, order stays Packed (`shipment.status: awb_assigned`) until the pickup scan; manual: courier + AWB entered, order Shipped | Testable via API (UI: Phase 3b) |
+| SH-01 | Rate and courier choice | Packed order | Open Shipping, queue "Ready to ship" | The order shows with its package size and weight (from QC) and COD amount. Courier rates and ETA are not shown (Shiprocket picks the courier at booking) | Partly built: no rate list |
+| SH-02 | Book courier and AWB | Same | Book | Shipping > Create shipment. Shiprocket (needs the server credentials): package prefilled from QC; invoice issued, AWB, label and manifest links on the card, order stays Packed (`awb_assigned`) until the pickup scan. Manual (courier, AWB, optional tracking link): order moves to Shipped. With seller details missing in Settings, a warning with an "Open Settings" link shows before booking and the server refusal is explained | Testable in the UI |
 | SH-03 | Customer tracking | Shipped order | Customer opens `/track-order` | Shows courier, AWB, live status link | |
 | SH-04 | Shipping notification | Shipped order | Check email, SMS or WhatsApp | Message with AWB and tracking link | Needs Resend / MSG91 configured |
 | SH-05 | Courier status webhook | Shipped order | Send test webhook: In transit, Out for delivery, Delivered | Webhook with `x-api-key` moves Shipped → Out_For_Delivery → Delivered; repeated events ignored; wrong token 401 | |
-| SH-06 | Delivery failed / RTO | Shipped order | Send NDR and RTO webhook | RTO INITIATED / RTO DELIVERED webhooks move the order to RTO_Initiated / RTO_Delivered; staff `CANCEL_ORDER` then refunds (prepaid) or issues a credit note (COD). Support task: Phase 3 | Partly testable via API (Support task: Phase 3b) |
-| SH-07 | COD remittance | COD order delivered | Record courier remittance | Matches COD amount; Finance sees it | Blocked: Phase 3b |
-| SH-08 | Cancel shipment | Booked, not picked up | Cancel AWB | `CANCEL_SHIPMENT` while Packed cancels the Shiprocket order; order stays Packed with shipment cancelled; refused after pickup | Testable via API (UI: Phase 3b) |
+| SH-06 | Delivery failed / RTO | Shipped order | Send NDR and RTO webhook (Shiprocket) or use the manual buttons "Return to sender started" and "Back at workshop" (manual shipments); then "Cancel order and refund" in the "Returning to sender" queue | Order moves to RTO_Initiated / RTO_Delivered; cancelling returns stock and refunds (prepaid, when the role may refund) or issues a credit note (COD). Shipping staff without `orders.refund` can cancel only; finance refunds. Support task for the customer call: not built | Testable in the UI |
+| SH-07 | COD remittance | COD order delivered | Mark the manual shipment Delivered (or Shiprocket webhook) | Cash is recorded as collected (`codCollectedPaise`); Finance shows it under "COD collected". Matching the courier's remittance statement to bank deposits is not built | Partly built |
+| SH-08 | Cancel shipment | Booked, not picked up | Shipping > Cancel shipment (reason) | Cancels the Shiprocket order; order stays Packed with the shipment cancelled and can be booked again; the button is absent once the order is Shipped | Testable in the UI (Shiprocket) |
 | SH-09 | RTO round trip | Shipped Shiprocket order | Send RTO INITIATED, then RTO DELIVERED webhooks; `CANCEL_ORDER` | RTO_Initiated → RTO_Delivered → Cancelled; prepaid: refund; COD: credit note `CN/…` | Testable via API |
 
 ## 8. Finance
@@ -184,14 +184,14 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | ID | Case | Preconditions | Steps | Expected result | Result |
 |---|---|---|---|---|---|
 | FN-01 | Revenue overview | Orders exist | Open dashboard | Gross, discounts, net, order counts match order list | |
-| FN-02 | GST invoice | Paid order | Generate invoice | Issued automatically at `CREATE_SHIPMENT`: next sequential number for the financial year, correct GSTIN, HSN, tax split by state, total equals the order total; immutable | Testable via API (UI: Phase 3b) |
-| FN-03 | Credit note | Refunded order | Generate | Refund on an invoiced order creates `CN/YY-YY/NNNNNN` against the invoice with tax reversed pro rata | Testable via API (UI: Phase 3b) |
-| FN-04 | Full refund | Paid order cancelled | Refund full | `CREATE_REFUND` full amount: Razorpay refund created; after the webhook the order is Refunded; refund notification queued | Testable via API (UI: Phase 3b) |
-| FN-05 | Partial refund | Paid order, one item returned | Refund part | `CREATE_REFUND` partial: order Partially_Refunded; ceiling = collected − refunded − pending; audited | Testable via API (UI: Phase 3b) |
-| FN-06 | Refund over limit | Paid order | Try refund above paid amount | `CREATE_REFUND` above the refundable balance returns 409 CONFLICT | Testable via API (UI: Phase 3b) |
-| FN-07 | Gateway reconciliation | A day of orders | Compare gateway settlement report to the system | Every payment matched; unmatched list is empty or explained | Blocked: Phase 3b |
-| FN-08 | COD reconciliation | COD orders delivered | Compare courier remittance to orders | Differences listed | Blocked: Phase 3b |
-| FN-09 | Export | None | Export orders CSV for a date range | Complete, correct totals, no PII beyond need | Blocked: Phase 3b |
+| FN-02 | GST invoice | Paid order | Ship the order, then Finance > select the order > Invoice PDF | Issued automatically at `CREATE_SHIPMENT`: next sequential number for the financial year, correct GSTIN, HSN, tax split by state, total equals the order total; immutable; the PDF downloads | Testable in the UI |
+| FN-03 | Credit note | Refunded order | Refund an invoiced order, then open it in Finance | Refund creates `CN/YY-YY/NNNNNN` against the invoice with tax reversed pro rata, listed with its PDF | Testable in the UI |
+| FN-04 | Full refund | Paid order cancelled | Refund full | Finance > Create refund, "Full", method Razorpay (needs a Razorpay payment): refund shows "waiting for Razorpay"; after the `refund.processed` webhook the order is Refunded; refund notification queued | Testable in the UI (Razorpay test mode) |
+| FN-05 | Partial refund | Paid order, one item returned | Refund part | Finance > Create refund with a smaller amount; method Razorpay, or Manual with the bank/UPI reference (COD orders). Order Partially_Refunded; "Refundable now" = collected − refunded − pending; audited; the dialog uses one idempotency key per attempt | Testable in the UI |
+| FN-06 | Refund over limit | Paid order | Try refund above paid amount | Enter more than "Refundable now": the dialog shows the ceiling and blocks the button; if another refund lands meanwhile the server's 409 text is shown in the dialog | Testable in the UI |
+| FN-07 | Gateway reconciliation | A day of orders | Finance > Reconciliation, compare with the gateway settlement report | Lists: prepaid orders paid without a payment id, flagged payments (`Payment_Discrepancy`, amount mismatch, duplicate payment, refund not started), refunds waiting for the webhook. Importing the gateway settlement file is not built; compare by payment id | Partly built |
+| FN-08 | COD reconciliation | COD orders delivered | Finance > Payments (COD pending / COD collected) and Reconciliation ("Delivered COD, cash not recorded"); Export > Cash on delivery | Expected, collected and outstanding per COD order. Courier remittance statements are not imported | Partly built |
+| FN-09 | Export | None | Finance > Export: choose dates, download Orders (GST split), Refunds, Cash on delivery | CSV per file for the IST date range; CGST+SGST when the delivery state equals the seller state, else IGST (empty when the seller state is unset); no names, emails, phones or addresses; formulas are neutralised. Truncation warning above 2000 orders | Testable in the UI |
 | FN-10 | Intra- vs inter-state GST | Seller in Karnataka (29) | Ship one order to Bengaluru, one to Mumbai; open both invoices | Bengaluru: CGST + SGST each 9%; Mumbai: IGST 18%; totals equal the amounts charged | Testable via API |
 | FN-11 | Invoice numbering across FY boundary | Staging clock or orders dispatched 31 Mar 23:xx and 1 Apr 00:xx IST | Dispatch both | `VX/26-27/…` last number, then `VX/27-28/000001`; no gaps within a year | Testable via API |
 | FN-12 | Refund not double counted | Razorpay test mode | `CREATE_REFUND` partial, then let `refund.processed` arrive (and replay it) | `refundedPaise` increases once; one refund record, one credit note, one notification | Testable via API |
@@ -204,12 +204,12 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | SP-01 | Look up order | None | Support console: search by order number, phone, email, pincode, name | Matching orders listed; detail shows customer, items, totals, timeline | |
 | SP-02 | Handle contact message | CG-30 done | Open message, reply, close | Status tracked | Blocked: Phase 3b |
 | SP-03 | Handle B2B enquiry to quote | CG-29 done | Trade enquiries: open the enquiry, mark Contacted, then Quoted, Won or Lost | Status saved and shown in the list filter. Sending a quote document and converting to an order are not built | |
-| SP-04 | Process return request | CS-11 done | Approve, arrange pickup, mark received, trigger refund or replacement | `APPROVE_RETURN` → `MARK_RETURN_RECEIVED`: refund resolution → finance `CREATE_REFUND`; replacement resolution → linked zero-value order in Paid | Testable via API (UI: Phase 3b) |
-| SP-05 | Reject return | CS-11 done | Reject with reason | `REJECT_RETURN` with reason: order back to Delivered; customer notification carries the reason | Testable via API (UI: Phase 3b) |
-| SP-06 | Support cannot refund | Support login | Look for refund actions; try a status change or note | No refund or status controls; notes box shows a read-only message | |
+| SP-04 | Process return request | CS-11 done | Returns > To review: read reason, details and photos; Approve (refund or replacement, optional message); then "Awaiting parcel" > Mark received (optionally restock) | Refund resolution: "Received" shows "Go to Finance", where finance issues the refund; replacement resolution: a linked zero-value order is created in Paid. Photos load for staff with `orders.read` | Testable in the UI |
+| SP-05 | Reject return | CS-11 done | Returns > Reject (reason required) | Order back to Delivered; the customer notification carries the reason | Testable in the UI |
+| SP-06 | Support cannot refund | Support login | Look for refund actions or status changes | No Finance, Shipping or Returns tabs; no status controls; `CREATE_REFUND` by API returns 403 | |
 | SP-07 | Customer summary and snippets | Customer with 2 orders | Open an order in Support | Order count, lifetime value and last order shown; Status, Delay and (when tracking exists) Tracking snippets can be copied; WhatsApp opens `wa.me/91<phone>` with the text | |
 | SP-08 | Order not in the loaded page | Older order | Search its order number or email, then "Search all orders" | Order found | |
-| SP-09 | Internal note | Order manager login | Add a note on an order | Appears with author and UTC time; support role sees notes read-only | |
+| SP-09 | Internal note | Order manager or Support login | Add a note on an order | Appears with author and UTC time. Support adds notes through `ADD_ORDER_NOTE` (server-side, `customers.read`); QC and package data in the same field are preserved. Finance has no note box (403) | |
 
 ## 10. Super admin
 
@@ -229,13 +229,13 @@ Run these as scripted scenarios across roles. Each step references the case that
 
 | ID | Scenario | Steps (role: case) | Expected result | Result |
 |---|---|---|---|---|
-| E2E-01 | Catalog product, UPI, delivered | Catalog: CM-01, CM-04. Guest: CG-05, CG-08, CG-11, CG-15. Order: OM-01, OM-05. Production: PR-02, PR-04. QC: QC-01, QC-04. Shipping: SH-02. Courier webhook: SH-05. Finance: FN-02. | Order flows Paid, In production, Packed, Shipped, Delivered with invoice; every status visible to the customer | Blocked: Phase 3b |
-| E2E-02 | Custom studio design order | Guest: CG-26 then CG-16. Order: OM-10. Production: PR-02. Then as E2E-01 from QC | The DXF matches the ordered design; delivered product matches dimensions within tolerance | Blocked: Phase 3b |
+| E2E-01 | Catalog product, UPI, delivered | Catalog: CM-01, CM-04. Guest: CG-05, CG-08, CG-11, CG-15. Order: OM-01, OM-05. Production: PR-02, PR-04. QC: QC-01, QC-04. Shipping: SH-02. Courier webhook: SH-05. Finance: FN-02. | Order flows Paid, In production, Packed, Shipped, Delivered with invoice; every status visible to the customer | Testable in the UI (the COD variant was run end to end on the local stack) |
+| E2E-02 | Custom studio design order | Guest: CG-26 then CG-16. Order: OM-10. Production: PR-02. Then as E2E-01 from QC | The DXF matches the ordered design; delivered product matches dimensions within tolerance | Testable in the UI |
 | E2E-03 | Payment abandon then release | Guest: CG-21 | Stock reserved at checkout start, released after timeout; second customer can buy last unit | |
-| E2E-04 | Cancellation with refund | Customer: CS-09. Finance: FN-04 | Stock restored, full refund, notification | Testable via API (UI: Phase 3b) |
-| E2E-05 | Return, partial refund | Customer: CS-11. Support: SP-04. Finance: FN-05, FN-03 | Credit note and partial refund reconcile (FN-07) | Testable via API (UI: Phase 3b) |
-| E2E-06 | Replacement for damaged item | Customer: CS-11. Support: SP-04 (replacement) | New production order linked to original at zero price | Testable via API (UI: Phase 3b) |
-| E2E-07 | COD order to remittance | Guest: CG-18. Ship: SH-02, SH-05, SH-07. Finance: FN-08 | COD collected amount reconciles | Blocked: Phase 3b |
+| E2E-04 | Cancellation with refund | Customer: CS-09. Finance: FN-04 | Stock restored, full refund, notification | Testable in the UI |
+| E2E-05 | Return, partial refund | Customer: CS-11. Support: SP-04. Finance: FN-05, FN-03 | Credit note and partial refund reconcile (FN-07) | Testable in the UI |
+| E2E-06 | Replacement for damaged item | Customer: CS-11. Support: SP-04 (replacement) | New production order linked to original at zero price | Testable in the UI |
+| E2E-07 | COD order to remittance | Guest: CG-18. Ship: SH-02, SH-05, SH-07. Finance: FN-08 | COD collected amount reconciles (FN-08) | Testable in the UI; courier remittance import not built |
 | E2E-08 | B2B enquiry to paid order | Guest: CG-29. Support: SP-03. Customer pays quote | Quote converts to order with agreed price | Blocked: Phase 3b |
 | E2E-09 | Review lifecycle | Customer: CS-07. Catalog: CM-11 | Review public only after approval; rating updates | |
 
@@ -249,9 +249,9 @@ Each role must be refused actions that belong to other roles. Test by UI (action
 | RP-02 | Order manager | Edit product price or stock; issue refunds; edit roles | |
 | RP-03 | Production | See customer phone, email or payment data in the console; edit orders other than stage, assignment and notes; refund; open Analytics, Customers, Team | |
 | RP-04 | QC and packing (production role) | Move Quality Check to Packed without a complete checklist and package details; edit prices; refund | |
-| RP-05 | Shipping | See Production, QC, Support or Trade tabs; change prices; refund; edit products | |
-| RP-06 | Finance | See Production, QC, Support or Trade tabs; edit products; change order status; edit roles | |
-| RP-07 | Support | Edit products; change order status or add notes; refund; change roles; open Production, QC or Team | |
+| RP-05 | Shipping | See Production, QC, Support, Trade or Finance tabs; change prices; refund (`CREATE_REFUND` and `CANCEL_ORDER` with refund return 403); edit products | |
+| RP-06 | Finance | See Production, QC, Support, Trade, Shipping or Returns tabs; book shipments (`CREATE_SHIPMENT` 403); edit products; change order status; add notes; edit roles | |
+| RP-07 | Support | Edit products; change order status; refund; change roles; open Production, QC, Shipping, Returns, Finance or Team. Support CAN add internal notes (`ADD_ORDER_NOTE`) | |
 | RP-08 | Any admin | Escalate own role by API call | |
 | RP-09 | Signed-out user | Open `/admin` or call admin APIs | Redirected to sign-in; API returns 401 | |
 | RP-11 | Catalog manager | Open Production, QC, Support or Trade enquiries | |

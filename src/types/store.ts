@@ -5,6 +5,7 @@
 import type { Product, ProductCategory } from '@/lib/catalog';
 import type { OrderStatus } from '@/lib/orders/orderStateMachine';
 import type { StaffRole } from '@/lib/auth/permissions';
+import type { OrderOps } from './orderOps';
 
 export type { Product, ProductCategory, OrderStatus };
 
@@ -90,6 +91,10 @@ export interface StoreConfig {
   codFee?: number;
   codMaxOrderValue?: number;
   returnWindowDays?: number;
+  defaultLeadTimeDays?: number;
+  customLeadTimeDays?: number;
+  /** Supplier block printed on GST invoices (public business details only). */
+  seller?: Partial<SellerSettings>;
   /** Storefront contact details. */
   whatsappNumber?: string;
   supportPhone?: string;
@@ -98,6 +103,7 @@ export interface StoreConfig {
   workshopAddress?: string;
 }
 
+import type { SellerSettings } from './settings';
 export type { SellerSettings, StoreSettingsDoc } from './settings';
 
 export interface OrderItem {
@@ -162,6 +168,8 @@ export interface Order {
   assignedTo?: string;
   adminNotes?: string;
   statusHistory: StatusHistoryEntry[];
+  /** Staff-only money, payment and shipment fields; present when the document carries them (orderOps.ts). */
+  ops?: OrderOps;
 }
 
 /** Server response for GET /api/order-status (public, no PII beyond the caller's own email). */
@@ -185,6 +193,8 @@ export interface PublicOrderSummary {
   canCancel?: boolean;
   /** Epoch ms until which POST /api/return-request is accepted, or null. */
   returnEligibleUntil?: number | null;
+  /** COD fee in rupees (0 for prepaid). */
+  codFee?: number;
 }
 
 export interface StaffMember {

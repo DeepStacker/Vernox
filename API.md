@@ -121,6 +121,7 @@ POST body / GET query: `{ "action": "...", ... }` → `200 { "success": true, ..
 | `LOG_AUDIT` | POST | any staff | `eventAction, targetType, targetId?, details?` (stored with `source: 'client_reported'`) |
 | `LIST_STAFF` | GET | `staff.read` | → `{ staff: StaffMember[] }` |
 | `SET_STAFF_ROLE` | POST | `staff.manage` | `email` or `uid`, `role: StaffRole \| null` → `{ staff }`; cannot change own role |
+| `ADD_ORDER_NOTE` | POST | `customers.read` | `orderId, note (1–500)` | `{ orderId, notes }` — appends `[YYYY-MM-DD HH:mm UTC <email>] note` to `orders.notes` in a transaction and keeps the `#vernox:v1` block; for roles that cannot write orders (support). 400 when `notes` would exceed 20 000 characters |
 | `UPDATE_ORDER_STATUS` | POST | `orders.update_status` (+ `orders.tracking` for `tracking`) | `orderId, status` (workshop stage: `In_Design`, `Cutting`, `Finishing`, `Quality_Check`, `Packed`), `note?, tracking?` |
 | `SAVE_COUPON` | POST | `coupons.write` | `coupon` (code unique, upper-cased; `usedCount` is server-maintained) |
 | `DELETE_COUPON` | POST | `coupons.write` | `couponId` |

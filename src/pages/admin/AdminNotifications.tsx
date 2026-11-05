@@ -120,7 +120,7 @@ export function AdminNotifications({ onSelectTab }: AdminNotificationsProps) {
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
       <div>
-        <h2 className="font-display text-3xl text-oxblood-deep">Operational Notifications</h2>
+        <h2 className="font-display text-3xl">Notifications</h2>
         <p className="text-muted-foreground text-sm">
           Real-time alerts regarding production queue thresholds, finite inventory limits, and payment status.
         </p>

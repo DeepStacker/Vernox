@@ -111,8 +111,15 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
      production files, job sheet print); QC and packing console (checklist, rework, package data, packing slip); Support console
      (search, timeline, notes, WhatsApp snippets); Trade enquiries; catalog manager (full product form, sizes preview, sample filter);
      staff screen guidance; analytics reduced to real order metrics. QC and package data live in `orders.notes` (DATABASE.md).
-   - **3b (pending):** shipping console (needs Phase 2 shipments), finance console (refunds, invoices, reconciliation, CSV export),
-     returns console. Reuse `src/pages/admin/shared` and `src/lib/orders/productionQueue.ts`.
+   - **3b (done, branch `phase3b-consoles`):** Shipping console (`orders.tracking`: queue of packed, in-transit and returning-to-sender orders; Shiprocket
+     or manual booking; cancel shipment before pickup; manual delivery-status buttons; RTO cancel-and-refund; per-order label links and a printable
+     label for manual shipments), Finance console (`orders.refund` / `reports.export`: payments, COD pending and collected, refunds with the refund
+     ceiling, invoices and credit notes as PDFs, reconciliation lists, CSV export with GST split), Returns console (`orders.update_status`: reason,
+     details and photos; approve as refund or replacement, reject with reason, mark received), business settings form (seller/GSTIN, contact, COD,
+     lead times, return window), `ADD_ORDER_NOTE` so support can add notes, one admin shell and shared UI components, COD orders in the production
+     queue, and the customer order summary reading the same API shape on every path.
+   - **Not built (3b):** courier rate list and ETA at booking; bulk label or manifest printing (the API is per order); importing Razorpay settlement
+     or courier remittance files (reconciliation compares loaded orders only); hold status and material-shortage flag (below).
 4. **Storefront redesign:** simpler navigation, shop by room/theme, filters, PDP with MRP,
    delivery estimate, room view and trust, SEO and performance.
 5. **UAT:** scripted end-to-end scenarios per role (see `UAT.md` once written) on a staging project.
@@ -162,7 +169,7 @@ customer's own wall answers the buying question at a fraction of the cost.
 - Light theme only (the old `.dark` block duplicated the light values). Legacy colour tokens remain as aliases for account, checkout and admin screens.
 - Not built (no backend yet): newsletter signup, contact-form storage (the form opens email/WhatsApp), review submission, EMI messaging, save-for-later.
 
-## Phase 3a follow-ups
+## Phase 3a follow-ups (status after 3b)
 
 - `TODO(catalog-images)`: product images are URL fields. File upload needs `storage.rules` (owned by the commerce backend work) and an
   upload field in `src/pages/admin/catalog/ProductFormDialog.tsx`; QC "photo taken" is a tick for the same reason (store the photo
@@ -172,9 +179,9 @@ customer's own wall answers the buying question at a fraction of the cost.
   messages[{ at, by, direction, text }], createdAt, updatedAt }`, readable by `customers.read`, writable by a new `tickets.write`
   permission (support, order manager) so support no longer needs `orders.update_status` just to leave a note; contact-form
   submissions would create tickets.
-- Support role cannot add order notes today (no `orders.update_status`; rules allow order updates only to production, shipping,
-  order manager and admins). The `tickets` collection above is the intended fix.
-- `defaultLeadTimeDays` (SLA fallback, default 7) is read from `settings/store` when present; add it to the settings form and the
-  `StoreConfig` type when `src/types` is next touched.
+- Done in 3b: support adds order notes through the `ADD_ORDER_NOTE` server action (permission `customers.read`), which appends inside a transaction and
+  keeps the `#vernox:v1` block. Firestore rules are unchanged. The `tickets` collection above is still the answer for real ticketing (contact-form
+  messages, assignment), not for notes.
+- Done in 3b: `defaultLeadTimeDays` and `customLeadTimeDays` are in the settings form and the `StoreConfig` type.
 - Workshop queues load up to 200 orders per status group; move to counters or a dedicated `workshop` index if volume exceeds that.
 - Hold status and material-shortage flag (UAT OM-06, PR-06) need new order statuses in the shared state machine.

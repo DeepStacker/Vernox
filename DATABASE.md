@@ -27,7 +27,10 @@ fields; `npm run seed` writes the same defaults). **Public document: never store
 `customLeadTimeDays`, `manualTransitDays`, `defaultHsnCode`,
 `seller: { legalName, tradeName, gstin, address, city, state, stateCode (2-digit GST code = GSTIN prefix), pincode, email, phone }`
 (printed on invoices; invoices cannot be issued until legalName, gstin, address, state, stateCode and pincode are set),
-storefront contact `whatsappNumber`, `supportPhone`, `supportEmail`, `supportHours`, `workshopAddress`.
+storefront contact `whatsappNumber`, `supportPhone`, `supportEmail`, `supportHours`, `workshopAddress` (empty = hidden on the storefront).
+The admin Settings screen edits `seller`, the contact fields, `codEnabled`, `codFee`, `codMaxOrderValue`, `defaultLeadTimeDays`,
+`customLeadTimeDays` and `returnWindowDays` (form model and GSTIN check: `src/pages/admin/settings/settingsForm.ts`, mirroring
+`GSTIN_PATTERN` in `api/_lib/storeConfig.ts`).
 
 ### `orders/{orderId}` — written only by the API (`api/_lib/orders.ts`)
 `id`, `orderNumber` (`VX-YYYYMMDD-XXXXXX`, also the Razorpay receipt), `status` (see lifecycle), `statusHistory[{ status, at, by,
@@ -47,13 +50,15 @@ charges[{ kind: shipping|cod_fee, taxablePaise, gstRateBps, taxPaise }] }`, per 
 `cancelledAt`/`cancellationReason`/`cancelledBy`, `parentOrderId`/`replacementOrderId`. Orders created before Phase 2 lack these;
 readers default them (`paymentMethod` prepaid, no tax breakdown — the invoice reconstructs it).
 Staff-editable (rules): `status` (fulfilment moves only), `statusHistory`, `assignedTo`, `tracking{ carrier, trackingNumber, url }`,
-`notes`, `updatedAt`.
+`notes`, `updatedAt`. Roles without write access to orders (support) add notes through the `ADD_ORDER_NOTE` action, which writes `notes` on the
+server. The staff consoles read the money, payment, refund and shipment fields above straight from the order (`orders.read` roles may read the
+whole document): see `OrderOps` in `src/types/orderOps.ts`.
 `notes` is a string with two parts (parser: `src/lib/orders/orderNotes.ts`): free text (one `[YYYY-MM-DD HH:mm UTC <email>] text`
 line per internal note) and, as the LAST line, an optional structured block `#vernox:v1 <compact JSON>`:
 `{"qc":{"<itemId>":{"outcome":"pass|fail","checks":{"dimensions","finish","edges","hardware","photo": bool},"at","by","reason?"}},
 "qcLog":[{"itemId","outcome","at","by","reason?"}] (last 50, append-only),"package":{"lengthCm","widthCm","heightCm","weightKg","at","by"}}`.
 `qc` holds the latest result per item and is cleared when QC fails an order (so rework is re-inspected); `qcLog` keeps every
-attempt with its reason; `package` is read by the shipping step (Phase 3b). A block that does not parse is kept as plain text and
+attempt with its reason; `package` is read by the Shipping console (length, width as `breadthCm`, height, weight prefill the Shiprocket booking). A block that does not parse is kept as plain text and
 never discarded. Staff write it through the console helpers only; any editor of `notes` must go through `withFreeText`/`appendNote`
 so the block survives. Plain legacy notes need no migration.
 Display copies written once at creation for the existing admin UI (do not use for money logic): `subtotal`, `discount`,
@@ -92,7 +97,9 @@ Phase 2 (India commerce):
   pending|processed|failed, requestedBy, providerRefundId (Razorpay id or manual bank/UPI reference), createdAt, processedAt,
   error, creditNoteId, creditNoteNumber }`. `ext_{rfnd_id}` documents record refunds made outside the store.
 - `returns/{orderId}` — `{ status: requested|approved|rejected|received, reason, details, photoPaths[], resolution:
-  refund|replacement|null, decisionNote, replacementOrderId, requestedAt, decidedAt, decidedBy, receivedAt }`.
+  refund|replacement|null, decisionNote, replacementOrderId, requestedAt, decidedAt, decidedBy, receivedAt }`. `photoPaths` are Storage
+  paths `returns/{orderId}/{file}`; staff with `orders.read` may read them (storage.rules) and the Returns console loads them with
+  `getDownloadURL`.
 - `notifications_outbox/{orderId}_{event}[_{refundId}]` — `{ event, payload (customer name/email/phone, amounts, tracking),
   channels{ email, sms: pending|sent|skipped }, status: pending|sending|sent|dead, attempts, nextAttemptAt, leaseUntil, lastError,
   sentAt }`. The id makes one notification per order + event.
