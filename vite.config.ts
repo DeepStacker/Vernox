@@ -74,6 +74,8 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
+    // The studio lazy-loads react-konva; pre-bundling it avoids a forced reload on first open in dev.
+    optimizeDeps: { include: ["konva", "react-konva"] },
     build: {
       chunkSizeWarningLimit: 900,
       rollupOptions: {

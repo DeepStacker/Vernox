@@ -16,7 +16,7 @@ graph TD
 
 ## 2. Technology Stack
 - **Frontend Framework**: React 18 with TypeScript, Tailwind CSS, Lucide icons, and Sonner notifications.
-- **CAD/CAM Vector Engine**: Custom in-browser computational geometry engine (`cadEngineTypes.ts`, `imageTracer.ts`, `manufacturingRules.ts`) enabling client-side kerf offset and DXF export.
+- **Design studio (`/studio`)**: Konva canvas, Clipper2 geometry, HarfBuzz text shaping and imagetracerjs tracing in Web Workers; versioned design document (schema v4) with a headless API (`src/lib/studio/api.ts`). See §5, `docs/studio.md` and `docs/adr/0001-studio-engine.md`.
 - **Serverless API Layer**: Vercel Node.js functions in `api/` (`checkout-intent`, `verify-payment`, `validate-coupon`, `order-status`, `razorpay-webhook`, `admin`, `cron/release-reservations`). Shared code in `api/_lib/`: pure domain logic (`pricing`, `coupons`, `orderLifecycle`) separated from I/O (`checkout`, `payments`, `webhook`, `reservations`) via the `DocStore` port (`store.ts`; Firestore Admin SDK in production, in-memory in tests). `server/index.ts` serves the same handlers for Docker.
 - **Database**: Google Cloud Firestore (multi-region distributed document store with document-level ACID transactions).
 - **Authentication**: Firebase Authentication. Staff roles are custom claims (`role`) set only by the server; permissions are defined once in `src/types/admin.ts` and enforced by `/api/admin` and mirrored in `firestore.rules`.
@@ -24,7 +24,8 @@ graph TD
 
 ## 3. Server-Authoritative Domains
 - **Pricing** (`api/_lib/pricing.ts`): catalog prices from Firestore `products`; custom studio pieces from dimensions × per-finish
-  rate (`settings/store.customPieces`, defaults in `api/_lib/storeConfig.ts`); GST and shipping from `settings/store` with env
+  rate (`settings/store.customPieces` over the defaults in the shared module `src/lib/pricing/customPiece.ts`, which the studio
+  also uses for its live price, so the displayed and charged prices are the same function); GST and shipping from `settings/store` with env
   defaults. Integer paise internally. Client prices are display-only and never accepted.
 - **Coupons** (`api/_lib/coupons.ts`): evaluated only from Firestore against server-priced lines; redeemed atomically when the
   order is paid.
@@ -38,3 +39,15 @@ graph TD
 - **Stateless app tier**: no state in function memory; rate limits and idempotency live in Firestore.
 - **Transactions**: each state change re-reads the order inside a Firestore transaction and decides from its current status, so
   duplicate and out-of-order callbacks/webhooks are safe. Stock is never written from a stale snapshot.
+
+## 5. Design Studio
+- **Flow**: Start (template / blank / upload) → Design → Review & add to cart; Simple (default) and Pro modes edit the same document
+  (`src/lib/studio/modes.ts` lists the tools/features per mode).
+- **Document**: `src/lib/studio/schema.ts` (zod, `schemaVersion: 4`, millimetres). The part is derived, never stored as truth:
+  plate ∪ "add" objects − "cut" objects − auto-placed mounting holes, plus automatic bridges for loose pieces (`compose.ts`).
+- **Engine**: Clipper2 booleans/offsets (`geometry/clipper.ts`), HarfBuzz shaping (`text/shaper.ts`, fonts in `public/fonts/studio`),
+  imagetracerjs tracing (`trace/`, in `src/workers/traceWorker.ts`), manufacturability checks (`manufacturability.ts`, in
+  `src/workers/geometryWorker.ts`), rules per finish/thickness from `materials.ts` (+ optional `settings/store.studioMaterials`).
+- **Orders**: add-to-cart freezes the cut contours into `customDesignRef.production`; `src/lib/orders/camDocument.ts` exports them
+  (and migrates legacy VDM 3.0.0 designs) for the admin Production console as DXF R12 / SVG / PDF (`exportCAM.ts`, `exportPDF.ts`).
+

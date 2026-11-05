@@ -24,6 +24,7 @@ import type { DocData } from './store';
 import type { StoreConfig } from './storeConfig';
 
 import { CUSTOM_PRODUCT_ID } from '../../src/types/products';
+import { normaliseFinishId, quoteCustomPiece } from '../../src/lib/pricing/customPiece';
 
 export { CUSTOM_PRODUCT_ID };
 
@@ -113,7 +114,7 @@ export interface OrderTotals {
   taxBreakdown: TaxBreakdown;
 }
 
-export const normaliseFinish = (finish: string) => finish.trim().toLowerCase().replace(/[\s-]+/g, '_');
+export const normaliseFinish = normaliseFinishId;
 const normaliseLabel = (label: string) => label.trim().toLowerCase().replace(/\s+/g, ' ');
 
 const invalidItem = (message: string) => new ApiError(400, 'INVALID_ITEM', message);
@@ -203,22 +204,20 @@ export function priceCatalogLine(
   };
 }
 
-/** Custom piece: max(minimum, setupFee + width_cm × height_cm × rate), rounded to whole paise. */
+/** Custom piece: max(minimum, setupFee + width_cm × height_cm × rate), via the shared quoteCustomPiece(). */
 export function priceCustomLine(item: CheckoutItemInput, config: StoreConfig): PricedLine {
   const { minDimensionMm, maxWidthMm, maxHeightMm, finishes } = config.customPieces;
-  const { widthMm, heightMm } = item;
-  if (!widthMm || !heightMm) throw invalidItem('Custom pieces require widthMm and heightMm.');
-  if (widthMm < minDimensionMm || heightMm < minDimensionMm || widthMm > maxWidthMm || heightMm > maxHeightMm) {
-    throw invalidItem(
-      `Custom pieces must be between ${minDimensionMm}mm and ${maxWidthMm}×${maxHeightMm}mm.`,
-    );
+  const quote = quoteCustomPiece(item, finishes, config.customPieces);
+  if ('problem' in quote) {
+    if (quote.problem === 'missing-dimensions') throw invalidItem('Custom pieces require widthMm and heightMm.');
+    if (quote.problem === 'out-of-range') {
+      throw invalidItem(`Custom pieces must be between ${minDimensionMm}mm and ${maxWidthMm}×${maxHeightMm}mm.`);
+    }
+    throw invalidItem(`Finish "${item.finish}" is not available for custom pieces.`);
   }
-  const finish = normaliseFinish(item.finish);
-  const rate = finishes[finish];
-  if (!rate) throw invalidItem(`Finish "${item.finish}" is not available for custom pieces.`);
-
-  const areaCm2 = (widthMm / 10) * (heightMm / 10);
-  const unitPricePaise = Math.max(rate.minimumPaise, Math.round(rate.setupFeePaise + areaCm2 * rate.ratePaisePerCm2));
+  const { unitPricePaise, rate, finish } = quote;
+  const widthMm = item.widthMm as number;
+  const heightMm = item.heightMm as number;
   return {
     productId: CUSTOM_PRODUCT_ID,
     name: `Bespoke ${rate.label} piece (${widthMm} × ${heightMm} mm)`,

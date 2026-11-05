@@ -3,8 +3,10 @@
 Vernox is a professional web-based tool for designing and visualizing custom metal signs with real-time, high-fidelity previews.
 
 ## Features
-- **Real-time Design**: Instant visualization of shapes, text, and images.
-- **Metal Previews**: 3D-like rendering of various metal finishes (Steel, Brass, Copper, etc.).
+- **Design studio** (`/studio`): templates (name plates incl. Hindi, Om mandala, office plaque, quote, festive), text in Latin and
+  Devanagari, shapes, logo/photo tracing, SVG/DXF import; live manufacturability checks with one-click fixes; live price equal to
+  the server's. Guide: `docs/studio.md`.
+- **Metal Previews**: finish rendering (Steel, Brass, Copper, etc.) with wall shadow.
 - **Mobile Responsive**: Optimized for both desktop and mobile devices.
 - **Dark & Light Mode**: High-contrast themes for a premium editing experience.
 - **Precision Grid**: Dual-grid system for accurate design placement.
@@ -14,8 +16,8 @@ Vernox is a professional web-based tool for designing and visualizing custom met
 - **Framework**: React + Vite
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS + shadcn/ui
-- **Canvas Engine**: React Konva
-- **State Management**: Custom Reducer + Context API
+- **Studio engine**: Konva (react-konva), Clipper2, HarfBuzz (WASM), imagetracerjs, zustand + zundo (see `docs/adr/0001-studio-engine.md`)
+- **State Management**: React context (storefront), zustand (studio)
 - **Deployment**: Vercel
 
 ## Getting Started
