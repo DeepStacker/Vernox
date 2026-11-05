@@ -65,7 +65,7 @@ export function AdminRoles() {
   return (
     <div className="space-y-8 animate-fade-in">
       <div>
-        <h2 className="font-display text-3xl text-oxblood-deep">Team Roles & Access</h2>
+        <h2 className="font-display text-3xl">Team</h2>
         <p className="text-muted-foreground text-sm">Give a person a staff role, change it, or revoke it.</p>
       </div>
 

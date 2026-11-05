@@ -21,6 +21,15 @@ describe('console tab access', () => {
     expect(canAccessTab('finance', 'b2b')).toBe(false);
   });
 
+  it('shows shipping, returns and finance consoles by permission', () => {
+    expect(roles('shipping')).toEqual(['super_admin', 'admin', 'order_manager', 'shipping']);
+    expect(roles('returns')).toEqual(['super_admin', 'admin', 'order_manager', 'production', 'shipping']);
+    expect(roles('finance')).toEqual(['super_admin', 'admin', 'finance']);
+    expect(ROLE_PERMISSIONS.finance.canRefund).toBe(true);
+    expect(ROLE_PERMISSIONS.shipping.canRefund).toBe(false);
+    expect(ROLE_PERMISSIONS.shipping.canTrackShipments).toBe(true);
+  });
+
   it('keeps catalog and staff management on their own permissions', () => {
     expect(roles('products')).toEqual(['super_admin', 'admin', 'catalog_manager']);
     expect(roles('roles')).toEqual(['super_admin']);

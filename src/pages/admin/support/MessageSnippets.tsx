@@ -28,7 +28,7 @@ export function MessageSnippets({ order, storeName }: { order: Order; storeName:
                 <Copy className="h-4 w-4" /> Copy
               </button>
               {link ? (
-                <a href={link} target="_blank" rel="noopener noreferrer" className="min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-[#1D5E37] px-3 text-sm font-semibold text-white">
+                <a href={link} target="_blank" rel="noopener noreferrer" className="min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 text-sm font-semibold text-white">
                   <MessageCircle className="h-4 w-4" /> WhatsApp
                 </a>
               ) : (

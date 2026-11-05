@@ -8,9 +8,12 @@ export type AdminAction =
   | 'SAVE_COUPON' | 'DELETE_COUPON'
   | 'SAVE_REVIEW' | 'DELETE_REVIEW'
   | 'SET_STAFF_ROLE' | 'LIST_STAFF'
-  | 'GET_AUDIT_LOGS' | 'LOG_AUDIT';
+  | 'GET_AUDIT_LOGS' | 'LOG_AUDIT'
+  | 'CREATE_SHIPMENT' | 'CANCEL_SHIPMENT' | 'GET_LABEL' | 'UPDATE_DELIVERY_STATUS'
+  | 'CANCEL_ORDER' | 'CREATE_REFUND' | 'GET_ORDER_DOCUMENTS'
+  | 'APPROVE_RETURN' | 'REJECT_RETURN' | 'MARK_RETURN_RECEIVED' | 'ADD_ORDER_NOTE';
 
-const READ_ACTIONS: ReadonlySet<AdminAction> = new Set(['LIST_STAFF', 'GET_AUDIT_LOGS']);
+const READ_ACTIONS: ReadonlySet<AdminAction> = new Set(['LIST_STAFF', 'GET_AUDIT_LOGS', 'GET_LABEL', 'GET_ORDER_DOCUMENTS']);
 
 function stringParams(payload: Record<string, unknown>): Record<string, string> {
   return Object.fromEntries(
@@ -19,7 +22,7 @@ function stringParams(payload: Record<string, unknown>): Record<string, string> 
 }
 
 export class AdminApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(message: string, readonly status: number, readonly code?: string) {
     super(message);
     this.name = 'AdminApiError';
   }
@@ -52,7 +55,7 @@ export async function adminAction<T = Record<string, unknown>>(
 
   if (!res.ok || (body && body.success === false)) {
     const message = (body?.message as string) || (body?.error as string) || `Request failed (${res.status})`;
-    throw new AdminApiError(message, res.status);
+    throw new AdminApiError(message, res.status, typeof body?.code === 'string' ? body.code : undefined);
   }
   return (body ?? {}) as T;
 }

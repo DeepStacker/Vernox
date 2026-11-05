@@ -38,7 +38,7 @@ export function MetricsDashboard() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="font-display text-3xl text-oxblood-deep">Analytics</h2>
+          <h2 className="font-display text-3xl">Analytics</h2>
           <p className="text-sm text-muted-foreground">Real orders only. Revenue counts paid orders that were not cancelled or fully refunded.</p>
         </div>
         <div className="flex gap-2" role="tablist" aria-label="Date range">
@@ -51,11 +51,11 @@ export function MetricsDashboard() {
         </div>
       </div>
 
-      {ordersError && <p role="alert" className="text-sm text-[#9B1C2E]">Could not load orders: {ordersError.message}</p>}
+      {ordersError && <p role="alert" className="text-sm text-destructive">Could not load orders: {ordersError.message}</p>}
       {incomplete && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[#C6A15B]/40 bg-[#FFF8E6] p-3 text-sm text-[#8C6219]">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-400/40 bg-amber-50 p-3 text-sm text-amber-800">
           Only orders since {new Date(oldestLoaded).toLocaleDateString('en-IN')} are loaded, so this range is incomplete.
-          <button type="button" onClick={() => void loadMoreOrders()} disabled={isLoadingMoreOrders} className="min-h-11 rounded-lg border border-[#C6A15B]/50 px-3 font-semibold">
+          <button type="button" onClick={() => void loadMoreOrders()} disabled={isLoadingMoreOrders} className="min-h-11 rounded-lg border border-amber-400/50 px-3 font-semibold">
             {isLoadingMoreOrders ? 'Loading…' : 'Load older orders'}
           </button>
         </div>
@@ -78,7 +78,7 @@ export function MetricsDashboard() {
                   <XAxis dataKey="day" tickFormatter={(d: string) => d.slice(5)} tick={{ fontSize: 11 }} minTickGap={16} />
                   <YAxis tick={{ fontSize: 11 }} width={56} />
                   <Tooltip formatter={(v: number) => inr(v)} />
-                  <Bar dataKey="revenue" fill="#5B262C" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

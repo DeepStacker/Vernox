@@ -247,7 +247,7 @@ export function AdminReviews() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="font-display text-3xl text-oxblood-deep">Collector & Patron Reviews</h2>
+            <h2 className="font-display text-3xl">Reviews</h2>
             <span className="text-xs font-mono bg-oxblood/10 text-oxblood border border-oxblood/20 px-2 py-0.5 rounded-full font-bold">
               {reviews.length} Total
             </span>

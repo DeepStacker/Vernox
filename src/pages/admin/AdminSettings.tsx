@@ -1,5 +1,6 @@
 /**
- * Admin store settings: the `settings/store` document (tax, shipping, currency, store name)
+ * Admin store settings: the `settings/store` document. Pricing basics (tax, shipping, currency, store
+ * name) and business details (seller/GST, contact, COD, lead times, returns) are separate forms,
  * plus a read-only export of public catalog content. There is no client-side import or reset;
  * bulk data changes belong to server-side tooling with audit trails.
  */
@@ -7,36 +8,29 @@
 import { useEffect, useState } from 'react';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { AdminPageHeader } from '@/components/admin/AdminUi';
+import { AtelierSelect } from '@/components/ui/select';
 import { useAdminData } from '@/lib/data/adminData';
 import { useSettingsMutations } from '@/lib/data/settings';
-import { AtelierSelect } from '@/components/ui/select';
-
-const numberInputClass =
-  'w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-oxblood text-center font-mono font-bold';
+import { BusinessSettingsForm } from './settings/BusinessSettingsForm';
 
 export function AdminSettings() {
   const { products, categories, homepageSettings, topics, storeConfig } = useAdminData();
   const { updateStoreConfig } = useSettingsMutations();
 
-  const [form, setForm] = useState({
+  const fromConfig = () => ({
     storeName: storeConfig.storeName,
     currency: storeConfig.currency || '₹',
     gstRatePercent: storeConfig.gstRatePercent,
     freeShippingThreshold: storeConfig.freeShippingThreshold,
     shippingFee: storeConfig.shippingFee,
   });
+  const [form, setForm] = useState(fromConfig);
   const [isSaving, setIsSaving] = useState(false);
 
   // Re-sync when the stored document loads or changes.
-  useEffect(() => {
-    setForm({
-      storeName: storeConfig.storeName,
-      currency: storeConfig.currency || '₹',
-      gstRatePercent: storeConfig.gstRatePercent,
-      freeShippingThreshold: storeConfig.freeShippingThreshold,
-      shippingFee: storeConfig.shippingFee,
-    });
-  }, [storeConfig]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fromConfig only reads storeConfig
+  useEffect(() => { setForm(fromConfig()); }, [storeConfig]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,70 +55,49 @@ export function AdminSettings() {
     URL.revokeObjectURL(link.href);
   };
 
+  const label = 'text-sm font-semibold';
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
-      <div>
-        <h2 className="font-display text-3xl text-oxblood-deep">Store Settings</h2>
-        <p className="text-muted-foreground text-sm">Tax, shipping and currency used by the storefront and the checkout server.</p>
-      </div>
+    <div className="mx-auto max-w-4xl animate-fade-in space-y-8 pb-12">
+      <AdminPageHeader title="Settings" line="Tax and shipping used by the storefront and checkout, and the business details behind invoices, contact and COD." />
 
-      <form onSubmit={handleSubmit} className="bg-card border border-border/70 rounded-xl p-6 shadow-soft space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Store name</label>
-            <input
-              type="text" required value={form.storeName}
-              onChange={e => setForm({ ...form, storeName: e.target.value })}
-              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-oxblood transition"
-            />
+      <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border border-border bg-card p-5 shadow-soft">
+        <h3 className="font-display text-xl">Store and pricing</h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-1">
+            <span className={label}>Store name</span>
+            <input type="text" required value={form.storeName} onChange={e => setForm({ ...form, storeName: e.target.value })} className="field" />
+          </label>
+          <div className="space-y-1">
+            <span className={label}>Currency symbol</span>
+            <AtelierSelect value={form.currency} onValueChange={val => setForm({ ...form, currency: val })} className="field" options={[{ value: '₹', label: '₹ (INR - Rupee)' }]} />
           </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Currency symbol</label>
-            <AtelierSelect
-              value={form.currency}
-              onValueChange={val => setForm({ ...form, currency: val })}
-              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-oxblood transition"
-              options={[{ value: '₹', label: '₹ (INR - Rupee)' }]}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:col-span-2 pt-2">
-            <div className="space-y-1.5 p-3.5 rounded-lg bg-muted/20 border border-border/60">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">GST rate (%)</label>
-              <input type="number" required min={0} max={100} step={0.1} value={form.gstRatePercent}
-                onChange={e => setForm({ ...form, gstRatePercent: Number(e.target.value) })} className={numberInputClass} />
-            </div>
-            <div className="space-y-1.5 p-3.5 rounded-lg bg-muted/20 border border-border/60">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Free shipping above</label>
-              <input type="number" required min={0} value={form.freeShippingThreshold}
-                onChange={e => setForm({ ...form, freeShippingThreshold: Number(e.target.value) })} className={numberInputClass} />
-            </div>
-            <div className="space-y-1.5 p-3.5 rounded-lg bg-muted/20 border border-border/60">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Standard shipping</label>
-              <input type="number" required min={0} value={form.shippingFee}
-                onChange={e => setForm({ ...form, shippingFee: Number(e.target.value) })} className={numberInputClass} />
-            </div>
-          </div>
+          <label className="space-y-1">
+            <span className={label}>GST rate (%)</span>
+            <input type="number" required min={0} max={100} step={0.1} value={form.gstRatePercent} onChange={e => setForm({ ...form, gstRatePercent: Number(e.target.value) })} className="field font-mono" />
+          </label>
+          <label className="space-y-1">
+            <span className={label}>Free shipping above (₹)</span>
+            <input type="number" required min={0} value={form.freeShippingThreshold} onChange={e => setForm({ ...form, freeShippingThreshold: Number(e.target.value) })} className="field font-mono" />
+          </label>
+          <label className="space-y-1">
+            <span className={label}>Standard shipping (₹)</span>
+            <input type="number" required min={0} value={form.shippingFee} onChange={e => setForm({ ...form, shippingFee: Number(e.target.value) })} className="field font-mono" />
+          </label>
         </div>
-
-        <div className="flex justify-end pt-2 border-t border-border/60">
-          <button type="submit" disabled={isSaving}
-            className="bg-oxblood hover:bg-oxblood-deep text-ivory font-semibold px-6 py-2.5 rounded-lg text-sm transition disabled:opacity-50">
-            {isSaving ? 'Saving…' : 'Save settings'}
-          </button>
+        <div className="flex justify-end border-t border-border pt-4">
+          <button type="submit" disabled={isSaving} className="btn-primary">{isSaving ? 'Saving…' : 'Save store settings'}</button>
         </div>
       </form>
 
-      <div className="bg-card border border-border/70 rounded-xl p-6 shadow-soft flex items-center justify-between gap-4">
+      <BusinessSettingsForm config={storeConfig} />
+
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-5 shadow-soft">
         <div>
-          <h3 className="font-display text-xl text-oxblood">Catalog export</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Downloads products, categories, topics and homepage settings as JSON. Orders and customer data are not included.</p>
+          <h3 className="font-display text-xl">Catalog export</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">Downloads products, categories, topics and homepage settings as JSON. Orders and customer data are not included.</p>
         </div>
-        <button onClick={handleDownloadCatalog}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-muted hover:bg-border rounded-lg text-xs font-semibold transition shrink-0">
-          <Download className="w-4 h-4" /> Download
-        </button>
+        <button onClick={handleDownloadCatalog} className="btn-secondary shrink-0"><Download className="h-4 w-4" /> Download</button>
       </div>
     </div>
   );

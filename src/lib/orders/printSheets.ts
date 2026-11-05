@@ -119,6 +119,38 @@ export function buildPackingSlipHtml(order: Order, ctx: PrintContext): string {
   return wrap('Packing slip', [packingSlipBody(order, ctx)]);
 }
 
+export interface ShippingLabelContext {
+  storeName: string;
+  /** Return address printed as "From" (seller address from settings/store); omitted when empty. */
+  fromAddress?: string;
+}
+
+/**
+ * Courier label for shipments booked by hand (no Shiprocket label exists for them): destination,
+ * courier, AWB barcode, COD amount to collect and package weight. Shiprocket labels come from the
+ * courier as a PDF and are opened from GET_LABEL instead.
+ */
+export function buildShippingLabelHtml(order: Order, ctx: ShippingLabelContext): string {
+  const ref = order.orderNumber || order.id;
+  const ship = order.ops?.shipment;
+  const awb = ship?.awb ?? order.tracking?.trackingNumber ?? '';
+  const courier = ship?.courier ?? order.tracking?.carrier ?? '';
+  const pkg = parseNotes(order.adminNotes).data.package;
+  const cod = order.ops?.paymentMethod === 'cod' ? Math.max(0, (order.ops.totalPaise || Math.round(order.total * 100)) - order.ops.codCollectedPaise) / 100 : 0;
+  const address = [order.shippingAddress, order.shippingCity, order.shippingState, order.shippingPincode].filter(Boolean).join(', ');
+  return wrap('Shipping label', [`<section class="sheet" style="max-width:480px">
+    <div class="head"><h1>${escapeHtml(courier || 'SHIPMENT')}</h1><div class="big">${escapeHtml(ref)}</div></div>
+    ${awb ? `<div style="margin:8px 0">${code39Svg(awb.toUpperCase())}<div class="big">AWB ${escapeHtml(awb)}</div></div>` : ''}
+    <h2>Ship to</h2>
+    <div class="big">${escapeHtml(order.customerName || order.email)}</div>
+    <div>${escapeHtml(address)}</div>
+    ${order.phone ? `<div>Phone: ${escapeHtml(order.phone)}</div>` : ''}
+    ${cod > 0 ? `<div class="care">COLLECT CASH ₹${cod.toLocaleString('en-IN')}</div>` : '<div class="muted" style="margin-top:8px">PREPAID, do not collect</div>'}
+    ${pkg ? `<h2>Package</h2><div>${pkg.lengthCm} × ${pkg.widthCm} × ${pkg.heightCm} cm, ${pkg.weightKg} kg</div>` : ''}
+    ${ctx.fromAddress ? `<h2>From</h2><div>${escapeHtml(ctx.storeName)}</div><div class="muted">${escapeHtml(ctx.fromAddress)}</div>` : ''}
+  </section>`]);
+}
+
 /** Opens the document in a new window and prints it. Returns false when the browser blocked the popup. */
 export function printHtml(html: string): boolean {
   const win = window.open('', '_blank', 'width=900,height=1000');

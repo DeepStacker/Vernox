@@ -136,6 +136,8 @@ export interface OrderDoc {
   shippingCountry: string;
   phone: string;
   tracking?: { carrier?: string; trackingNumber?: string; url?: string } | null;
+  /** Staff notes: free text plus the structured `#vernox:v1` block (src/lib/orders/orderNotes.ts). Staff-written only. */
+  notes?: string;
 }
 
 /** Indian mobile as 10 digits (strips +91 / 0 and separators); other formats are returned digits-only. */

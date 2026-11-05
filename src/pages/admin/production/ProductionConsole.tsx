@@ -45,7 +45,7 @@ export function ProductionConsole() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="font-display text-3xl text-oxblood-deep">Production</h2>
+          <h2 className="font-display text-3xl">Production</h2>
           <p className="text-sm text-muted-foreground">Oldest orders first. Move an order forward only when the stage is finished.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -58,7 +58,7 @@ export function ProductionConsole() {
       </div>
 
       {queue.error && (
-        <p role="alert" className="rounded-lg border border-[#9B1C2E]/30 bg-[#FDE8EC] p-3 text-sm text-[#9B1C2E]">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           Could not load the queue: {queue.error.message}
         </p>
       )}

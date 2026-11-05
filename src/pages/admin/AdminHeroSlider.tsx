@@ -194,9 +194,9 @@ export function AdminHeroSlider() {
               {slides.length} {slides.length === 1 ? 'Slide' : 'Slides'} Active
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-foreground">
-            Hero Slider Management
-          </h1>
+          <h2 className="font-display text-3xl">
+            Hero sliders
+          </h2>
           <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
             Control the full-screen editorial image slides, architectural locations, series typography, and linked artworks displayed on the storefront home page.
           </p>
@@ -275,7 +275,7 @@ export function AdminHeroSlider() {
 
           {/* Overlaid Pill Badge */}
           <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6">
-            <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-sm bg-white/95 backdrop-blur-md border border-[#EBE4D6] shadow-sm text-dark-brown">
+            <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-sm bg-white/95 backdrop-blur-md border border-border shadow-sm text-dark-brown">
               <span className="w-2 h-2 rounded-full bg-gold" />
               <span className="text-[10px] sm:text-xs uppercase tracking-[0.22em] font-sans font-semibold">
                 {activePreviewSlide.series}

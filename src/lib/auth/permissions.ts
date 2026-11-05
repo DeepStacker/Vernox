@@ -17,6 +17,12 @@ export interface RolePermissions {
   canManageProduction: boolean;
   canManageShipping: boolean;
   canManageFinance: boolean;
+  /** orders.tracking: book, cancel and update shipments. */
+  canTrackShipments: boolean;
+  /** orders.refund: create refunds (and cancel with a refund). */
+  canRefund: boolean;
+  /** reports.export: finance CSV exports. */
+  canExportReports: boolean;
   canManageCoupons: boolean;
   canModerateReviews: boolean;
   canManageStaff: boolean;
@@ -39,6 +45,9 @@ function derivePermissions(role: StaffRole): RolePermissions {
     canManageProduction: updatesStatus && (seesCustomers || !handlesTracking),
     canManageShipping: updatesStatus && handlesTracking,
     canManageFinance: has('orders.refund') || has('reports.export'),
+    canTrackShipments: handlesTracking,
+    canRefund: has('orders.refund'),
+    canExportReports: has('reports.export'),
     canManageCoupons: has('coupons.write'),
     canModerateReviews: has('reviews.moderate'),
     canManageStaff: has('staff.manage'),
@@ -61,7 +70,7 @@ export function formatRole(role: StaffRole): string {
 export type AdminTabId =
   | 'home' | 'orders' | 'products' | 'customers' | 'analytics' | 'marketing' | 'coupons'
   | 'custom-orders' | 'hero-slider' | 'reviews' | 'notifications' | 'roles' | 'audit' | 'settings'
-  | 'production' | 'qc' | 'support' | 'b2b';
+  | 'production' | 'qc' | 'support' | 'b2b' | 'shipping' | 'returns' | 'finance';
 
 /** Which admin tabs a role may open. Single source for navigation and the command palette. */
 export function canAccessTab(role: StaffRole, tab: AdminTabId): boolean {
@@ -76,6 +85,12 @@ export function canAccessTab(role: StaffRole, tab: AdminTabId): boolean {
     case 'production':
     case 'qc':
       return p.canManageProduction;
+    case 'shipping':
+      return p.canManageShipping;
+    case 'returns':
+      return p.canUpdateOrders;
+    case 'finance':
+      return p.canManageFinance;
     case 'support':
       return p.canManageSupport;
     case 'b2b':

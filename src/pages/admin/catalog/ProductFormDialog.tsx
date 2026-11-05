@@ -32,7 +32,7 @@ function Field({ label, error, children, hint }: { label: string; error?: string
       <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       {children}
       {hint && !error && <span className="block text-xs text-muted-foreground">{hint}</span>}
-      {error && <span role="alert" className="block text-xs text-[#9B1C2E]">{error}</span>}
+      {error && <span role="alert" className="block text-xs text-destructive">{error}</span>}
     </label>
   );
 }
@@ -47,7 +47,7 @@ function ImageField({ label, value, error, onChange }: { label: string; value: s
       </Field>
       {value.trim() && !error && (
         broken
-          ? <p className="text-xs text-[#9B1C2E]">This image could not be loaded.</p>
+          ? <p className="text-xs text-destructive">This image could not be loaded.</p>
           : <img src={value.trim()} alt="" onError={() => setBroken(true)} className="h-24 w-24 rounded-lg border border-border object-cover" />
       )}
     </div>
@@ -128,7 +128,7 @@ export function ProductFormDialog({ open, product, template, currency, gstRatePe
               </Field>
             </div>
             <SizesEditor draft={draft} gstRatePercent={gstRatePercent} currency={currency} errors={errors} onChange={sizes => set('sizes', sizes)} />
-            {errors.sizes && <p role="alert" className="text-xs text-[#9B1C2E]">{errors.sizes}</p>}
+            {errors.sizes && <p role="alert" className="text-xs text-destructive">{errors.sizes}</p>}
           </fieldset>
 
           <ChipSelect label="Finishes" options={finishOptions} value={draft.finishes} onChange={v => set('finishes', v)} error={errors.finishes} />

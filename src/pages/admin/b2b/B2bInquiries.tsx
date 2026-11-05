@@ -26,7 +26,7 @@ export function B2bInquiries() {
   return (
     <div className="space-y-5 animate-fade-in">
       <div>
-        <h2 className="font-display text-3xl text-oxblood-deep">Trade enquiries</h2>
+        <h2 className="font-display text-3xl">Trade enquiries</h2>
         <p className="text-sm text-muted-foreground">Enquiries from the Trade page. Reply by email or phone, then record the outcome.</p>
       </div>
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter by status">
@@ -37,7 +37,7 @@ export function B2bInquiries() {
           </button>
         ))}
       </div>
-      {error && <p role="alert" className="text-sm text-[#9B1C2E]">Could not load enquiries: {error.message}</p>}
+      {error && <p role="alert" className="text-sm text-destructive">Could not load enquiries: {error.message}</p>}
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">

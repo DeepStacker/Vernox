@@ -4,7 +4,7 @@ import type { Order, OrderItem } from '@/types/store';
 import type { OrderStatus } from '../orderStateMachine';
 import {
   DEFAULT_LEAD_TIME_DAYS, PRODUCTION_STAGES, defaultLeadTimeDays, groupByStage, isAssignedTo, nextStageFor, orderLeadTimeDays,
-  reworkTargetsFor, slaState, stageCounts,
+  reworkTargetsFor, slaState, stageCounts, workshopQueryStatuses,
 } from '../productionQueue';
 
 const DAY = 24 * 3600 * 1000;
@@ -22,6 +22,14 @@ describe('production queue', () => {
     expect(groups.Cutting.map(o => o.id)).toEqual(['old', 'new']);
     expect(groups.Paid.map(o => o.id)).toEqual(['p']);
     expect(Object.values(groups).flat()).toHaveLength(3);
+  });
+
+  it('treats confirmed COD orders as waiting to start and lets them move to In_Design', () => {
+    const groups = groupByStage([order('p', 'Paid', 2), order('c', 'Confirmed_COD', 3)], PRODUCTION_STAGES);
+    expect(groups.Paid.map(o => o.id)).toEqual(['c', 'p']);
+    expect(workshopQueryStatuses(PRODUCTION_STAGES)).toContain('Confirmed_COD');
+    expect(workshopQueryStatuses(['Packed'])).toEqual(['Packed']);
+    expect(nextStageFor('Confirmed_COD', ROLE_PERMISSIONS.production)).toBe('In_Design');
   });
 
   it('counts per stage including empty ones', () => {

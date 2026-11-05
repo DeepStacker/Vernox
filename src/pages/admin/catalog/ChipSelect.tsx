@@ -16,7 +16,7 @@ export function ChipSelect<T extends string>({ label, options, value, onChange, 
           </button>
         ))}
       </div>
-      {error && <p role="alert" className="text-xs text-[#9B1C2E]">{error}</p>}
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     </fieldset>
   );
 }

@@ -11,12 +11,22 @@ import { nextClientStatuses, type OrderStatus } from './orderStateMachine';
 export const PRODUCTION_STAGES = ['Paid', 'In_Design', 'Cutting', 'Finishing', 'Quality_Check'] as const satisfies readonly OrderStatus[];
 export const QC_STAGES = ['Quality_Check', 'Packed'] as const satisfies readonly OrderStatus[];
 
+/**
+ * COD orders are confirmed (`Confirmed_COD`) rather than `Paid` at checkout; for the workshop both
+ * are "waiting to start", so the queue loads and groups them together.
+ */
+export const workshopStage = (status: OrderStatus): OrderStatus => (status === 'Confirmed_COD' ? 'Paid' : status);
+
+/** Statuses to query for the given workshop stages (adds Confirmed_COD wherever Paid is listed). */
+export const workshopQueryStatuses = (stages: readonly OrderStatus[]): OrderStatus[] =>
+  stages.includes('Paid') ? [...stages, 'Confirmed_COD'] : [...stages];
+
 export const DEFAULT_LEAD_TIME_DAYS = 7;
 const DAY_MS = 24 * 3600 * 1000;
 
 /** The happy-path next stage for each workshop stage. */
 const FORWARD: Partial<Record<OrderStatus, OrderStatus>> = {
-  Paid: 'In_Design', In_Design: 'Cutting', Cutting: 'Finishing', Finishing: 'Quality_Check', Quality_Check: 'Packed',
+  Paid: 'In_Design', Confirmed_COD: 'In_Design', In_Design: 'Cutting', Cutting: 'Finishing', Finishing: 'Quality_Check', Quality_Check: 'Packed',
 };
 
 /** Where a failed QC may send an order back to. */
@@ -27,7 +37,8 @@ export const oldestFirst = (a: Order, b: Order): number => a.placedAt - b.placed
 export function groupByStage<S extends OrderStatus>(orders: readonly Order[], stages: readonly S[]): Record<S, Order[]> {
   const groups = Object.fromEntries(stages.map(s => [s, [] as Order[]])) as Record<S, Order[]>;
   for (const order of [...orders].sort(oldestFirst)) {
-    if ((stages as readonly OrderStatus[]).includes(order.status)) groups[order.status as S].push(order);
+    const stage = workshopStage(order.status);
+    if ((stages as readonly OrderStatus[]).includes(stage)) groups[stage as S].push(order);
   }
   return groups;
 }

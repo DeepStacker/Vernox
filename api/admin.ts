@@ -10,6 +10,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { Auth } from 'firebase-admin/auth';
 import { z } from 'zod';
+import { appendNote } from '../src/lib/orders/orderNotes';
 import { STAFF_ROLES, isStaffRole, roleHasPermission, type Permission, type StaffMember } from '../src/types/admin';
 import { auditInTransaction, buildAuditEntry, recordAudit } from './_lib/audit';
 import { requireStaff, type StaffUser } from './_lib/auth';
@@ -28,7 +29,8 @@ import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
 import { createRefund, refundCeilingPaise } from './_lib/refunds';
 import { decideReturn, markReturnReceived, returnPath } from './_lib/returns';
 import { createShippingProvider } from './_lib/shipping';
-import { applyCourierStatus, cancelShipment, createShipment, getLabel } from './_lib/shipping/shipments';
+import { applyCourierStatus, cancelShipment, createShipment, getLabel, type ManualShipmentDetails } from './_lib/shipping/shipments';
+import type { PackageDetails } from './_lib/shipping/types';
 import type { DocStore } from './_lib/store';
 import { loadStoreConfig } from './_lib/storeConfig';
 
@@ -96,6 +98,7 @@ const idSchema = (key: string) => z.object({ [key]: z.string().trim().regex(/^[A
 
 const orderIdField = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
 const reasonField = z.string().trim().min(3).max(300);
+const MAX_NOTES_LENGTH = 20_000;
 
 // ---------- actions ----------
 
@@ -215,6 +218,33 @@ const ACTIONS: Record<string, ActionDefinition> = {
     },
   },
 
+  /**
+   * Internal note for roles that cannot write orders (support has customers.read but not
+   * orders.update_status, so firestore.rules refuse its direct `notes` write). The note is
+   * appended server-side inside a transaction, so concurrent notes never overwrite each other
+   * and the structured `#vernox:v1` block (QC, package) is preserved by appendNote().
+   */
+  ADD_ORDER_NOTE: {
+    method: 'POST',
+    permission: 'customers.read',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: orderIdField, note: z.string().trim().min(1).max(500) }), ctx.params);
+      const now = Date.now();
+      const by = ctx.actor.email ?? ctx.actor.uid;
+      const notes = await ctx.store.runTransaction(async tx => {
+        const order = asOrder(await tx.get(orderPath(p.orderId)));
+        if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
+        const next = appendNote(order.notes, p.note, by, now);
+        // firestore.rules cap `notes` at 20 000 characters for the other writers; keep the same limit.
+        if (next.length > MAX_NOTES_LENGTH) throw badRequest('This order has too many notes to add another.');
+        tx.update(orderPath(order.id), { notes: next, updatedAt: now });
+        auditInTransaction(ctx.store, tx, audit(ctx, 'ORDER_NOTE_ADDED', 'order', order.id));
+        return next;
+      });
+      return { orderId: p.orderId, notes };
+    },
+  },
+
   // ---------- shipping (permission orders.tracking) ----------
 
   CREATE_SHIPMENT: {
@@ -245,8 +275,8 @@ const ACTIONS: Record<string, ActionDefinition> = {
       const config = await loadStoreConfig(ctx.store);
       const shipment = await createShipment(ctx.store, createShippingProvider(ctx.store, config), config, {
         orderId: p.orderId,
-        package: p.package,
-        manual: p.manual,
+        package: p.package as PackageDetails | undefined, // cast: the app tsconfig (non-strict) also type-checks this file via tests
+        manual: p.manual as ManualShipmentDetails | undefined,
         actor: ctx.actor,
       });
       const order = asOrder(await ctx.store.get(orderPath(p.orderId)));

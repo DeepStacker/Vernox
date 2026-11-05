@@ -28,9 +28,11 @@ import {
   Eye, Trash2, Printer, FileCode, FileText, ExternalLink,
   MapPin, Phone, Mail, Clock, Package, AlertCircle, ShoppingCart,
   Scissors, Truck, ShieldCheck, Tag, ZoomIn, Image as ImageIcon,
-  Gift, Percent, ShoppingBag, Leaf, Sparkles
+  Gift, Percent, ShoppingBag, Leaf
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { AdminPageHeader } from '@/components/admin/AdminUi';
+import { StatusBadge } from './shared/badges';
 
 export interface AdminOrdersProps {
   initialFilter?: 'all' | 'open' | 'unfulfilled' | 'unpaid' | 'paid' | 'customers' | 'custom';
@@ -255,17 +257,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
     }
   };
 
-  const statusTone = (status: OrderStatus): string => {
-    if (['Delivered'].includes(status)) return 'bg-[#EEF5F0] text-[#1D5E37] border-[#1D5E37]/20';
-    if (['Pending_Payment', 'Payment_Failed', 'Expired', 'Cancelled'].includes(status)) return 'bg-[#FFF4F0] text-[#9A3412] border-[#9A3412]/20';
-    if (['Refunded', 'Partially_Refunded', 'Returned', 'Return_Requested'].includes(status)) return 'bg-neutral-100 text-neutral-600 border-neutral-200';
-    return 'bg-[#FAF3E8] text-[#8C6219] border-[#C6A15B]/30';
-  };
-  const renderStatusTag = (status: OrderStatus) => (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${statusTone(status)}`}>
-      {ORDER_STATUS_LABELS[status]}
-    </span>
-  );
+  const renderStatusTag = (status: OrderStatus) => <StatusBadge status={status} />;
 
   const persist = async (order: Order, update: Parameters<typeof saveOrderUpdate>[0]['update']) => {
     const ok = await saveOrderUpdate({ order, update, actor });
@@ -283,53 +275,19 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
 
   return (
     <div className="space-y-6 pb-12 animate-fade-in max-w-[1440px] mx-auto">
-      
-      {/* 1. ATELIER COMMISSIONS BANNER (Vernox Luxury Aesthetic) */}
-      <div className="bg-gradient-to-r from-card via-card to-[#FAF6EE] border border-[#E3DACB] rounded-2xl p-6 sm:p-8 relative overflow-hidden shadow-2xs">
-        {/* Architectural Guilloche & Laser Vector Motif in Background */}
-        <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-20 pointer-events-none hidden md:block">
-          <svg width="220" height="180" viewBox="0 0 220 180" fill="none" className="text-brass">
-            <rect x="10" y="10" width="200" height="160" rx="4" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4" />
-            <circle cx="110" cy="90" r="60" stroke="currentColor" strokeWidth="1.2" />
-            <circle cx="110" cy="90" r="40" stroke="#5B262C" strokeWidth="1" />
-            <path d="M50 90 L170 90 M110 30 L110 150" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 2" />
-            <path d="M70 50 L150 130 M150 50 L70 130" stroke="currentColor" strokeWidth="0.5" />
-          </svg>
-        </div>
-
-        <div className="relative z-10 max-w-xl">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-oxblood/10 border border-oxblood/20 text-oxblood text-[10px] font-bold tracking-widest uppercase">
-              <Sparkles className="w-3 h-3 text-brass" /> Vernox Atelier Console
-            </span>
-            <span className="text-xs text-muted-foreground font-serif italic">Bespoke Architectural Craft</span>
+      <AdminPageHeader
+        title={initialFilter === 'custom' ? 'Custom designs' : 'Orders'}
+        line="Find an order, check its payment, move it forward and keep notes."
+        actions={(
+          <div className="relative w-full sm:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input type="text" value={welcomeSearch} aria-label="Search orders" onChange={e => { setWelcomeSearch(e.target.value); setSearchQuery(''); }}
+              placeholder="Order, name, email or place" className="field pl-9" />
           </div>
+        )}
+      />
 
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-display font-bold text-foreground tracking-tight">
-            Atelier Commissions & Orders
-          </h1>
-          <p className="text-muted-foreground text-xs sm:text-sm mt-1.5 mb-5 font-sans">
-            Manage custom architectural steel and brass commissions, CAM laser production routing, patron ledger, and global fulfillment.
-          </p>
-
-          {/* Banner Search Input */}
-          <div className="relative max-w-md">
-            <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text"
-              value={welcomeSearch}
-              onChange={(e) => {
-                setWelcomeSearch(e.target.value);
-                setSearchQuery('');
-              }}
-              placeholder="Search commissions, patron name, email, or destination..."
-              className="w-full bg-background border border-border rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood shadow-2xs transition"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* 2. TABS BAR (Vernox Luxury Aesthetic) */}
+      {/* Queue tabs */}
       <div className="flex items-center gap-1 sm:gap-6 border-b border-border/70 overflow-x-auto text-xs sm:text-sm font-semibold tracking-tight scrollbar-none px-1">
         {[
           { id: 'all', label: 'All Orders' },
@@ -500,7 +458,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
 
         {/* Floating Bulk Actions Dock (Vernox Obsidian & Brass) */}
         {selectedOrderIds.size > 0 && (
-          <div className="bg-[#1C1615] border-b border-brass/40 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 animate-fade-in text-xs text-[#F8F4E7]">
+          <div className="bg-toolbar border-b border-brass/40 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 animate-fade-in text-xs text-toolbar-foreground">
             <div className="flex items-center gap-2 font-semibold">
               <CheckSquare className="w-4 h-4 text-brass" />
               <span>{selectedOrderIds.size} orders selected</span>
@@ -508,13 +466,13 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleExportCSV(orders.filter(o => selectedOrderIds.has(o.id)))}
-                className="bg-[#120D0C] border border-[#2E2421] text-[#E8DFD3] hover:text-white px-3 py-1 rounded-md text-xs font-semibold transition"
+                className="bg-toolbar-foreground/10 border border-toolbar-foreground/20 text-toolbar-foreground px-3 py-1 rounded-md text-xs font-semibold transition"
               >
                 Export Selected
               </button>
               <button
                 onClick={() => setSelectedOrderIds(new Set())}
-                className="text-[#A8988E] hover:text-[#F8F4E7] text-xs underline ml-1"
+                className="text-toolbar-foreground/70 hover:text-toolbar-foreground text-xs underline ml-1"
               >
                 Deselect
               </button>
@@ -526,7 +484,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-border/70 text-[11px] font-display font-bold text-muted-foreground uppercase tracking-wider bg-[#FAF8F5]/80">
+              <tr className="border-b border-border/70 text-[11px] font-display font-bold text-muted-foreground uppercase tracking-wider bg-muted/40">
                 <th className="py-3 px-4 w-10">
                   <button 
                     onClick={toggleSelectAllPage} 
@@ -562,7 +520,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
                   return (
                     <tr 
                       key={order.id} 
-                      className={`hover:bg-[#FBF9F5] transition group cursor-pointer ${
+                      className={`hover:bg-muted/40 transition group cursor-pointer ${
                         isSelected ? 'bg-oxblood/[0.04]' : ''
                       }`}
                       onClick={() => setInspectingOrder(order)}
@@ -581,7 +539,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
                         </button>
                       </td>
 
-                      {/* ORDER (#195867) */}
+                      {/* ORDER */}
                       <td className="py-3.5 px-4 font-mono font-semibold text-oxblood hover:text-oxblood-deep hover:underline">
                         {order.orderNumber || order.id}
                       </td>

@@ -1,6 +1,6 @@
 /**
  * Support console: find an order by number, email, phone, pincode or name, then read its timeline,
- * customer, items and totals, add an internal note (roles that may write orders) and copy or send
+ * customer, items and totals, add an internal note (support through ADD_ORDER_NOTE) and copy or send
  * customer messages. There is no ticketing backend; notes live on the order (see ROADMAP.md).
  */
 import { useMemo, useState } from 'react';
@@ -41,7 +41,7 @@ export function SupportConsole() {
   return (
     <div className="space-y-5 animate-fade-in">
       <div>
-        <h2 className="font-display text-3xl text-oxblood-deep">Support</h2>
+        <h2 className="font-display text-3xl">Support</h2>
         <p className="text-sm text-muted-foreground">Search by order number, email, phone, pincode or name.</p>
       </div>
       <div className="relative max-w-xl">
@@ -49,7 +49,7 @@ export function SupportConsole() {
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="VX-20261105-ABC123, name@email.com, 98xxxxxx, 560001"
           aria-label="Search orders" className="min-h-11 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm outline-none focus:border-oxblood" />
       </div>
-      {ordersError && <p role="alert" className="text-sm text-[#9B1C2E]">Could not load orders: {ordersError.message}</p>}
+      {ordersError && <p role="alert" className="text-sm text-destructive">Could not load orders: {ordersError.message}</p>}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <section aria-label="Results" className="space-y-2">

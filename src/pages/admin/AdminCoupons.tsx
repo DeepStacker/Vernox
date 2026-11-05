@@ -206,7 +206,7 @@ export function AdminCoupons() {
       {/* Top Banner & Action */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="font-display text-3xl text-oxblood-deep">Coupon & Discount Management</h2>
+          <h2 className="font-display text-3xl">Discounts</h2>
           <p className="text-muted-foreground text-sm">
             Control promotional pricing, usage caps, per-customer restrictions, and monitor real-time redemptions.
           </p>
