@@ -17,6 +17,10 @@ export interface VisitorSession {
   funnelStep: 'view' | 'cart' | 'checkout' | 'purchase';
   orderId?: string;
   orderTotal?: number;
+  /** Named interaction (e.g. `wall_preview_opened`) recorded on a `view` step; funnel steps leave it unset. */
+  event?: string;
+  /** Small, non-personal parameters of `event` (ids, sizes, finishes). Never photos or free text. */
+  eventData?: Record<string, string | number | boolean>;
 }
 
 const STORAGE_KEY = 'vernox-store-analytics-sessions';

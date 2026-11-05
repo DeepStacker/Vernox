@@ -23,6 +23,7 @@
     "dev:local": "VITE_USE_FIREBASE_EMULATOR=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_PROJECT_ID=vernox-1b5d5 vite"
   },
   "dependencies": {
+    "@google/model-viewer": "^4.4.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -67,6 +68,7 @@
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
     "pdf-lib": "^1.17.1",
+    "qrcode-generator": "^2.0.4",
     "razorpay": "^2.9.6",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
@@ -78,6 +80,7 @@
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "three": "^0.170.0",
     "uuid": "^13.0.0",
     "vaul": "^0.9.9",
     "zod": "^3.25.76"
@@ -92,6 +95,7 @@
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
+    "@types/three": "^0.170.0",
     "@vitejs/plugin-react-swc": "^3.11.0",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.32.0",
