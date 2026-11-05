@@ -18,17 +18,11 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const db = getFirestore(app);
 
-// Connect to local Firestore emulator when enabled (safe across browser and Node build contexts)
-const useEmulator = 
-  (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_USE_FIREBASE_EMULATOR === 'true') ||
-  (typeof process !== 'undefined' && process.env && (process.env.VITE_USE_FIREBASE_EMULATOR === 'true' || !!process.env.FIRESTORE_EMULATOR_HOST));
-
-if (useEmulator) {
-  const host = 
-    (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_FIREBASE_EMULATOR_HOST) ||
-    (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_EMULATOR_HOST) ||
-    'localhost';
-  // Ports match firebase.json "emulators"; `npm run dev:local` starts them with seeded data.
+// Local emulators (`npm run dev:local`). Vite only substitutes the literal `import.meta.env.X`
+// form, so keep these reads plain (no optional chaining) or the flag is silently undefined.
+if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
+  const host = import.meta.env.VITE_FIREBASE_EMULATOR_HOST || '127.0.0.1';
+  // Ports match firebase.json "emulators".
   connectFirestoreEmulator(db, host, 8085);
   connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
 }
