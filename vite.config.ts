@@ -55,7 +55,6 @@ export default defineConfig(({ mode }) => {
         "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
       },
       hmr: {
-        clientPort: 8080,
         overlay: false,
       },
       ...(process.env.BACKEND_URL
