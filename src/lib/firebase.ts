@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -28,5 +28,7 @@ if (useEmulator) {
     (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_FIREBASE_EMULATOR_HOST) ||
     (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_EMULATOR_HOST) ||
     'localhost';
+  // Ports match firebase.json "emulators"; `npm run dev:local` starts them with seeded data.
   connectFirestoreEmulator(db, host, 8085);
+  connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
 }

@@ -26,6 +26,12 @@ Vernox is a professional web-based tool for designing and visualizing custom met
 3. Copy `.env.example` to `.env.local` and fill in the Firebase service account and Razorpay test keys (see DEPLOYMENT.md).
 4. Start the dev server: `npm run dev`. It serves the storefront and `/api/*` on http://localhost:8080; the API runs through `server/apiRouter.ts`, the same router the Docker backend uses. Without Firebase credentials, API calls fail with `CONFIG_ERROR` by design.
 
+### Local stack with sample data (no cloud credentials needed)
+1. `npm run emulators` — Firestore, Auth and Storage emulators (needs Java and the Firebase CLI).
+2. `npm run seed:local` — loads the sample catalogue and store settings into the emulator.
+3. `npm run dev:local` — the app and `/api/*` against the emulators on http://localhost:8080.
+Payments still need Razorpay test keys in `.env.local`.
+
 ### Package manager
 npm is the only supported package manager (`package-lock.json` is the single lockfile; Dockerfiles use `npm ci`). Do not commit `bun.lock`, `bun.lockb` or `yarn.lock`.
 
