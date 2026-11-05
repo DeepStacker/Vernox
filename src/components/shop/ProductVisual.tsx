@@ -8,13 +8,15 @@ interface Props {
   finish: string;
   className?: string;
   priority?: boolean;
+  /** 0..1 share of the largest size; the plate scales to it (PDP size changes morph, never jump). */
+  scale?: number;
 }
 
 /**
  * Product picture. Uses the real photograph when `imageUrl` is set; otherwise draws the design
  * as a metal plate on a wall-coloured tile (see TODO(catalogue) in src/lib/catalog.ts).
  */
-export function ProductVisual({ product, finish, className, priority }: Props) {
+export function ProductVisual({ product, finish, className, priority, scale = 1 }: Props) {
   if (product.imageUrl) {
     return (
       <div className={cn('aspect-square overflow-hidden bg-secondary', className)}>
@@ -26,9 +28,9 @@ export function ProductVisual({ product, finish, className, priority }: Props) {
     <div
       role="img"
       aria-label={`${product.name} in ${finish.replace(/_/g, ' ')} finish`}
-      className={cn('flex aspect-square items-center justify-center bg-[#EFE8DD] p-[14%]', className)}
+      className={cn('flex aspect-square items-center justify-center wall-tile p-[12%]', className)}
     >
-      <ShapeThumb shapeId={product.shapeId} finish={finish} className="h-full w-full" />
+      <ShapeThumb shapeId={product.shapeId} finish={finish} name={product.name} className="metal-plate h-full w-full" style={scale === 1 ? undefined : { transform: `scale(${scale})` }} />
     </div>
   );
 }

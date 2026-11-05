@@ -3,6 +3,7 @@ import type { Product } from '@/lib/catalog';
 import { useCatalog } from '@/lib/catalogContext';
 import { reviewStatsByProduct } from '@/lib/storefront/listing';
 import { ProductCard } from '@/components/shop/ProductCard';
+import { Reveal } from '@/components/shop/Reveal';
 
 interface Props {
   products: Product[];
@@ -18,7 +19,9 @@ export function ProductGrid({ products, priorityCount = 0, className = 'grid-col
   return (
     <div className={`grid gap-3 sm:gap-5 ${className}`}>
       {products.map((p, i) => (
-        <ProductCard key={p.id} product={p} stats={stats.get(p.id)} isWishlisted={isInWishlist(p.id)} onToggleWishlist={toggleWishlist} priority={i < priorityCount} />
+        <Reveal key={p.id} index={i % 4} className="min-w-0">
+          <ProductCard product={p} stats={stats.get(p.id)} isWishlisted={isInWishlist(p.id)} onToggleWishlist={toggleWishlist} priority={i < priorityCount} />
+        </Reveal>
       ))}
     </div>
   );

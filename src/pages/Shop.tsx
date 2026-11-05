@@ -3,6 +3,8 @@ import { Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { SlidersHorizontal, X } from 'lucide-react';
 import { StoreLayout } from '@/components/shop/StoreLayout';
 import { ProductGrid } from '@/components/shop/ProductGrid';
+import { PageHeader } from '@/components/shop/PageHeader';
+import { EmptyState, ErrorState, ProductGridSkeleton } from '@/components/shop/StateViews';
 import { FilterPanel } from '@/components/shop/FilterPanel';
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { finishName, getCategory, ROOMS, THEMES, type ProductCategory } from '@/lib/catalog';
@@ -63,95 +65,86 @@ export default function Shop() {
     setParams(toSearchParams(next), { replace: true });
   };
 
+  const clearAll = () => update({ ...filters, q: '', room: '', theme: '', category: '', finishes: [], size: '', price: '', ready: false });
+
   return (
     <StoreLayout>
       <div className="container py-6 sm:py-10">
-        <header className="mb-5">
-          <h1 className="font-display text-3xl sm:text-4xl">{heading?.name ?? 'All designs'}</h1>
-          {heading?.description && <p className="mt-1 text-muted-foreground">{heading.description}</p>}
-        </header>
+        <PageHeader title={heading?.name ?? 'All designs'} crumbs={[{ label: 'Shop' }]} />
 
-        <div className="grid gap-8 lg:grid-cols-[16rem_1fr]">
-          <aside className="hidden lg:block" aria-label="Filters">
-            <FilterPanel filters={filters} onChange={update} idPrefix="d" />
-          </aside>
-
-          <section aria-label="Results">
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <button type="button" onClick={() => setSheetOpen(true)} className="btn-secondary py-2 lg:hidden">
-                <SlidersHorizontal className="h-4 w-4" aria-hidden="true" /> Filters{chips.length > 0 ? ` (${chips.length})` : ''}
-              </button>
-              <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
-                {productsLoading ? 'Loading designs...' : `${results.length} ${results.length === 1 ? 'design' : 'designs'}`}
-              </p>
-              <label className="ml-auto flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Sort by</span>
-                <select value={filters.sort} onChange={e => update({ ...filters, sort: e.target.value as SortKey })} className="field w-auto py-1.5">
-                  {SORT_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </select>
-              </label>
-            </div>
-
-            {chips.length > 0 && (
-              <ul className="mb-5 flex flex-wrap items-center gap-2" aria-label="Active filters">
-                {chips.map(c => (
-                  <li key={c.key}>
-                    <button type="button" onClick={() => update(c.clear(filters))} className="inline-flex min-h-9 items-center gap-1 rounded-full border border-border bg-card px-3 text-sm hover:border-burgundy" aria-label={`Remove filter ${c.label}`}>
-                      {c.label} <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  </li>
-                ))}
-                <li>
-                  <button type="button" onClick={() => update({ ...filters, q: '', room: '', theme: '', category: '', finishes: [], size: '', price: '', ready: false })} className="min-h-9 px-2 text-sm font-semibold text-burgundy hover:underline">
-                    Clear all
-                  </button>
-                </li>
-              </ul>
-            )}
-
-            {productsError && (
-              <div role="alert" className="rounded-lg border border-destructive/40 p-6 text-center">
-                <p className="mb-3">Designs could not be loaded.</p>
-                <button type="button" onClick={() => refetchProducts()} className="btn-primary">Try again</button>
-              </div>
-            )}
-
-            {productsLoading && <div className="h-96 animate-pulse rounded-lg bg-secondary" aria-hidden="true" />}
-
-            {!productsLoading && !productsError && results.length === 0 && (
-              <div className="rounded-lg border border-border bg-card p-8 text-center">
-                <p className="font-display text-2xl">No designs match these filters</p>
-                <p className="mt-1 text-muted-foreground">
-                  {hasActiveFilters(filters) ? 'Try removing a filter, or ' : 'Check back soon, or '}design your own in the Studio.
-                </p>
-                {hasActiveFilters(filters) && (
-                  <button type="button" onClick={() => update({ ...filters, q: '', room: '', theme: '', category: '', finishes: [], size: '', price: '', ready: false })} className="btn-primary mt-4">
-                    Clear all filters
-                  </button>
-                )}
-              </div>
-            )}
-
-            {results.length > 0 && (
-              <>
-                <ProductGrid products={results.slice(0, visible)} priorityCount={4} className="grid-cols-2 xl:grid-cols-3" />
-                {visible < results.length && (
-                  <div className="mt-8 text-center">
-                    <button type="button" onClick={() => setVisible(v => v + PAGE_SIZE)} className="btn-secondary">
-                      Load more ({results.length - visible} left)
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </section>
+        <div className="mb-5 flex items-center gap-2">
+          <ul className="no-scrollbar -mx-4 flex flex-1 gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" aria-label="Rooms">
+            {ROOMS.map(r => (
+              <li key={r.id} className="shrink-0">
+                <button
+                  type="button"
+                  aria-pressed={filters.room === r.id}
+                  onClick={() => update({ ...filters, room: filters.room === r.id ? '' : r.id })}
+                  className={`min-h-11 rounded-full border px-4 text-sm font-medium transition-colors ${filters.room === r.id ? 'border-burgundy bg-burgundy text-cream' : 'border-border bg-card hover:border-burgundy'}`}
+                >
+                  {r.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" onClick={() => setSheetOpen(true)} className="btn-secondary shrink-0">
+            <SlidersHorizontal className="h-4 w-4" aria-hidden="true" /> Filters{chips.length > 0 ? ` (${chips.length})` : ''}
+          </button>
         </div>
+
+        <section aria-label="Results">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+              {productsLoading ? 'Loading...' : `${results.length} ${results.length === 1 ? 'design' : 'designs'}`}
+            </p>
+            {chips.map(c => (
+              <button key={c.key} type="button" onClick={() => update(c.clear(filters))} className="inline-flex min-h-9 items-center gap-1 rounded-full border border-border bg-card px-3 text-sm hover:border-burgundy" aria-label={`Remove filter ${c.label}`}>
+                {c.label} <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            ))}
+            <label className="ml-auto flex items-center gap-2 text-sm">
+              <span className="sr-only">Sort by</span>
+              <select value={filters.sort} onChange={e => update({ ...filters, sort: e.target.value as SortKey })} className="field w-auto py-1.5" aria-label="Sort by">
+                {SORT_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+            </label>
+          </div>
+
+          {productsError && (
+            <ErrorState>
+              Designs could not be loaded. <button type="button" onClick={() => refetchProducts()} className="font-semibold underline">Try again</button>
+            </ErrorState>
+          )}
+          {productsLoading && <ProductGridSkeleton />}
+          {!productsLoading && !productsError && results.length === 0 && (
+            <EmptyState
+              title="No designs match"
+              hint={hasActiveFilters(filters) ? 'Try removing a filter.' : 'Check back soon.'}
+              action={hasActiveFilters(filters) ? undefined : { label: 'Design your own', to: '/studio' }}
+            />
+          )}
+          {!productsLoading && !productsError && results.length === 0 && hasActiveFilters(filters) && (
+            <div className="mt-4 text-center"><button type="button" onClick={clearAll} className="btn-primary">Clear filters</button></div>
+          )}
+
+          {results.length > 0 && (
+            <>
+              {/* Keyed by the result set so a filter change re-runs the staggered reveal. */}
+              <ProductGrid key={results.map(r => r.id).join('|')} products={results.slice(0, visible)} priorityCount={4} />
+              {visible < results.length && (
+                <div className="mt-8 text-center">
+                  <button type="button" onClick={() => setVisible(v => v + PAGE_SIZE)} className="btn-secondary">Load more</button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
       </div>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="left" className="flex w-[88vw] max-w-sm flex-col bg-background p-0">
+        <SheetContent side="right" className="flex w-[88vw] max-w-sm flex-col bg-background p-0">
           <SheetHeader className="border-b border-border p-4"><SheetTitle>Filters</SheetTitle></SheetHeader>
-          <div className="flex-1 overflow-y-auto p-4"><FilterPanel filters={filters} onChange={update} idPrefix="m" /></div>
+          <div className="flex-1 overflow-y-auto p-4"><FilterPanel filters={filters} onChange={update} idPrefix="f" /></div>
           <SheetFooter className="border-t border-border p-4">
             <button type="button" onClick={() => setSheetOpen(false)} className="btn-primary w-full">Show {results.length} designs</button>
           </SheetFooter>

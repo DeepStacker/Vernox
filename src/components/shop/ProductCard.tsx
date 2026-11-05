@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
+import { flyToCart } from '@/lib/storefront/motion';
 import { Link } from 'react-router-dom';
 import { Heart, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,7 +25,8 @@ export function ProductCard({ product, stats, isWishlisted, onToggleWishlist, pr
   const smallest = product.sizes[0];
   const outOfStock = product.trackInventory !== false && product.stock <= 0;
 
-  const quickAdd = () => {
+  const quickAdd = (e: MouseEvent<HTMLButtonElement>) => {
+    flyToCart(e.currentTarget);
     add({
       productId: product.id,
       productName: product.name,
@@ -41,7 +43,7 @@ export function ProductCard({ product, stats, isWishlisted, onToggleWishlist, pr
   };
 
   return (
-    <article className="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
+    <article className="group lift flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
       <div className="relative">
         <Link to={`/product/${product.slug}`} aria-label={product.name} className="block">
           <ProductVisual product={product} finish={finish} priority={priority} />
@@ -62,7 +64,7 @@ export function ProductCard({ product, stats, isWishlisted, onToggleWishlist, pr
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-3 sm:p-4">
-        <Link to={`/product/${product.slug}`} className="font-display text-lg leading-snug text-foreground hover:text-burgundy sm:text-xl">
+        <Link to={`/product/${product.slug}`} className="line-clamp-2 min-h-[2.6em] font-display text-lg leading-snug text-foreground hover:text-burgundy sm:text-xl">
           {product.name}
         </Link>
 
@@ -81,7 +83,7 @@ export function ProductCard({ product, stats, isWishlisted, onToggleWishlist, pr
           ))}
         </div>
 
-        <PriceTag product={product} from={product.sizes.length > 1} className="mt-auto" />
+        <PriceTag product={product} from={product.sizes.length > 1} compact className="mt-auto" />
         {stats && stats.count > 0 && <StarRating average={stats.average} count={stats.count} />}
 
         <button

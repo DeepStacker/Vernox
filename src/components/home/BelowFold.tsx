@@ -1,5 +1,5 @@
 import { Bestsellers } from '@/components/home/Bestsellers';
-import { CorporateBand, HomeFaq, HowItsMade, StayInTouch, StudioCta } from '@/components/home/HomeBands';
+import { CorporateBand, HowItsMade, StudioCta } from '@/components/home/HomeBands';
 
 /** Everything under the first screen of the home page; loaded lazily so the hero paints first. */
 export default function BelowFold() {
@@ -7,10 +7,8 @@ export default function BelowFold() {
     <>
       <Bestsellers />
       <StudioCta />
-      <CorporateBand />
       <HowItsMade />
-      <HomeFaq />
-      <StayInTouch />
+      <CorporateBand />
     </>
   );
 }

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Minus, Plus, ShieldCheck, Trash2, Truck } from 'lucide-react';
+import { Minus, Plus, Trash2, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 import { StoreLayout } from '@/components/shop/StoreLayout';
+import { PageHeader } from '@/components/shop/PageHeader';
+import { EmptyState } from '@/components/shop/StateViews';
 import { ShapeThumb } from '@/components/shop/ShapeThumb';
 import { ProductGrid } from '@/components/shop/ProductGrid';
 import { useCart } from '@/lib/cartContext';
@@ -63,14 +65,10 @@ export default function Cart() {
   if (items.length === 0) {
     return (
       <StoreLayout>
-        <div className="container py-12 text-center">
-          <h1 className="font-display text-3xl sm:text-4xl">Your cart is empty</h1>
-          <p className="mt-2 text-muted-foreground">Start with a bestseller, or design your own piece.</p>
-          <div className="mt-5 flex justify-center gap-3">
-            <Link to="/shop" className="btn-primary">Shop designs</Link>
-            <Link to="/studio" className="btn-secondary">Design your own</Link>
-          </div>
-          {bestsellers.length > 0 && <div className="mt-12 text-left"><h2 className="section-title mb-4">Bestsellers</h2><ProductGrid products={bestsellers} /></div>}
+        <div className="container py-6 sm:py-10">
+          <PageHeader title="Your cart" crumbs={[{ label: 'Cart' }]} />
+          <EmptyState title="Your cart is empty" action={{ label: 'Shop designs', to: '/shop' }} />
+          {bestsellers.length > 0 && <div className="mt-10"><h2 className="section-title mb-4">Bestsellers</h2><ProductGrid products={bestsellers} /></div>}
         </div>
       </StoreLayout>
     );
@@ -79,7 +77,7 @@ export default function Cart() {
   return (
     <StoreLayout>
       <div className="container py-6 sm:py-10">
-        <h1 className="mb-5 font-display text-3xl sm:text-4xl">Your cart ({items.reduce((n, i) => n + i.quantity, 0)})</h1>
+        <PageHeader title={`Your cart (${items.reduce((n, i) => n + i.quantity, 0)})`} crumbs={[{ label: 'Cart' }]} />
 
         <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
           <section aria-label="Cart items" className="space-y-4">
@@ -97,10 +95,10 @@ export default function Cart() {
             <ul className="divide-y divide-border rounded-lg border border-border bg-card">
               {items.map(item => (
                 <li key={item.id} className="flex gap-3 p-3 sm:gap-4 sm:p-4">
-                  <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded bg-[#EFE8DD] p-3">
+                  <div className="flex h-24 w-24 shrink-0 items-center justify-center wall-tile rounded p-3">
                     {item.customDesignThumb
                       ? <img src={item.customDesignThumb} alt={`${item.productName} preview`} className="h-full w-full object-contain" />
-                      : <ShapeThumb shapeId={item.shapeId} finish={item.finish} className="h-full w-full" />}
+                      : <ShapeThumb shapeId={item.shapeId} finish={item.finish} name={item.productName} className="h-full w-full" />}
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col">
                     <Link to={`/product/${item.productSlug}`} className="font-medium hover:text-burgundy">{item.productName}</Link>
@@ -149,12 +147,9 @@ export default function Cart() {
 
             <button type="button" onClick={() => navigate('/checkout')} className="btn-primary w-full">Proceed to checkout</button>
 
-            <ul className="space-y-1.5 text-xs text-muted-foreground">
-              <li className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-brass" aria-hidden="true" /> Secure payments: UPI, cards and net banking</li>
-              <li className="flex items-center gap-2"><Truck className="h-4 w-4 text-brass" aria-hidden="true" />
-                {hasCustom ? 'Cash on delivery is not available for custom Studio pieces.' : 'Cash on delivery available on ready designs.'}
-              </li>
-            </ul>
+            <p className="flex items-center gap-2 text-xs text-muted-foreground"><Truck className="h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
+              {hasCustom ? 'Custom Studio pieces are prepaid.' : 'Cash on delivery available.'}
+            </p>
           </aside>
         </div>
       </div>

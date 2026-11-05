@@ -1,41 +1,39 @@
-import { CheckCircle2, Clock } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { FULFILMENT_STAGES, fulfilmentStageIndex } from '@/lib/orders/fulfilmentStages';
 import type { OrderStatus } from '@/lib/orders/orderStateMachine';
+import { cn } from '@/lib/utils';
 
-/** Progress tiles for an order, driven only by its real status. */
+/** Status timeline for an order, driven only by its real status. Compact: dots on a rail, the current step named. */
 export function OrderProgress({ status }: { status: OrderStatus }) {
   const reached = fulfilmentStageIndex(status);
+  const last = FULFILMENT_STAGES.length - 1;
+  const stage = FULFILMENT_STAGES[Math.max(reached, 0)];
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-      {FULFILMENT_STAGES.map((stage, index) => {
-        const done = index < reached || (index === reached && index === FULFILMENT_STAGES.length - 1);
-        const current = index === reached && !done;
-        return (
-          <div
-            key={stage.title}
-            className={`p-4 rounded-sm border transition-all ${
-              done
-                ? 'bg-cream/60 border-burgundy/30 text-dark-brown'
-                : current
-                  ? 'bg-burgundy/5 border-burgundy text-burgundy ring-1 ring-burgundy/20'
-                  : 'bg-cream/20 border-[#E8E1D3] text-dark-brown/40'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono font-bold">0{index + 1}</span>
-              {done ? (
-                <CheckCircle2 className="w-4 h-4 text-burgundy" />
-              ) : current ? (
-                <Clock className="w-4 h-4 text-gold" />
-              ) : (
-                <div className="w-2 h-2 rounded-full bg-[#E0D7C6]" />
-              )}
-            </div>
-            <h4 className="text-xs font-semibold leading-snug font-sans">{stage.title}</h4>
-            <p className="text-[10px] mt-1 leading-relaxed opacity-80 font-sans">{stage.desc}</p>
-          </div>
-        );
-      })}
+    <div>
+      <ol className="flex items-center" aria-label="Order progress">
+        {FULFILMENT_STAGES.map((s, i) => {
+          const done = i < reached || (i === reached && i === last);
+          const current = i === reached && !done;
+          return (
+            <li key={s.title} className={cn('flex items-center', i < last && 'flex-1')} aria-current={current ? 'step' : undefined}>
+              <span
+                className={cn(
+                  'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
+                  done && 'border-burgundy bg-burgundy text-cream',
+                  current && 'border-burgundy bg-card text-burgundy ring-4 ring-burgundy/15',
+                  !done && !current && 'border-border bg-card text-muted-foreground',
+                )}
+                title={s.title}
+              >
+                {done ? <Check className="h-4 w-4" aria-hidden="true" /> : i + 1}
+                <span className="sr-only">{s.title}{done ? ' (done)' : current ? ' (current)' : ''}</span>
+              </span>
+              {i < last && <span className={cn('mx-1 h-0.5 flex-1 rounded', i < reached ? 'bg-burgundy' : 'bg-border')} aria-hidden="true" />}
+            </li>
+          );
+        })}
+      </ol>
+      {reached >= 0 && <p className="mt-3 text-sm font-semibold">{stage.title}</p>}
     </div>
   );
 }

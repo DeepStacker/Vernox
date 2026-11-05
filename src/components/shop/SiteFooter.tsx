@@ -9,9 +9,7 @@ const COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
     title: 'Shop',
     links: [
       { label: 'All designs', to: '/shop' },
-      { label: 'Spiritual & Mandala', to: '/shop?category=spiritual' },
       { label: 'Name plates', to: '/shop?category=nameplates' },
-      { label: 'Festive & Gifting', to: '/shop?category=festive' },
       { label: 'Design your own', to: '/studio' },
     ],
   },
@@ -19,24 +17,24 @@ const COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
     title: 'Help',
     links: [
       { label: 'Track order', to: '/track-order' },
-      { label: 'Shipping & delivery', to: '/shipping' },
-      { label: 'Returns & replacement', to: '/returns' },
+      { label: 'Shipping', to: '/shipping' },
+      { label: 'Returns', to: '/returns' },
       { label: 'FAQs', to: '/faqs' },
-      { label: 'Contact us', to: '/contact' },
+      { label: 'Contact', to: '/contact' },
     ],
   },
   {
     title: 'Company',
     links: [
-      { label: 'About Vernox', to: '/about' },
-      { label: 'Corporate & bulk orders', to: '/trade' },
-      { label: 'Privacy policy', to: '/privacy' },
-      { label: 'Terms of sale', to: '/terms' },
+      { label: 'About', to: '/about' },
+      { label: 'Corporate & bulk', to: '/trade' },
+      { label: 'Privacy', to: '/privacy' },
+      { label: 'Terms', to: '/terms' },
     ],
   },
 ];
 
-const PAYMENT_METHODS = ['UPI', 'Cards', 'Net banking', 'Wallets', 'COD*'];
+const PAYMENT_METHODS = ['UPI', 'Cards', 'Net banking', 'COD'];
 
 export function SiteFooter() {
   const { storeConfig } = useCatalog();
@@ -45,24 +43,19 @@ export function SiteFooter() {
 
   return (
     <>
-      <footer className="mt-16 border-t border-border bg-secondary pb-safe-nav lg:pb-0">
+      <footer className="mt-12 border-t border-border bg-secondary pb-safe-nav lg:pb-0">
         <div className="container grid gap-10 py-12 md:grid-cols-[1.4fr_repeat(3,1fr)]">
           <div className="space-y-3">
             <span className="font-brand text-2xl">Vernox</span>
-            <p className="max-w-xs text-sm text-muted-foreground">
-              Laser-cut metal wall art, made to order in India. Delivered across the country.
-            </p>
+            <p className="max-w-xs text-sm text-muted-foreground">Laser-cut metal wall art, made to order in India.</p>
             <ul className="space-y-1 text-sm">
-              <li>{contact.email}</li>
-              <li>{contact.phone}</li>
-              <li className="text-muted-foreground">{contact.hours}</li>
+              {contact.email && <li><a href={`mailto:${contact.email}`} className="hover:text-burgundy hover:underline">{contact.email}</a></li>}
+              {contact.phone && <li><a href={`tel:${contact.phone.replace(/[^\d+]/g, '')}`} className="hover:text-burgundy hover:underline">{contact.phone}</a></li>}
             </ul>
-            {wa ? (
+            {wa && (
               <a href={wa} target="_blank" rel="noopener noreferrer" className="btn-secondary mt-2 py-2">
-                <MessageCircle className="h-4 w-4" aria-hidden="true" /> Chat on WhatsApp
+                <MessageCircle className="h-4 w-4" aria-hidden="true" /> WhatsApp us
               </a>
-            ) : (
-              <p className="text-sm text-muted-foreground">WhatsApp: [number to be added in store settings]</p>
             )}
           </div>
 
@@ -82,9 +75,7 @@ export function SiteFooter() {
           <div className="container flex flex-col gap-3 py-5 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between">
             <div className="flex flex-wrap items-center gap-2" aria-label="Payment methods accepted">
               {PAYMENT_METHODS.map(m => <span key={m} className="rounded border border-border bg-card px-2 py-1 font-medium text-foreground">{m}</span>)}
-              <span>*COD on ready designs only</span>
             </div>
-            <p>Secure payments · Made in India · GSTIN: [to be added]</p>
             <p>© {new Date().getFullYear()} Vernox. All rights reserved.</p>
           </div>
         </div>

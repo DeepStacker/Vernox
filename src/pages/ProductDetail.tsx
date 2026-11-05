@@ -1,7 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Banknote, Heart, Minus, PackageCheck, Plus, ShieldCheck, Truck } from 'lucide-react';
+import { Heart, Minus, Plus } from 'lucide-react';
 import { StoreLayout } from '@/components/shop/StoreLayout';
+import { PageHeader } from '@/components/shop/PageHeader';
+import { Reveal } from '@/components/shop/Reveal';
+import { ProductGridSkeleton } from '@/components/shop/StateViews';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { flyToCart } from '@/lib/storefront/motion';
 import { ProductGallery } from '@/components/shop/ProductGallery';
 import { PriceTag } from '@/components/shop/PriceTag';
 import { ProductFaq, ProductReviews, SpecsTable } from '@/components/shop/ProductInfo';
@@ -31,8 +36,13 @@ export default function ProductDetail() {
 
   // Reset the selection when navigating between products (related items keep this component mounted).
   useEffect(() => {
-    setSizeIndex(0);
-    setFinish(product?.finishes[0] ?? '');
+    // `?size=<label>&finish=<id>` preselects a configuration (the wall-preview QR code uses it); invalid values are ignored.
+    const query = new URLSearchParams(window.location.search);
+    const wantedSize = query.get('size')?.trim().toLowerCase();
+    const sizeFromUrl = product && wantedSize ? product.sizes.findIndex(x => x.label.toLowerCase() === wantedSize) : -1;
+    const wantedFinish = query.get('finish') ?? '';
+    setSizeIndex(sizeFromUrl >= 0 ? sizeFromUrl : 0);
+    setFinish((product?.finishes as string[] | undefined)?.includes(wantedFinish) ? wantedFinish : product?.finishes[0] ?? '');
     setQuantity(1);
     if (product) {
       window.scrollTo(0, 0);
@@ -55,7 +65,17 @@ export default function ProductDetail() {
     jsonLd: product ? productJsonLd({ ...product, price: unitPrice(product, product.sizes[0]) }) : undefined,
   });
 
-  if (productsLoading) return <StoreLayout><div className="container py-20"><div className="h-96 animate-pulse rounded-lg bg-secondary" aria-hidden="true" /></div></StoreLayout>;
+  // Keep the address in sync with the chosen configuration so a shared link reopens it (replaceState: no history entries).
+  useEffect(() => {
+    if (!product) return;
+    const url = new URL(window.location.href);
+    const sizeLabel = product.sizes[sizeIndex]?.label;
+    if (sizeLabel) url.searchParams.set('size', sizeLabel);
+    if (finish) url.searchParams.set('finish', finish);
+    window.history.replaceState(window.history.state, '', url);
+  }, [product, sizeIndex, finish]);
+
+  if (productsLoading) return <ProductSkeleton />;
   if (!product) return <NotFound />;
 
   const size = product.sizes[sizeIndex] ?? { label: 'Standard', widthMm: 0, heightMm: 0, priceDelta: 0 };
@@ -70,7 +90,8 @@ export default function ProductDetail() {
   const rated = productReviews.filter(r => r.rating > 0);
   const average = rated.length ? rated.reduce((s, r) => s + r.rating, 0) / rated.length : 0;
 
-  const addToCart = (openDrawer: boolean) => {
+  const addToCart = (openDrawer: boolean, source?: Element | null) => {
+    flyToCart(source ?? null);
     add({
       productId: product.id,
       productName: product.name,
@@ -93,21 +114,20 @@ export default function ProductDetail() {
     navigate('/checkout');
   };
 
+  const widest = Math.max(...product.sizes.map(x => x.widthMm), 1);
+  // The plate scales with the chosen size (never below 70%) so size changes visibly morph the piece.
+  const plateScale = 0.7 + 0.3 * ((size.widthMm || widest) / widest);
+
   return (
     <StoreLayout mainClassName="pb-24 lg:pb-0">
       <div className="container py-4 sm:py-8">
-        <nav aria-label="Breadcrumb" className="mb-4 text-sm text-muted-foreground">
-          <Link to="/shop" className="hover:text-burgundy">Shop</Link>
-          {category && <> / <Link to={`/shop?category=${category.id}`} className="hover:text-burgundy">{category.name}</Link></>}
-          {' / '}<span className="text-foreground">{product.name}</span>
-        </nav>
+        <PageHeader crumbs={[{ label: 'Shop', to: '/shop' }, ...(category ? [{ label: category.name, to: `/shop?category=${category.id}` }] : []), { label: product.name }]} />
 
         <div className="grid gap-8 lg:grid-cols-2">
-          <ProductGallery product={product} finish={activeFinish} size={size} />
+          <ProductGallery product={product} finish={activeFinish} size={size} plateScale={plateScale} />
 
           <div className="space-y-5">
             <div>
-              {product.isSample && <p className="mb-1 text-xs text-muted-foreground">Sample listing for testing</p>}
               <h1 className="font-display text-3xl sm:text-4xl">{product.name}</h1>
               <p className="mt-1 text-muted-foreground">{product.tagline}</p>
               {rated.length > 0 && <div className="mt-2"><StarRating average={average} count={rated.length} /></div>}
@@ -119,11 +139,9 @@ export default function ProductDetail() {
               <DeliveryEstimate productId={product.id} className="pt-2" />
             </div>
 
-            <ul className="space-y-1.5 rounded-lg bg-secondary p-3 text-sm">
-              <li className="flex items-center gap-2"><Truck className="h-4 w-4 shrink-0 text-brass" aria-hidden="true" /> Free shipping on orders above {formatINR(storeConfig.freeShippingThreshold)}</li>
-              <li className="flex items-center gap-2"><Banknote className="h-4 w-4 shrink-0 text-brass" aria-hidden="true" /> Cash on delivery available on this ready design</li>
-              <li className="flex items-center gap-2"><PackageCheck className="h-4 w-4 shrink-0 text-brass" aria-hidden="true" /> Made to order, ships in about {product.leadTimeDays ?? 7} working days</li>
-            </ul>
+            <p className="text-sm text-muted-foreground">
+              Free shipping above {formatINR(storeConfig.freeShippingThreshold)} · Ships in about {product.leadTimeDays ?? 7} working days
+            </p>
 
             <fieldset>
               <legend className="mb-2 text-sm font-semibold">Size: {formatSizeCm(size)} ({formatSizeInches(size)})</legend>
@@ -159,7 +177,7 @@ export default function ProductDetail() {
                   />
                 ))}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">The price is the same in every finish.</p>
+              
             </fieldset>
 
             <div className="flex items-center gap-3">
@@ -175,32 +193,33 @@ export default function ProductDetail() {
             {lowStock && <p className="text-sm font-medium text-burgundy">Only {product.stock} left in stock</p>}
 
             <div className="hidden gap-3 lg:flex">
-              <button type="button" disabled={outOfStock} onClick={() => addToCart(true)} className="btn-secondary flex-1">{outOfStock ? 'Out of stock' : 'Add to cart'}</button>
+              <button type="button" disabled={outOfStock} onClick={(e: MouseEvent<HTMLButtonElement>) => addToCart(true, e.currentTarget)} className="btn-secondary flex-1">{outOfStock ? 'Out of stock' : 'Add to cart'}</button>
               <button type="button" disabled={outOfStock} onClick={buyNow} className="btn-primary flex-1">Buy now</button>
             </div>
 
-            <Link to="/studio" className="block rounded-lg border border-border bg-card p-3 text-sm hover:border-burgundy">
-              <span className="font-semibold text-burgundy">Customise this design</span>
-              <span className="block text-muted-foreground">Different size, a name or your own artwork? Open the Studio.</span>
-            </Link>
-
-            <ul className="grid grid-cols-3 gap-2 text-center text-xs text-muted-foreground">
-              <li className="rounded-lg border border-border p-2"><ShieldCheck className="mx-auto mb-1 h-5 w-5 text-brass" aria-hidden="true" />Secure payments</li>
-              <li className="rounded-lg border border-border p-2"><PackageCheck className="mx-auto mb-1 h-5 w-5 text-brass" aria-hidden="true" />Replacement on transit damage</li>
-              <li className="rounded-lg border border-border p-2"><Truck className="mx-auto mb-1 h-5 w-5 text-brass" aria-hidden="true" />Delivered across India</li>
-            </ul>
-
-            <p className="text-sm text-muted-foreground">{product.description}</p>
+            <Link to="/studio" className="inline-block text-sm font-semibold text-burgundy underline-offset-4 hover:underline">Want a different size or your own artwork? Open the Studio</Link>
           </div>
         </div>
 
-        <div className="mt-12 grid gap-10 lg:grid-cols-2">
-          <section aria-labelledby="specs-heading"><h2 id="specs-heading" className="section-title mb-3">Specifications</h2><SpecsTable product={product} size={size} finish={activeFinish} /></section>
-          <section aria-labelledby="faq-heading"><h2 id="faq-heading" className="section-title mb-3">Questions about this design</h2><ProductFaq product={product} /></section>
-        </div>
+        <Reveal className="mt-10 max-w-3xl">
+          <Accordion type="single" collapsible defaultValue="about">
+            <AccordionItem value="about">
+              <AccordionTrigger className="font-display text-xl">About this design</AccordionTrigger>
+              <AccordionContent className="text-muted-foreground">{product.description}</AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="specs">
+              <AccordionTrigger className="font-display text-xl">Specifications</AccordionTrigger>
+              <AccordionContent><SpecsTable product={product} size={size} finish={activeFinish} /></AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="faq">
+              <AccordionTrigger className="font-display text-xl">Questions</AccordionTrigger>
+              <AccordionContent><ProductFaq product={product} /></AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </Reveal>
 
         <section className="mt-12" aria-labelledby="reviews-heading">
-          <h2 id="reviews-heading" className="section-title mb-3">Customer reviews</h2>
+          <h2 id="reviews-heading" className="section-title mb-3">Reviews</h2>
           <ProductReviews reviews={productReviews} />
         </section>
 
@@ -219,8 +238,28 @@ export default function ProductDetail() {
           <p className="text-lg font-semibold leading-tight">{formatINR(price)}</p>
           <p className="text-xs text-muted-foreground">+ GST</p>
         </div>
-        <button type="button" disabled={outOfStock} onClick={() => addToCart(true)} className="btn-secondary ml-auto px-4">Add</button>
+        <button type="button" disabled={outOfStock} onClick={(e: MouseEvent<HTMLButtonElement>) => addToCart(true, e.currentTarget)} className="btn-secondary ml-auto px-4">Add</button>
         <button type="button" disabled={outOfStock} onClick={buyNow} className="btn-primary px-4">Buy now</button>
+      </div>
+    </StoreLayout>
+  );
+}
+
+/** Matches the final layout (gallery left, buy box right) so nothing shifts when the product arrives. */
+function ProductSkeleton() {
+  return (
+    <StoreLayout>
+      <div className="container py-4 sm:py-8" role="status" aria-label="Loading design">
+        <div className="skeleton mb-6 h-4 w-48" />
+        <div className="grid gap-8 lg:grid-cols-2">
+          <div className="space-y-3"><div className="skeleton aspect-square" /><div className="flex gap-2"><div className="skeleton h-10 w-20" /><div className="skeleton h-10 w-20" /><div className="skeleton h-10 w-20" /></div></div>
+          <div className="space-y-5">
+            <div className="skeleton h-10 w-3/4" /><div className="skeleton h-5 w-1/2" /><div className="skeleton h-8 w-40" />
+            <div className="skeleton h-12 w-full" /><div className="skeleton h-12 w-2/3" />
+            <div className="flex gap-3"><div className="skeleton h-11 flex-1" /><div className="skeleton h-11 flex-1" /></div>
+          </div>
+        </div>
+        <div className="mt-12"><ProductGridSkeleton count={4} /></div>
       </div>
     </StoreLayout>
   );

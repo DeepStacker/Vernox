@@ -1,12 +1,13 @@
 /**
  * Public contact details. Values come from `settings/store` when the owner sets them
- * (supportEmail, supportPhone, whatsappNumber, supportHours, workshopAddress); until then clearly
- * marked placeholders are shown so nothing fake is presented as real.
+ * (supportEmail, supportPhone, whatsappNumber, supportHours, workshopAddress); until then the
+ * field is an empty string and the UI omits it, so customers never see a placeholder.
  * TODO(contact): owner to fill the settings/store contact fields before launch.
  */
 import type { StoreConfig } from '@/types/store';
 
 export interface StoreContact {
+  /** Empty when the owner has not configured it; callers must omit empty fields. */
   email: string;
   phone: string;
   /** Digits only with country code, e.g. 919876543210, for wa.me links. Empty until configured. */
@@ -26,11 +27,11 @@ type ContactSettings = Partial<{
 export function resolveContact(config: StoreConfig): StoreContact {
   const c = config as StoreConfig & ContactSettings;
   return {
-    email: c.supportEmail || config.adminEmail || '[Support email]',
-    phone: c.supportPhone || '[Support phone]',
+    email: c.supportEmail || config.adminEmail || '',
+    phone: c.supportPhone || '',
     whatsapp: (c.whatsappNumber ?? '').replace(/\D/g, ''),
     hours: c.supportHours || 'Mon to Sat, 10 am to 6 pm IST',
-    address: c.workshopAddress || '[Workshop address]',
+    address: c.workshopAddress || '',
   };
 }
 
