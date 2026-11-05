@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Phone, Tag, ShieldCheck, Truck } from 'lucide-react';
 import { SiteHeader } from '@/components/shop/SiteHeader';
+import { PageHeader } from '@/components/shop/PageHeader';
 import { SiteFooter } from '@/components/shop/SiteFooter';
 import { ShapeThumb } from '@/components/shop/ShapeThumb';
 import { useCart } from '@/lib/cartContext';
@@ -24,12 +25,12 @@ import {
 
 const inputClass =
   'w-full bg-background border border-border rounded px-4 py-2.5 text-sm outline-none focus:border-burgundy transition';
-const labelClass = 'text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block mb-1';
+const labelClass = 'text-sm font-medium text-foreground block mb-1';
 
 type Phase = 'details' | 'creating' | 'ready' | 'paying' | 'verifying';
 
 function FieldError({ message }: { message?: string }) {
-  return message ? <p className="text-[11px] text-destructive mt-1" role="alert">{message}</p> : null;
+  return message ? <p className="text-xs text-destructive mt-1" role="alert">{message}</p> : null;
 }
 
 export default function Checkout() {
@@ -236,15 +237,7 @@ export default function Checkout() {
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-10 md:py-14 w-full grid lg:grid-cols-[1.1fr_400px] gap-10 flex-1">
         <form onSubmit={handleContinue} className="space-y-8" noValidate>
           <div>
-            <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground mb-2">
-              <Link to="/cart" className="hover:text-burgundy transition">Cart</Link>
-              <span>/</span>
-              <span className="text-burgundy font-semibold">Secure Checkout</span>
-            </div>
-            <h1 className="font-display text-3xl sm:text-4xl text-burgundy leading-tight font-semibold">Checkout</h1>
-            <p className="text-muted-foreground text-xs mt-1">
-              Delivery within India. Your final total is confirmed by our server before you pay.
-            </p>
+            <PageHeader title="Checkout" crumbs={[{ label: 'Cart', to: '/cart' }, { label: 'Checkout' }]} />
           </div>
 
           <div className="bg-card border border-border/70 rounded-lg p-5 shadow-soft space-y-4">
@@ -297,7 +290,7 @@ export default function Checkout() {
                 <label className={labelClass} htmlFor="co-pincode">Pincode</label>
                 <input id="co-pincode" inputMode="numeric" maxLength={6} autoComplete="postal-code" value={form.pincode} onChange={set('pincode')} className={inputClass} />
                 <FieldError message={errors.pincode} />
-                <p className="text-[11px] mt-1 text-muted-foreground flex items-center gap-1" aria-live="polite">
+                <p className="text-xs mt-1 text-muted-foreground flex items-center gap-1" aria-live="polite">
                   {delivery.isLoading && 'Checking delivery…'}
                   {!delivery.isLoading && delivery.estimate?.serviceable && delivery.estimate.estimatedDeliveryDate && (
                     <><Truck className="w-3 h-3" aria-hidden /> Estimated delivery by {formatDeliveryDate(delivery.estimate.estimatedDeliveryDate)}</>
@@ -321,7 +314,7 @@ export default function Checkout() {
                 onChange={() => setPaymentMethod('prepaid')} className="mt-1 accent-burgundy" />
               <span>
                 <span className="font-semibold text-dark-brown">Pay online</span>
-                <span className="block text-[11px] text-muted-foreground">UPI, cards, net banking or wallets via Razorpay.</span>
+                <span className="block text-xs text-muted-foreground">UPI, cards, net banking or wallets via Razorpay.</span>
               </span>
             </label>
             <label className={`flex items-start gap-3 text-sm ${codBlockedReason ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
@@ -331,7 +324,7 @@ export default function Checkout() {
                 <span className="font-semibold text-dark-brown">
                   Cash on delivery{codFee > 0 ? ` (+ ${money(codFee)} fee + GST)` : ''}
                 </span>
-                <span className="block text-[11px] text-muted-foreground">
+                <span className="block text-xs text-muted-foreground">
                   {codBlockedReason ?? 'Pay in cash when your order arrives.'}
                 </span>
               </span>
@@ -342,7 +335,7 @@ export default function Checkout() {
             <button
               type="submit"
               disabled={busy || items.length === 0}
-              className="w-full bg-burgundy hover:bg-burgundy-hover text-cream font-semibold py-4 rounded-[2px] transition text-xs uppercase tracking-[0.2em] disabled:opacity-60 shadow-sm"
+              className="btn-primary w-full py-4"
             >
               {phase === 'creating'
                 ? (paymentMethod === 'cod' ? 'Placing your order…' : 'Confirming your total…')
@@ -353,14 +346,14 @@ export default function Checkout() {
               type="button"
               onClick={handlePay}
               disabled={busy}
-              className="w-full bg-burgundy hover:bg-burgundy-hover text-cream font-semibold py-4 rounded-[2px] transition text-xs uppercase tracking-[0.2em] disabled:opacity-60 shadow-sm flex items-center justify-center gap-2"
+              className="btn-primary w-full py-4"
             >
               <ShieldCheck className="w-4 h-4" />
               {phase === 'paying' ? 'Waiting for payment…' : phase === 'verifying' ? 'Confirming your payment…' : `Pay ${money(activeIntent.pricing.total)} securely`}
             </button>
           )}
           {activeIntent && (
-            <p className="text-[11px] text-muted-foreground -mt-4">
+            <p className="text-xs text-muted-foreground -mt-4">
               Order {activeIntent.orderNumber} is reserved and awaiting payment. Editing your details or cart will create a new order total.
             </p>
           )}
@@ -382,11 +375,11 @@ export default function Checkout() {
                     ) : (
                       <ShapeThumb shapeId={i.shapeId} finish={i.finish} className="w-full h-full" />
                     )}
-                    <span className="absolute -top-1 -right-1 bg-burgundy text-cream text-[9px] font-mono px-1 rounded-[1px] font-bold">×{i.quantity}</span>
+                    <span className="absolute -top-1 -right-1 bg-burgundy text-cream text-xs font-mono px-1 rounded-[1px] font-bold">×{i.quantity}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-dark-brown truncate">{i.productName}</div>
-                    <div className="text-muted-foreground text-[10px] mt-0.5 capitalize">{i.finish} · {i.sizeLabel}</div>
+                    <div className="text-muted-foreground text-xs mt-0.5 capitalize">{i.finish} · {i.sizeLabel}</div>
                   </div>
                 </div>
               ))}
@@ -399,7 +392,7 @@ export default function Checkout() {
                 </span>
                 {couponCode && (
                   <button type="button" onClick={() => { cartRemoveCoupon(); toast.info('Coupon removed.'); }}
-                    className="text-[10px] text-destructive hover:underline font-semibold">
+                    className="text-xs text-destructive hover:underline font-semibold">
                     Remove
                   </button>
                 )}
@@ -451,14 +444,14 @@ export default function Checkout() {
                   <div className="flex justify-between text-muted-foreground">
                     <span>Items subtotal (estimate)</span><span className="font-mono text-foreground">{money(subtotal)}</span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Shipping, GST{paymentMethod === 'cod' ? ', the cash on delivery fee' : ''} and discounts are calculated by our server when you continue. That total is the amount you pay.
                   </p>
                 </>
               )}
             </div>
 
-            <Link to="/cart" className="block text-center text-[10px] uppercase tracking-widest text-muted-foreground hover:text-burgundy font-bold pt-2 transition">
+            <Link to="/cart" className="block text-center text-xs text-muted-foreground hover:text-burgundy font-bold pt-2 transition">
               ← Edit quantities in cart
             </Link>
           </div>
@@ -467,8 +460,8 @@ export default function Checkout() {
             <div className="p-2 rounded-[2px] bg-burgundy/10 text-burgundy shrink-0"><Phone className="w-4 h-4" /></div>
             <div className="text-xs">
               <div className="font-semibold text-dark-brown">Need help with checkout?</div>
-              <div className="text-muted-foreground text-[11px] mt-0.5">
-                Write to <a href="mailto:concierge@vernoxatelier.com" className="text-burgundy font-semibold underline">concierge@vernoxatelier.com</a>
+              <div className="text-muted-foreground text-xs mt-0.5">
+                <Link to="/contact" className="text-burgundy font-semibold underline">Contact us</Link>
               </div>
             </div>
           </div>

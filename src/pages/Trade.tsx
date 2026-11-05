@@ -8,10 +8,10 @@ import { useSeo } from '@/lib/seo';
 import { isEmail } from '@/lib/storefront/contact';
 
 const USES = [
-  { icon: Building2, title: 'Logo signage', body: 'Reception walls, shop fronts and office entrances cut from your logo file.' },
-  { icon: Gift, title: 'Corporate gifting', body: 'Festive and milestone gifts for teams and clients, with names or logos.' },
-  { icon: Ruler, title: 'Architects and interior designers', body: 'Trade pricing, custom sizes and finish samples for your projects.' },
-  { icon: PenTool, title: 'Custom artwork', body: 'Send a sketch or a vector file and we cut it to size.' },
+  { icon: Building2, title: 'Logo signage' },
+  { icon: Gift, title: 'Corporate gifting' },
+  { icon: Ruler, title: 'Trade pricing' },
+  { icon: PenTool, title: 'Custom artwork' },
 ];
 
 const PROJECT_TYPES = [
@@ -65,23 +65,22 @@ export default function Trade() {
   };
 
   return (
-    <ContentPage title="Corporate & bulk orders" intro="Metal signage, gifts and wall art for businesses and projects, with bulk and trade pricing." wide>
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {USES.map(({ icon: Icon, title, body }) => (
-          <li key={title} className="rounded-lg border border-border bg-card p-4">
-            <Icon className="h-6 w-6 text-brass" aria-hidden="true" />
-            <h2 className="mt-2 font-display text-xl">{title}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+    <ContentPage title="Corporate & bulk orders" intro="Logo signage, gifts and project pricing." wide>
+      <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {USES.map(({ icon: Icon, title }) => (
+          <li key={title} className="flex items-center gap-3 rounded-lg border border-border bg-card p-4">
+            <Icon className="h-6 w-6 shrink-0 text-brass" aria-hidden="true" />
+            <span className="font-display text-xl">{title}</span>
           </li>
         ))}
       </ul>
 
       <section aria-labelledby="quote-heading" className="max-w-2xl">
-        <h2 id="quote-heading" className="mb-3 font-display text-3xl">Request a quote</h2>
+        <h2 id="quote-heading" className="mb-3 font-display text-2xl">Request a quote</h2>
         {refId ? (
           <div role="status" className="rounded-lg border border-border bg-card p-6">
             <p className="font-display text-2xl">Thank you. We have your enquiry.</p>
-            <p className="mt-1 text-muted-foreground">Your reference is <strong>{refId}</strong>. We reply with a quote or follow-up questions.</p>
+            <p className="mt-1 text-muted-foreground">Reference <strong>{refId}</strong>. We will reply with a quote.</p>
           </div>
         ) : (
           <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">

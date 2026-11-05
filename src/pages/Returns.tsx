@@ -5,33 +5,21 @@ import { useSeo } from '@/lib/seo';
 export default function Returns() {
   useSeo({ title: 'Returns & Replacement', description: 'What to do if your Vernox metal wall art arrives damaged or is not what you ordered.' });
   return (
-    <ContentPage title="Returns & replacement" intro="Each piece is made for you, so our policy is built around getting you a piece that is right.">
-      <DraftNote>Draft policy for UAT. Owner and legal advisor to confirm the windows below before launch.</DraftNote>
-
-      <Section title="Damaged in transit">
+    <ContentPage title="Returns" intro="Each piece is made for you, so we focus on getting it right.">
+      <DraftNote>Confirm the damage-report window and the change-of-mind return policy and refund timelines, then add them below.</DraftNote>
+      <Section title="Damaged or wrong item">
         <ul>
-          <li>Record an unboxing video if you can, and send us photos within 48 hours of delivery [confirm].</li>
-          <li>We arrange a free replacement. You do not need to pay again.</li>
+          <li>Send photos within 48 hours of delivery.</li>
+          <li>We replace it at no cost.</li>
         </ul>
       </Section>
-
-      <Section title="Wrong item or manufacturing defect">
-        <p>If the piece differs from your order or has a defect, contact us within 7 days [confirm] and we will repair, replace or refund.</p>
+      <Section title="Custom pieces">
+        <p>Made from your own design, so returns are only for damage or defects.</p>
       </Section>
-
-      <Section title="Custom Studio pieces">
-        <p>Pieces made from your own design, name or logo cannot be returned unless they arrive damaged or defective, because they cannot be resold.</p>
-      </Section>
-
-      <Section title="Change of mind on ready designs">
-        <p>[Owner to decide: return window and who pays return shipping for unused ready designs.]</p>
-      </Section>
-
       <Section title="Refunds">
-        <p>Approved refunds go back to the original payment method. For cash on delivery orders we will ask for bank or UPI details. Timelines: [confirm].</p>
+        <p>Approved refunds go to the original payment method.</p>
       </Section>
-
-      <Link to="/contact" className="btn-primary">Contact us about an order</Link>
+      <p className="text-muted-foreground">Start a request from <Link to="/account" className="font-semibold text-burgundy hover:underline">your orders</Link> or <Link to="/contact" className="font-semibold text-burgundy hover:underline">contact us</Link>.</p>
     </ContentPage>
   );
 }

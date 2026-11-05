@@ -13,6 +13,8 @@ interface Props {
   product: Product;
   finish: string;
   size: ProductSize;
+  /** Plate scale for the chosen size (0..1); the product view morphs to it. */
+  plateScale?: number;
 }
 
 const ROOM_PHOTO = {
@@ -21,7 +23,7 @@ const ROOM_PHOTO = {
 } as const;
 
 /** Product views: the design, a close-up, a sample room photo and the to-scale wall view. Click the stage to zoom. */
-export function ProductGallery({ product, finish, size }: Props) {
+export function ProductGallery({ product, finish, size, plateScale = 1 }: Props) {
   const [view, setView] = useState<View>('product');
   const [zoom, setZoom] = useState(false);
   const roomPhoto = ROOM_PHOTO[product.rooms?.[0] ?? 'living'];
@@ -29,7 +31,7 @@ export function ProductGallery({ product, finish, size }: Props) {
   const tabs: { id: View; label: string }[] = [
     { id: 'product', label: 'Product' },
     { id: 'closeup', label: 'Close-up' },
-    { id: 'room', label: 'Room photo' },
+    { id: 'room', label: 'In a room' },
     { id: 'wall', label: 'View on your wall' },
   ];
 
@@ -46,7 +48,7 @@ export function ProductGallery({ product, finish, size }: Props) {
     }
     return (
       <div className={cn('overflow-hidden rounded-lg', view === 'closeup' && 'cursor-zoom-in')}>
-        <ProductVisual product={product} finish={finish} priority={!large} className={cn('rounded-lg', view === 'closeup' && 'scale-[1.8]')} />
+        <ProductVisual product={product} finish={finish} priority={!large} scale={plateScale} className={cn('rounded-lg', view === 'closeup' && 'scale-[1.8]')} />
       </div>
     );
   };

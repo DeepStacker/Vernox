@@ -1,12 +1,16 @@
-import { useId } from 'react';
+import { useId, type CSSProperties } from 'react';
 import { shapeDefinitions } from '@/lib/shapes';
+import { buildMotif, motifForName } from '@/components/shop/metalArt';
 
 interface Props {
   shapeId: string;
   finish?: string;
   className?: string;
+  style?: CSSProperties;
   /** width / height of the plate; defaults to a square so cards and thumbnails stay uniform. */
   aspect?: number;
+  /** Design name; picks the motif (Om, mandala, tree of life...). Without it the plain catalogue shape is drawn. */
+  name?: string;
 }
 
 const STEEL = ['#5c5c5c', '#2c2c2c', '#151515', '#0c0c0c'];
@@ -29,30 +33,63 @@ const finishGradients: Record<string, string[]> = {
   corten_rust: CORTEN,
 };
 
-/** Draws a design as a metal plate in the chosen finish. Used wherever a product photo is not available yet. */
-export function ShapeThumb({ shapeId, finish = 'brass', className, aspect = 1 }: Props) {
+/**
+ * Draws a design as a laser-cut metal plate in the chosen finish: finish gradient with a hairline brushed
+ * texture, bevelled edge, and a standoff drop shadow. Used wherever a product photo is not available yet.
+ * Only transform/opacity animate (the `.metal-sheen` sweep and gradient-stop colour transitions are CSS).
+ */
+export function ShapeThumb({ shapeId, finish = 'brass', className, style, aspect = 1, name }: Props) {
   const shape = shapeDefinitions.find(s => s.id === shapeId) ?? shapeDefinitions[0];
   const w = 200 * Math.max(1, aspect);
   const h = 200 * Math.max(1, 1 / aspect);
-  const path = shape.getPath(w, h);
   const stops = finishGradients[finish] ?? BRASS;
   const uid = useId().replace(/:/g, '');
-  const gid = `grad-${uid}`;
+  const gid = `g${uid}`;
+  const art = buildMotif(motifForName(name), w, h, shape.getPath(w, h));
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className={className} aria-hidden="true" focusable="false">
+    <svg viewBox={`0 0 ${w} ${h}`} className={className} style={style} aria-hidden="true" focusable="false">
       <defs>
-        <linearGradient id={gid} x1="0.2" y1="0" x2="0.8" y2="1">
+        <linearGradient id={gid} x1="0.15" y1="0" x2="0.85" y2="1">
           {stops.map((color, index) => (
-            <stop key={color + index} offset={`${(index / (stops.length - 1)) * 100}%`} stopColor={color} />
+            <stop key={index} offset={`${(index / (stops.length - 1)) * 100}%`} className="metal-stop" style={{ stopColor: color }} />
           ))}
         </linearGradient>
-        <filter id={`${gid}-shadow`} x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="#000000" floodOpacity="0.28" />
+        <linearGradient id={`${gid}-sheen`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0.5" stopColor="#fff" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <pattern id={`${gid}-brush`} width="4" height="2.2" patternUnits="userSpaceOnUse">
+          <rect width="4" height="0.7" fill="#fff" opacity="0.09" />
+          <rect y="1.3" width="4" height="0.5" fill="#000" opacity="0.07" />
+        </pattern>
+        <mask id={`${gid}-m`} maskUnits="userSpaceOnUse" x="0" y="0" width={w} height={h}>
+          <g fill="#fff">{art.solid}</g>
+          {art.cut}
+        </mask>
+        <filter id={`${gid}-bevel`} x="-5%" y="-5%" width="110%" height="110%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="b" />
+          <feOffset in="b" dx="-1.3" dy="-1.3" result="o" />
+          <feComposite in="SourceAlpha" in2="o" operator="out" result="edge" />
+          <feFlood floodColor="#fff" floodOpacity="0.6" />
+          <feComposite in2="edge" operator="in" result="hi" />
+          <feMerge><feMergeNode in="SourceGraphic" /><feMergeNode in="hi" /></feMerge>
+        </filter>
+        <filter id={`${gid}-shadow`} x="-20%" y="-20%" width="140%" height="145%">
+          <feDropShadow dx="2" dy="9" stdDeviation="7" floodColor="#2b2018" floodOpacity="0.3" />
+          <feDropShadow dx="0.8" dy="2" stdDeviation="1.4" floodColor="#000" floodOpacity="0.35" />
         </filter>
       </defs>
-      <path d={path} fill={`url(#${gid})`} filter={`url(#${gid}-shadow)`} />
-      <path d={path} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.2" />
+      <g filter={`url(#${gid}-shadow)`}>
+        <g filter={`url(#${gid}-bevel)`}>
+          <g mask={`url(#${gid}-m)`}>
+            <rect width={w} height={h} fill={`url(#${gid})`} />
+            <rect width={w} height={h} fill={`url(#${gid}-brush)`} />
+            <g transform="skewX(-18)"><rect className="metal-sheen" x={-w * 0.7} width={w * 0.5} height={h} fill={`url(#${gid}-sheen)`} /></g>
+          </g>
+        </g>
+      </g>
     </svg>
   );
 }

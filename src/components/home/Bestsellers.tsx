@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useCatalog } from '@/lib/catalogContext';
 import { ProductGrid } from '@/components/shop/ProductGrid';
+import { EmptyState, ErrorState, ProductGridSkeleton } from '@/components/shop/StateViews';
 import { reviewStatsByProduct, sortProducts } from '@/lib/storefront/listing';
 
 export function Bestsellers() {
@@ -12,14 +13,14 @@ export function Bestsellers() {
   );
 
   return (
-    <section className="container py-12" aria-labelledby="best-heading">
+    <section className="container py-10 sm:py-12" aria-labelledby="best-heading">
       <div className="mb-5 flex items-end justify-between gap-4">
         <h2 id="best-heading" className="section-title">Bestsellers</h2>
-        <Link to="/shop" className="text-sm font-semibold text-burgundy hover:underline">View all</Link>
+        <Link to="/shop" className="inline-flex min-h-11 items-center text-sm font-semibold text-burgundy hover:underline">View all</Link>
       </div>
-      {productsLoading && <div className="h-64 animate-pulse rounded-lg bg-secondary" aria-hidden="true" />}
-      {productsError && <p role="alert" className="text-sm text-destructive">Designs could not be loaded. Please refresh the page.</p>}
-      {!productsLoading && !productsError && top.length === 0 && <p className="text-muted-foreground">New designs are coming soon.</p>}
+      {productsLoading && <ProductGridSkeleton />}
+      {productsError && <ErrorState>Designs could not be loaded. Please refresh the page.</ErrorState>}
+      {!productsLoading && !productsError && top.length === 0 && <EmptyState title="New designs are coming soon" />}
       {top.length > 0 && <ProductGrid products={top} />}
     </section>
   );

@@ -6,14 +6,13 @@ import { SiteFooter } from '@/components/shop/SiteFooter';
 import { useCatalog } from '@/lib/catalogContext';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { useMyOrders } from '@/lib/data/orders';
-import { OrderProgress } from '@/components/shop/OrderProgress';
-import { ORDER_STATUS_LABELS, type OrderStatus } from '@/lib/orders/orderStateMachine';
+import { OrderDetails } from '@/components/shop/OrderDetails';
+import { EmptyState, ErrorState, LoadingBlock } from '@/components/shop/StateViews';
+import { toPublicSummary } from '@/lib/data/orderLookup';
 import { INDIAN_STATES_AND_UTS, isValidPincode, normalizeIndianMobile } from '@/lib/checkout/validation';
 import { ShapeThumb } from '@/components/shop/ShapeThumb';
-import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, MapPin, Truck, Calendar, Package, AlertCircle, Layers, Sun, Moon, User, Lock, Settings, History, ShieldCheck, Mail, Phone, ArrowRight, Eye, EyeOff, X, PhoneCall, Heart, Activity, Check } from 'lucide-react';
+import { User, Lock, Settings, History, ShieldCheck, Phone, ArrowRight, Eye, EyeOff, X, PhoneCall, Heart } from 'lucide-react';
 import { toast } from 'sonner';
-import { useTheme } from 'next-themes';
 import { auth, googleProvider } from '@/lib/firebase';
 import { signInWithPopup, RecaptchaVerifier, type ConfirmationResult, signInWithPhoneNumber, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 
@@ -23,7 +22,6 @@ export default function Account() {
   const { user, profile: currentCustomer, signIn, register, signOut: logoutCustomer, updateProfile } = useAuth();
   const { data: customerOrders = [], isLoading: ordersLoading, error: ordersError } = useMyOrders(user?.uid);
   
-  const { theme, setTheme } = useTheme();
   const [searchParams] = useSearchParams();
   
   // Navigation tabs inside dashboard
@@ -36,9 +34,6 @@ export default function Account() {
     }
   }, [searchParams]);
   
-  // Expandable orders
-  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-
   // Auth Modes: 'login' | 'register' | 'phone'
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'phone'>('login');
   
@@ -98,22 +93,6 @@ export default function Account() {
       });
     }
   }, [currentCustomer]);
-
-  const getStatusColor = (status: OrderStatus) => {
-    switch (status) {
-      case 'Pending_Payment': return 'text-yellow-600 bg-yellow-500/10 border-yellow-500/20';
-      case 'Paid': case 'In_Design': return 'text-purple-600 bg-purple-500/10 border-purple-500/20';
-      case 'Cutting': case 'Finishing': case 'Quality_Check': case 'Packed': return 'text-blue-600 bg-blue-500/10 border-blue-500/20';
-      case 'Shipped': case 'Out_For_Delivery': return 'text-indigo-600 bg-indigo-500/10 border-indigo-500/20';
-      case 'Delivered': return 'text-green-600 bg-green-500/10 border-green-500/20';
-      case 'Cancelled': case 'Payment_Failed': case 'Expired': return 'text-red-600 bg-red-500/10 border-red-500/20';
-      default: return 'text-zinc-600 bg-zinc-500/10 border-zinc-500/20';
-    }
-  };
-
-  const handleToggleExpand = (orderId: string) => {
-    setExpandedOrderId(prev => prev === orderId ? null : orderId);
-  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -307,25 +286,17 @@ export default function Account() {
         <section className="max-w-md mx-auto px-6 py-16 flex-1 w-full flex flex-col justify-center">
 
           <div className="bg-card border border-border shadow-luxe rounded p-6 sm:p-8 space-y-6 noise-overlay relative">
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="absolute top-4 right-4 p-2 rounded-full border border-border bg-background text-muted-foreground hover:text-foreground transition"
-              title="Toggle Theme Mode"
-            >
-              {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-brass" /> : <Moon className="w-3.5 h-3.5 text-oxblood" />}
-            </button>
 
             {authMode === 'login' && (
               <div className="space-y-5 animate-fade-in">
                 <div className="text-left space-y-1">
-                  <span className="text-[10px] uppercase tracking-[0.35em] text-brass font-bold">Atelier Accounts</span>
                   <h1 className="font-display text-2xl text-oxblood-deep font-semibold">Sign In</h1>
-                  <p className="text-xs text-muted-foreground">Access your custom commission orders, shipping settings, and design backups.</p>
+                  <p className="text-xs text-muted-foreground">Orders, addresses and saved designs.</p>
                 </div>
 
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Email or User ID</label>
+                    <label className="text-xs font-medium text-muted-foreground">Email or User ID</label>
                     <input 
                       type="text" 
                       placeholder="name@example.com"
@@ -337,7 +308,7 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Password</label>
+                    <label className="text-xs font-medium text-muted-foreground">Password</label>
                     <div className="relative">
                       <input 
                         type={showPassword ? 'text' : 'password'} 
@@ -368,7 +339,7 @@ export default function Account() {
 
                 <div className="relative flex py-1 items-center text-xs text-muted-foreground/60">
                   <div className="flex-grow border-t border-border/50"></div>
-                  <span className="flex-shrink mx-4 uppercase tracking-widest text-[9px]">or authenticate with</span>
+                  <span className="flex-shrink mx-4 text-xs">or authenticate with</span>
                   <div className="flex-grow border-t border-border/50"></div>
                 </div>
 
@@ -407,7 +378,7 @@ export default function Account() {
             {authMode === 'phone' && (
               <div className="space-y-5 animate-fade-in">
                 <div className="text-left space-y-1">
-                  <span className="text-[10px] uppercase tracking-[0.35em] text-brass font-bold">SMS Gateways</span>
+                  <span className="text-xs uppercase tracking-[0.35em] text-brass font-bold">SMS Gateways</span>
                   <h1 className="font-display text-2xl text-oxblood-deep font-semibold">Phone Sign In</h1>
                   <p className="text-xs text-muted-foreground">Secure mobile phone numbers with SMS verification codes.</p>
                 </div>
@@ -415,7 +386,7 @@ export default function Account() {
                 {!showOtpInput ? (
                   <form onSubmit={handleSendOtp} className="space-y-4">
                     <div className="space-y-1.5">
-                      <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Mobile Phone Number</label>
+                      <label className="text-xs font-medium text-muted-foreground">Mobile Phone Number</label>
                       <input 
                         type="tel" 
                         placeholder="+32 470 00 00 00"
@@ -424,7 +395,7 @@ export default function Account() {
                         className="w-full bg-background border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-oxblood font-mono font-medium"
                         required
                       />
-                      <span className="text-[9px] text-muted-foreground/80 block mt-1 leading-normal">Requires international country code prefix.</span>
+                      <span className="text-xs text-muted-foreground/80 block mt-1 leading-normal">Requires international country code prefix.</span>
                     </div>
 
                     <button
@@ -439,7 +410,7 @@ export default function Account() {
                 ) : (
                   <form onSubmit={handleVerifyOtp} className="space-y-4">
                     <div className="space-y-1.5">
-                      <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">6-Digit Verification Code</label>
+                      <label className="text-xs font-medium text-muted-foreground">6-Digit Verification Code</label>
                       <input 
                         type="text" 
                         maxLength={6}
@@ -479,14 +450,13 @@ export default function Account() {
             {authMode === 'register' && (
               <div className="space-y-5 animate-fade-in">
                 <div className="text-left space-y-1">
-                  <span className="text-[10px] uppercase tracking-[0.35em] text-brass font-bold">Atelier Accounts</span>
                   <h1 className="font-display text-2xl text-oxblood-deep font-semibold">Create Account</h1>
                   <p className="text-xs text-muted-foreground">Sign up to prefill checkout addresses and browse order status updates.</p>
                 </div>
 
                 <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
                   <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Full Name</label>
+                    <label className="text-xs font-medium text-muted-foreground">Full Name</label>
                     <input 
                       type="text" 
                       placeholder="Jane Doe"
@@ -498,7 +468,7 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Email Address</label>
+                    <label className="text-xs font-medium text-muted-foreground">Email Address</label>
                     <input 
                       type="email" 
                       placeholder="name@example.com"
@@ -510,7 +480,7 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Phone Number (Optional)</label>
+                    <label className="text-xs font-medium text-muted-foreground">Phone Number (Optional)</label>
                     <input 
                       type="text" 
                       placeholder="+32 470 00 00 00"
@@ -521,7 +491,7 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Create Password</label>
+                    <label className="text-xs font-medium text-muted-foreground">Create Password</label>
                     <input 
                       type="password" 
                       placeholder="••••••••"
@@ -543,7 +513,7 @@ export default function Account() {
 
                 <div className="relative flex py-1 items-center text-xs text-muted-foreground/60">
                   <div className="flex-grow border-t border-border/50"></div>
-                  <span className="flex-shrink mx-4 uppercase tracking-widest text-[9px]">or</span>
+                  <span className="flex-shrink mx-4 text-xs">or</span>
                   <div className="flex-grow border-t border-border/50"></div>
                 </div>
 
@@ -597,7 +567,7 @@ export default function Account() {
             </div>
             <div>
               <h3 className="font-display font-semibold text-oxblood-deep leading-tight truncate">{currentCustomer.name}</h3>
-              <p className="text-[10px] text-muted-foreground truncate mt-0.5">{currentCustomer.email || currentCustomer.phone}</p>
+              <p className="text-xs text-muted-foreground truncate mt-0.5">{currentCustomer.email || currentCustomer.phone}</p>
             </div>
           </div>
 
@@ -632,13 +602,6 @@ export default function Account() {
           </nav>
 
           <div className="border-t border-border/50 pt-4 flex flex-col gap-2">
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="w-full border border-border bg-card p-2.5 rounded text-xs font-semibold flex items-center justify-center gap-2 hover:bg-muted text-muted-foreground hover:text-foreground transition"
-            >
-              {theme === 'dark' ? <Sun className="w-4 h-4 text-brass" /> : <Moon className="w-4 h-4 text-oxblood" />}
-              <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-            </button>
 
             <button
               onClick={logoutCustomer}
@@ -652,191 +615,21 @@ export default function Account() {
         {/* Right Hand Context Panels */}
         <main className="space-y-6">
           {activeTab === 'orders' && (
-            <div className="space-y-6 animate-fade-in">
-              <div>
-                <h1 className="font-display text-3xl text-oxblood-deep font-semibold">Atelier Orders</h1>
-                <p className="text-xs text-muted-foreground">Inspect tracking details, receipts, and custom commission canvas designs.</p>
-              </div>
-
+            <div className="space-y-5 animate-fade-in">
+              <h1 className="font-display text-3xl">My orders</h1>
               {ordersLoading ? (
-                <p className="text-sm text-muted-foreground py-10 text-center">Loading your orders…</p>
+                <LoadingBlock className="h-40" />
               ) : ordersError ? (
-                <div className="text-center py-12 border border-destructive/30 rounded bg-destructive/5 text-sm text-destructive">
-                  We could not load your orders: {ordersError.message}
-                </div>
+                <ErrorState>We could not load your orders: {ordersError.message}</ErrorState>
               ) : customerOrders.length === 0 ? (
-                <div className="text-center py-20 border border-dashed border-border rounded bg-card/40 noise-overlay">
-                  <Package className="w-10 h-10 mx-auto mb-4 text-muted-foreground/40" />
-                  <p className="text-muted-foreground mb-6 font-serif-italic text-sm">No orders recorded under this account yet.</p>
-                  <Link to="/shop" className="inline-flex bg-gradient-oxblood text-primary-foreground font-semibold px-6 py-3 rounded-full hover:shadow-soft transition text-xs uppercase tracking-widest">
-                    Explore the Shop
-                  </Link>
-                </div>
+                <EmptyState title="No orders yet" action={{ label: 'Shop designs', to: '/shop' }} />
               ) : (
                 <div className="space-y-4">
-                  {customerOrders.map(o => {
-                    const isExpanded = expandedOrderId === o.id;
-                    const totalItemsCount = o.items.reduce((sum, i) => sum + i.quantity, 0);
-                    
-                    return (
-                      <div 
-                        key={o.id} 
-                        className={`bg-card border rounded transition-all shadow-soft overflow-hidden ${
-                          isExpanded ? 'border-oxblood/30 ring-1 ring-oxblood/10' : 'border-border/60 hover:border-oxblood/20'
-                        }`}
-                      >
-                        {/* CARD SUMMARY HEADER */}
-                        <div 
-                          onClick={() => handleToggleExpand(o.id)}
-                          className="p-5 flex flex-wrap items-center justify-between gap-4 cursor-pointer select-none"
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-sm font-semibold text-brass">{o.orderNumber || o.id}</span>
-                              <span className={`px-2.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded-full border ${getStatusColor(o.status)}`}>
-                                {ORDER_STATUS_LABELS[o.status]}
-                              </span>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Placed: {new Date(o.placedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <div className="font-semibold text-oxblood-deep font-mono">{storeConfig.currency}{o.total.toFixed(2)}</div>
-                              <span className="text-[9px] uppercase tracking-widest text-brass font-bold">Secure Account Receipt</span>
-                            </div>
-                            <div className="p-1 hover:bg-muted rounded text-muted-foreground">
-                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* EXPANDED DETAILED BODY */}
-                        {isExpanded && (
-                          <div className="border-t border-border/50 bg-background-warm/30 p-5 space-y-6 animate-fade-in">
-                            <div className="space-y-4 bg-muted/20 border border-border/40 p-5 rounded-md">
-                              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 border-b border-border/20 pb-2">
-                                <History className="w-3.5 h-3.5" /> Order progress
-                              </h4>
-                              <OrderProgress status={o.status} />
-                            </div>
-
-                            {/* 1. Itemized List */}
-                            <div className="space-y-3">
-                              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 border-b border-border/30 pb-2">
-                                <Package className="w-3.5 h-3.5" /> Order details
-                              </h4>
-                              <div className="divide-y divide-border/40">
-                                {o.items.map(item => (
-                                  <div key={item.id} className="flex gap-4 py-4 first:pt-0 last:pb-0 items-center">
-                                    <div className="w-16 h-16 shrink-0 bg-card border border-border/50 rounded p-2 flex items-center justify-center">
-                                      {item.customDesignThumb ? (
-                                        <img 
-                                          src={item.customDesignThumb} 
-                                          alt="" 
-                                          className="w-full h-full object-contain" 
-                                        />
-                                      ) : (
-                                        <ShapeThumb shapeId={item.shapeId} finish={item.finish} className="w-full h-full" />
-                                      )}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-display text-sm font-semibold text-oxblood-deep truncate">{item.productName}</div>
-                                      <div className="text-xs text-muted-foreground capitalize font-medium">
-                                        {item.finish} · {item.sizeLabel}
-                                      </div>
-                                      {item.customDesignRef && item.customDesignRef.startsWith('{') && (
-                                        <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider text-brass font-bold mt-1">
-                                          <Layers className="w-2.5 h-2.5" /> Custom Design
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="text-right text-sm">
-                                      <div className="font-semibold font-mono text-oxblood-deep">{storeConfig.currency}{(item.unitPrice * item.quantity).toFixed(2)}</div>
-                                      <div className="text-xs text-muted-foreground">{storeConfig.currency}{item.unitPrice.toFixed(2)} x {item.quantity}</div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* 2. Tracking details & Shipping details */}
-                            <div className="grid md:grid-cols-2 gap-6 pt-2 border-t border-border/40">
-                              {/* Shipping Coordinate Card */}
-                              <div className="space-y-2 text-xs">
-                                <h5 className="font-semibold text-oxblood flex items-center gap-1.5">
-                                  <MapPin className="w-3.5 h-3.5" /> Shipping Address
-                                </h5>
-                                <div className="text-muted-foreground leading-relaxed pl-5">
-                                  <p className="font-semibold text-foreground">{o.customerName}</p>
-                                  <p>{o.shippingAddress}</p>
-                                  <p>{o.shippingCity}, {o.shippingState} {o.shippingPincode}</p>
-                                  <p>{o.shippingCountry}</p>
-                                </div>
-                              </div>
-
-                              {/* Order Tracking Card */}
-                              <div className="space-y-2 text-xs">
-                                <div className="flex items-center justify-between">
-                                  <h5 className="font-semibold text-oxblood flex items-center gap-1.5">
-                                    <Truck className="w-3.5 h-3.5" /> Order Tracking
-                                  </h5>
-                                  <Link 
-                                    to={`/track-order?id=${o.orderNumber || o.id}`}
-                                    className="text-[10px] text-brass hover:text-oxblood font-semibold tracking-wider uppercase inline-flex items-center gap-1 transition"
-                                  >
-                                    Live Telemetry &rarr;
-                                  </Link>
-                                </div>
-                                {o.tracking?.trackingNumber ? (
-                                  <div className="text-muted-foreground leading-relaxed pl-5 space-y-1">
-                                    <p>Carrier: <span className="font-semibold text-foreground capitalize">{o.tracking?.carrier || 'Courier'}</span></p>
-                                    <p>Code: <span className="font-mono text-foreground font-semibold">{o.tracking?.trackingNumber}</span></p>
-                                    {o.tracking?.estimatedDelivery && (
-                                      <p className="flex items-center gap-1 text-emerald-600 mt-1">
-                                        <Calendar className="w-3 h-3" /> Delivery: {o.tracking?.estimatedDelivery}
-                                      </p>
-                                    )}
-                                    <div className="pt-2">
-                                      <Link
-                                        to={`/track-order?id=${o.orderNumber || o.id}`}
-                                        className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-oxblood border border-oxblood/20 bg-oxblood/5 hover:bg-oxblood hover:text-white px-3 py-1.5 rounded transition uppercase tracking-wider"
-                                      >
-                                        <Activity className="w-3 h-3" /> Dedicated Tracking Portal
-                                      </Link>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="text-muted-foreground leading-relaxed pl-5 space-y-2">
-                                    <div className="flex items-start gap-1.5 bg-yellow-500/5 border border-yellow-500/10 p-2.5 rounded">
-                                      <AlertCircle className="w-4 h-4 text-yellow-600 shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="font-semibold text-foreground text-[11px]">Production in Queue</p>
-                                        <p className="text-[10px] text-muted-foreground/80 mt-0.5">We are preparing your custom commission layout. Once laser cut and patinated, tracking codes will activate here.</p>
-                                      </div>
-                                    </div>
-                                    <Link
-                                      to={`/track-order?id=${o.orderNumber || o.id}`}
-                                      className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-oxblood border border-oxblood/20 bg-oxblood/5 hover:bg-oxblood hover:text-white px-3 py-1.5 rounded transition uppercase tracking-wider"
-                                    >
-                                      <Activity className="w-3 h-3" /> Track Atelier Milestones &rarr;
-                                    </Link>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {customerOrders.map(o => <OrderDetails key={o.id} order={toPublicSummary(o)} email={currentCustomer.email} />)}
                 </div>
               )}
             </div>
           )}
-
           {activeTab === 'profile' && (
             <div className="space-y-6 animate-fade-in max-w-2xl">
               <div>
@@ -847,7 +640,7 @@ export default function Account() {
               <form onSubmit={handleUpdateProfile} className="bg-card border border-border/60 rounded p-6 space-y-5 noise-overlay">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Full Name</label>
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Full Name</label>
                     <input 
                       type="text" 
                       value={profileForm.name}
@@ -858,7 +651,7 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Phone Number</label>
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Phone Number</label>
                     <input 
                       type="text" 
                       value={profileForm.phone}
@@ -869,7 +662,7 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1 md:col-span-2">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Default Shipping Street Address</label>
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Default Shipping Street Address</label>
                     <input 
                       type="text" 
                       value={profileForm.address}
@@ -879,7 +672,7 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">City</label>
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">City</label>
                     <input 
                       type="text" 
                       value={profileForm.city}
@@ -889,7 +682,7 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Pincode</label>
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Pincode</label>
                     <input 
                       type="text" 
                       inputMode="numeric"
@@ -901,7 +694,7 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1 md:col-span-2">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">State / UT</label>
+                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">State / UT</label>
                     <select
                       value={profileForm.state}
                       onChange={e => setProfileForm({ ...profileForm, state: e.target.value })}
@@ -934,7 +727,7 @@ export default function Account() {
 
               <form onSubmit={handleUpdatePassword} className="bg-card border border-border/60 rounded p-6 space-y-4 noise-overlay">
                 <div className="space-y-1">
-                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Current Password</label>
+                  <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Current Password</label>
                   <input 
                     type="password" 
                     placeholder="••••••••"
@@ -946,7 +739,7 @@ export default function Account() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">New Password</label>
+                  <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">New Password</label>
                   <input 
                     type="password" 
                     placeholder="••••••••"
@@ -958,7 +751,7 @@ export default function Account() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Confirm New Password</label>
+                  <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Confirm New Password</label>
                   <input 
                     type="password" 
                     placeholder="••••••••"
@@ -1007,13 +800,13 @@ export default function Account() {
                           <Link to={`/product/${p.slug}`} className="font-display text-lg text-oxblood-deep hover:underline truncate block font-semibold">
                             {p.name}
                           </Link>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest truncate">{p.tagline}</p>
+                          <p className="text-xs text-muted-foreground uppercase tracking-widest truncate">{p.tagline}</p>
                           <p className="text-sm font-semibold font-mono text-oxblood mt-1">{storeConfig.currency}{p.price}</p>
                         </div>
                         <div className="flex items-center gap-3 mt-3">
                           <Link
                             to={`/product/${p.slug}`}
-                            className="bg-oxblood text-ivory text-[10px] uppercase tracking-widest font-semibold px-4 py-2 rounded hover:bg-oxblood-deep transition"
+                            className="bg-oxblood text-ivory text-xs uppercase tracking-widest font-semibold px-4 py-2 rounded hover:bg-oxblood-deep transition"
                           >
                             Configure
                           </Link>

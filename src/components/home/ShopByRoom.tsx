@@ -1,50 +1,43 @@
 import { Link } from 'react-router-dom';
 import { Picture, SITE_IMAGES } from '@/components/shop/Picture';
+import { Reveal } from '@/components/shop/Reveal';
 import { ShapeThumb } from '@/components/shop/ShapeThumb';
-import { ROOMS, THEMES, type RoomId } from '@/lib/catalog';
+import { ROOMS, type RoomId } from '@/lib/catalog';
 
 // Rooms without a photograph yet are drawn with a representative design (TODO(catalogue) in src/lib/catalog.ts).
 const ROOM_PHOTOS: Partial<Record<RoomId, keyof typeof SITE_IMAGES>> = {
   living: 'livingRoom', bedroom: 'bedroom', office: 'office', entrance: 'entrance', outdoor: 'round',
 };
-const ROOM_SHAPES: Partial<Record<RoomId, string>> = { pooja: 'flower', kids: 'cloud' };
+const ROOM_ART: Partial<Record<RoomId, { shapeId: string; name: string }>> = {
+  pooja: { shapeId: 'circle', name: 'Mandala' },
+  kids: { shapeId: 'cloud', name: 'Cloud' },
+};
 
 export function ShopByRoom() {
   return (
-    <section className="container py-12" aria-labelledby="room-heading">
+    <section className="container py-10 sm:py-12" aria-labelledby="room-heading">
       <h2 id="room-heading" className="section-title mb-5">Shop by room</h2>
       <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
-        {ROOMS.map(room => {
+        {ROOMS.map((room, i) => {
           const photo = ROOM_PHOTOS[room.id];
+          const art = ROOM_ART[room.id];
           return (
-            <li key={room.id}>
-              <Link to={`/shop?room=${room.id}`} className="group block overflow-hidden rounded-lg border border-border bg-card">
-                {photo ? (
-                  <Picture {...SITE_IMAGES[photo]} alt="" className="aspect-[4/3] w-full object-cover" />
-                ) : (
-                  <div className="flex aspect-[4/3] items-center justify-center bg-[#EFE8DD] p-6" aria-hidden="true">
-                    <ShapeThumb shapeId={ROOM_SHAPES[room.id] ?? 'circle'} finish="brass" className="h-full" />
-                  </div>
-                )}
-                <div className="p-3">
-                  <p className="font-display text-lg group-hover:text-burgundy">{room.name}</p>
-                  <p className="text-xs text-muted-foreground">{room.blurb}</p>
+            <Reveal as="li" key={room.id} index={i % 4}>
+              <Link to={`/shop?room=${room.id}`} className="group lift relative block overflow-hidden rounded-lg border border-border bg-card">
+                <div className="aspect-[4/3] overflow-hidden">
+                  {photo ? (
+                    <Picture {...SITE_IMAGES[photo]} alt="" className="kenburns h-full w-full object-cover" />
+                  ) : (
+                    <div className="wall-tile flex h-full items-center justify-center p-6" aria-hidden="true">
+                      <ShapeThumb shapeId={art?.shapeId ?? 'circle'} name={art?.name} finish="brass" className="h-full" />
+                    </div>
+                  )}
                 </div>
+                <p className="px-3 py-2.5 font-display text-lg group-hover:text-burgundy">{room.name}</p>
               </Link>
-            </li>
+            </Reveal>
           );
         })}
-      </ul>
-
-      <h3 className="mb-3 mt-10 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Shop by theme</h3>
-      <ul className="flex flex-wrap gap-2">
-        {THEMES.map(t => (
-          <li key={t.id}>
-            <Link to={`/shop?theme=${t.id}`} className="inline-flex min-h-11 items-center rounded-full border border-border bg-card px-4 text-sm font-medium hover:border-burgundy hover:text-burgundy">
-              {t.name}
-            </Link>
-          </li>
-        ))}
       </ul>
     </section>
   );

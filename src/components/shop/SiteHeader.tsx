@@ -108,7 +108,7 @@ export function SiteHeader(_props: { onOpenStudio?: () => void } = {}) {
     <header className="sticky top-0 z-40 border-b border-border bg-background">
       <div className="bg-burgundy text-cream">
         <p className="container py-1.5 text-center text-xs sm:text-sm">
-          Free shipping above {formatINR(threshold)} · COD on ready designs · Made in India
+          Free shipping above {formatINR(threshold)} · COD on ready designs
         </p>
       </div>
 
@@ -129,9 +129,9 @@ export function SiteHeader(_props: { onOpenStudio?: () => void } = {}) {
           <Link to="/account" aria-label="Account" className="hidden h-11 w-11 items-center justify-center hover:text-burgundy sm:flex">
             <User className="h-5 w-5" aria-hidden="true" />
           </Link>
-          <Link to="/cart" aria-label={`Cart, ${count} items`} className="relative flex h-11 w-11 items-center justify-center hover:text-burgundy">
+          <Link to="/cart" data-cart-icon aria-label={`Cart, ${count} items`} className="relative flex h-11 w-11 items-center justify-center hover:text-burgundy">
             <ShoppingBag className="h-5 w-5" aria-hidden="true" />
-            {count > 0 && <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-burgundy px-1 text-[10px] font-semibold text-cream">{count}</span>}
+            {count > 0 && <span key={count} className="cart-bump absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-burgundy px-1 text-[10px] font-semibold text-cream">{count}</span>}
           </Link>
         </div>
       </div>

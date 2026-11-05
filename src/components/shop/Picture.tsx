@@ -22,7 +22,8 @@ export function Picture({ src, width, height, priority = false, alt, className, 
         height={height}
         loading={priority ? 'eager' : 'lazy'}
         decoding={priority ? 'sync' : 'async'}
-        {...(priority ? { fetchPriority: 'high' as const } : {})}
+        // React 18 only forwards the lowercase attribute; `fetchPriority` triggers an unknown-prop warning.
+        {...(priority ? ({ fetchpriority: 'high' } as Record<string, string>) : {})}
         className={className}
         {...rest}
       />
