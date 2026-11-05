@@ -5,6 +5,10 @@
     {
       "path": "/api/cron/release-reservations",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/send-notifications",
+      "schedule": "*/2 * * * *"
     }
   ],
   "rewrites": [
@@ -30,8 +34,14 @@
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
       ]
     }
   ]

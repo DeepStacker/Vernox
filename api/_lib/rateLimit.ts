@@ -24,6 +24,13 @@ export const RATE_LIMITS = {
   validateCoupon: { scope: 'coupon', limit: 30, windowMs: 60_000 },
   orderStatus: { scope: 'order_status', limit: 20, windowMs: 60_000 },
   admin: { scope: 'admin', limit: 120, windowMs: 60_000 },
+  serviceability: { scope: 'serviceability', limit: 30, windowMs: 60_000 },
+  invoice: { scope: 'invoice', limit: 20, windowMs: 60_000 },
+  orderCancel: { scope: 'order_cancel', limit: 10, windowMs: 60_000 },
+  returnRequest: { scope: 'return_request', limit: 10, windowMs: 60_000 },
+  // COD abuse: per mobile number and per email, independent of IP.
+  codCheckoutPhone: { scope: 'cod_phone', limit: 3, windowMs: 3600_000 },
+  codCheckoutEmail: { scope: 'cod_email', limit: 3, windowMs: 3600_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** Returns true when the request is within the limit (and counts it). */
@@ -41,6 +48,11 @@ export async function consumeRateLimit(store: DocStore, rule: RateLimitRule, key
 }
 
 export async function enforceRateLimit(store: DocStore, req: VercelRequest, rule: RateLimitRule): Promise<void> {
-  const allowed = await consumeRateLimit(store, rule, clientIp(req));
-  if (!allowed) throw new ApiError(429, 'RATE_LIMITED', 'Too many requests. Please wait a minute and try again.');
+  await enforceRateLimitKey(store, rule, clientIp(req));
+}
+
+/** Rate limit on an explicit key (e.g. a phone number) instead of the client IP. */
+export async function enforceRateLimitKey(store: DocStore, rule: RateLimitRule, key: string): Promise<void> {
+  const allowed = await consumeRateLimit(store, rule, key);
+  if (!allowed) throw new ApiError(429, 'RATE_LIMITED', 'Too many requests. Please wait and try again.');
 }

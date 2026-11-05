@@ -9,6 +9,7 @@
  * Credentials as for the API (see .env.example).
  */
 import { getDb } from '../api/_lib/firebaseAdmin';
+import { defaultSettingsDoc } from '../api/_lib/storeConfig';
 import { products } from '../src/lib/catalog';
 import { LAUNCH_COUPONS } from '../src/types/coupon';
 
@@ -26,8 +27,13 @@ async function main() {
   }
 
   const settingsRef = db.doc('settings/store');
-  if (force || !(await settingsRef.get()).exists) {
-    await settingsRef.set({ gstRatePercent: 18, shippingFee: 40, freeShippingThreshold: 150, updatedAt: Date.now() }, { merge: true });
+  const settingsExist = (await settingsRef.get()).exists;
+  if (force || !settingsExist) {
+    // Same defaults as the API (api/_lib/storeConfig.ts); seller and contact fields start empty.
+    // --force never blanks business details the owner already entered.
+    const { seller, whatsappNumber, supportPhone, supportEmail, supportHours, workshopAddress, ...pricing } = defaultSettingsDoc();
+    const ownerFields = { seller, whatsappNumber, supportPhone, supportEmail, supportHours, workshopAddress };
+    await settingsRef.set({ ...pricing, ...(settingsExist ? {} : ownerFields), updatedAt: Date.now() }, { merge: true });
     written += 1;
   }
 

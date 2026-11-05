@@ -77,7 +77,9 @@ service cloud.firestore {
       allow write: if canWriteSettings();
     }
 
-    // settings/store holds tax, shipping and custom-piece rates read by the API.
+    // settings/store holds tax, shipping, COD, seller (GSTIN) and contact details
+    // read by the API and storefront. It is public: never store secrets here
+    // (provider keys and webhook tokens are server environment variables).
     match /settings/{settingDoc} {
       allow read: if true;
       allow write: if canWriteSettings();
@@ -116,20 +118,41 @@ service cloud.firestore {
 
     // ---------- orders (created and paid only by the API) ----------
 
+    // Workshop moves staff may write directly. MIRRORS STAFF_WORKSHOP_MOVES in
+    // src/types/orderStatus.ts (ORDER_TRANSITIONS restricted to STAFF_SETTABLE_STATUSES);
+    // src/test/orderLifecycle.test.ts parses this map and fails if they differ.
+    // Legacy Phase 1 statuses (Designing, Finished) move like In_Design / Finishing.
+    // Shipping, delivery, cancellation, returns and refunds are API-only (invoice,
+    // stock, refunds, notifications). Prefer UPDATE_ORDER_STATUS, which also notifies.
+    function staffWorkshopMoves() {
+      return {
+        'Paid': ['In_Design'],
+        'Confirmed_COD': ['In_Design'],
+        'In_Design': ['Cutting'],
+        'Cutting': ['Finishing', 'In_Design'],
+        'Finishing': ['Quality_Check', 'Cutting'],
+        'Quality_Check': ['Packed', 'Finishing', 'Cutting'],
+        'Packed': ['Quality_Check'],
+        'Partially_Refunded': ['In_Design', 'Cutting', 'Finishing', 'Quality_Check', 'Packed'],
+        'Designing': ['Cutting'],
+        'Finished': ['Quality_Check', 'Cutting']
+      };
+    }
+
     match /orders/{orderId} {
       allow read: if (signedIn() && resource.data.userId == request.auth.uid) || canReadOrders();
       allow create, delete: if false;
-      // Staff may move fulfilment forward and annotate; money, items, customer
-      // and payment fields are immutable from clients.
+      // Staff may move workshop stages and annotate; money, items, customer,
+      // payment, shipment and invoice fields are immutable from clients.
       allow update: if canUpdateOrders()
         && changedKeys().hasOnly(['status', 'statusHistory', 'assignedTo', 'tracking', 'notes', 'updatedAt'])
         && (
           request.resource.data.status == resource.data.status
-          || (
-            resource.data.status in ['Paid', 'Designing', 'Cutting', 'Finished', 'Shipped']
-            && request.resource.data.status in ['Designing', 'Cutting', 'Finished', 'Shipped', 'Delivered', 'Cancelled']
-          )
-        );
+          || request.resource.data.status in staffWorkshopMoves().get(resource.data.status, [])
+        )
+        // QC / packing records are stored in `notes` by the staff consoles.
+        && request.resource.data.get('notes', '') is string
+        && request.resource.data.get('notes', '').size() <= 20000;
     }
 
     // ---------- B2B inquiries ----------
@@ -193,6 +216,36 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /rate_limits/{key} {
+      allow read, write: if false;
+    }
+    // Phase 2 (India commerce). Customers reach their invoices, cancellations and
+    // returns only through the API (/api/invoice, /api/order-cancel, /api/return-request).
+    match /invoices/{invoiceId} {
+      allow read, write: if false;
+    }
+    match /credit_notes/{creditNoteId} {
+      allow read, write: if false;
+    }
+    match /counters/{counterId} {
+      allow read, write: if false;
+    }
+    match /refunds/{refundId} {
+      allow read, write: if false;
+    }
+    match /returns/{orderId} {
+      allow read, write: if false;
+    }
+    match /notifications_outbox/{notificationId} {
+      allow read, write: if false;
+    }
+    match /courier_events/{eventId} {
+      allow read, write: if false;
+    }
+    match /serviceability_cache/{pincode} {
+      allow read, write: if false;
+    }
+    // Shiprocket API token cache.
+    match /integrations/{integrationId} {
       allow read, write: if false;
     }
     // Legacy collection from the removed shared-password admin login.

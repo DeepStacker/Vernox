@@ -5,6 +5,7 @@
  */
 import { auth } from '@/lib/firebase';
 import type { CartItem } from '@/lib/cartContext';
+import { CUSTOM_PRODUCT_ID } from '@/types/products';
 
 export interface CheckoutCustomer {
   email: string;
@@ -21,14 +22,19 @@ export interface ServerPricing {
   subtotal: number;
   discount: number;
   shipping: number;
+  /** Cash on delivery fee (0 for prepaid). */
+  codFee?: number;
   tax: number;
   total: number;
   items: Array<{ productId: string; name: string; unitPrice: number; quantity: number; lineTotal: number }>;
 }
 
+export type PaymentMethod = 'prepaid' | 'cod';
+
 export interface CheckoutIntent {
   orderId: string;
   orderNumber: string;
+  paymentMethod: 'prepaid';
   razorpayOrderId: string;
   keyId: string;
   /** Amount in paise. */
@@ -37,9 +43,17 @@ export interface CheckoutIntent {
   pricing: ServerPricing;
 }
 
+/** A cash-on-delivery order is confirmed when created: there is no payment step. */
+export interface CodOrder {
+  orderId: string;
+  orderNumber: string;
+  paymentMethod: 'cod';
+  pricing: ServerPricing;
+}
+
 export type CheckoutErrorCode =
-  | 'INSUFFICIENT_STOCK' | 'INVALID_ITEM' | 'INVALID_COUPON' | 'VALIDATION_ERROR'
-  | 'PAYMENT_PROVIDER_ERROR' | 'CONFIG_ERROR' | 'NETWORK_ERROR' | 'UNKNOWN';
+  | 'INSUFFICIENT_STOCK' | 'INVALID_ITEM' | 'INVALID_COUPON' | 'VALIDATION_ERROR' | 'COD_NOT_AVAILABLE'
+  | 'RATE_LIMITED' | 'PAYMENT_PROVIDER_ERROR' | 'CONFIG_ERROR' | 'NETWORK_ERROR' | 'UNKNOWN';
 
 export class CheckoutError extends Error {
   constructor(readonly code: CheckoutErrorCode, message: string) {
@@ -96,14 +110,22 @@ export async function createCheckoutIntent(params: {
   couponCode?: string;
   idempotencyKey: string;
   customer: CheckoutCustomer;
-}): Promise<CheckoutIntent> {
+  paymentMethod?: PaymentMethod;
+}): Promise<CheckoutIntent | CodOrder> {
   const data = await postJson('/api/checkout-intent', {
     items: toCheckoutItems(params.items),
     couponCode: params.couponCode,
     idempotencyKey: params.idempotencyKey,
     customer: params.customer,
+    paymentMethod: params.paymentMethod ?? 'prepaid',
   });
-  return data as unknown as CheckoutIntent;
+  // Responses from before COD carry no paymentMethod; they are prepaid.
+  return (data.paymentMethod === 'cod' ? data : { ...data, paymentMethod: 'prepaid' }) as unknown as CheckoutIntent | CodOrder;
+}
+
+/** Same rule as the server (api/_lib/cod.ts): any Crafting Studio piece makes the cart prepaid only. */
+export function cartHasCustomItem(items: Array<Pick<CartItem, 'productId'>>): boolean {
+  return items.some(i => i.productId === CUSTOM_PRODUCT_ID);
 }
 
 export async function verifyPayment(payment: {

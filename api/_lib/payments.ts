@@ -5,11 +5,15 @@
  * current status, then write — so duplicate or out-of-order deliveries are safe.
  */
 import { auditInTransaction, buildAuditEntry, SYSTEM_ACTOR } from './audit';
-import { couponFromDoc, couponPath, customerKey, customerUsagePath } from './coupons';
+import { couponFromDoc, couponPath, customerUsagePath, writeCouponRedemption } from './coupons';
 import { ApiError } from './errors';
+import { applyCreditNote, planCreditNote } from './gst/invoice';
 import { applyStockDelta, planRecommit, planRelease } from './inventory';
+import { enqueueNotification, payloadFromOrder } from './notifications/outbox';
 import { canTransition, isPaidStatus, refundStatus, type OrderStatus, type StatusHistoryEntry } from './orderLifecycle';
+import { applyStatusChange, planEvent, planStatusChange } from './orderTransitions';
 import { asOrder, orderPath, type OrderDoc } from './orders';
+import { refundPath, type RefundDoc } from './refundRecords';
 import { arrayUnion, increment, type DocStore } from './store';
 
 export type PaymentSource = 'checkout_callback' | 'webhook';
@@ -111,6 +115,12 @@ export async function confirmPayment(
     const couponDoc = order.coupon ? await tx.get(couponPath(order.coupon.id)) : null;
     const usagePath = order.coupon ? customerUsagePath(order.coupon.id, order.email) : null;
     const usageDoc = usagePath ? await tx.get(usagePath) : null;
+    const wasReleased = order.stockReservation?.status === 'released';
+    const transition = await planStatusChange(tx, order, {
+      to: 'Paid',
+      by,
+      note: wasReleased ? 'late payment after reservation release' : undefined,
+    });
 
     // ---- decide ----
     const flags: string[] = [];
@@ -130,30 +140,24 @@ export async function confirmPayment(
     }
 
     // ---- writes ----
-    const wasReleased = order.stockReservation?.status === 'released';
     applyStockDelta(tx, recommit, -1, now);
-    tx.update(orderPath(order.id), {
-      status: 'Paid',
-      statusHistory: arrayUnion(history('Paid', now, by, wasReleased ? 'late payment after reservation release' : undefined)),
+    applyStatusChange(tx, transition, order, now, {
       razorpayPaymentId: params.razorpayPaymentId,
       paidAt: now,
       paymentConfirmedVia: params.source,
       ...(order.stockReservation?.status === 'none' ? {} : { stockReservation: { ...order.stockReservation, status: 'committed' } }),
       ...(flags.length > 0 ? { flags: arrayUnion(...flags) } : {}),
-      updatedAt: now,
     });
 
-    if (order.coupon && coupon && usagePath) {
-      tx.update(couponPath(coupon.id), { usedCount: increment(1), updatedAt: now });
-      tx.set(usagePath, { count: increment(1), customerKey: customerKey(order.email), updatedAt: now }, { merge: true });
-      tx.set(`coupon_usages/${order.id}`, {
+    if (order.coupon && coupon) {
+      writeCouponRedemption(tx, {
         couponId: coupon.id,
         couponCode: coupon.code,
         orderId: order.id,
-        customerEmail: order.email,
+        email: order.email,
         discountPaise: order.coupon.discountPaise,
         orderTotalPaise: order.amounts.totalPaise,
-        usedAt: now,
+        now,
       });
     }
 
@@ -235,31 +239,104 @@ export async function cancelUnstartedCheckout(store: DocStore, orderId: string, 
   });
 }
 
-/** refund.processed: records the refund once (by refund id) and derives full vs partial status. */
+/** Money actually collected for an order: the captured payment (prepaid) or the cash collected (COD). */
+export function collectedPaise(order: OrderDoc): number {
+  if (order.paymentMethod === 'cod') return order.codCollectedPaise ?? 0;
+  if (order.paymentMethod === 'replacement') return 0;
+  return order.razorpayPaymentId ? order.amounts.totalPaise : 0;
+}
+
+export type RecordRefundOutcome = 'recorded' | 'duplicate';
+
+/**
+ * Records a processed refund exactly once per provider refund id, whichever path
+ * reports it first (refund.processed webhook, the refund API response, or a
+ * manual refund). Reconciles with our `refunds/{id}` document (written before the
+ * provider was called, see refunds.ts) so pending and refunded totals never double
+ * count; refunds created outside the store (Razorpay dashboard) get a document
+ * with source `external`. Issues a credit note when the order was invoiced and
+ * enqueues the refund notification.
+ */
 export async function recordRefund(
   store: DocStore,
-  params: { orderId: string; refundId: string; amountPaise: number; now?: number },
-): Promise<'recorded' | 'duplicate'> {
+  params: {
+    orderId: string;
+    /** Provider refund id (`rfnd_...`) or, for manual refunds, our refund document id. */
+    refundId: string;
+    amountPaise: number;
+    /** Our refunds/{id}, when known (Razorpay refund notes carry it). */
+    refundDocId?: string | null;
+    by?: string;
+    now?: number;
+  },
+): Promise<RecordRefundOutcome> {
   const now = params.now ?? Date.now();
+  let refundDocId = params.refundDocId ?? null;
+  if (!refundDocId) {
+    const found = await store.query('refunds', { where: [{ field: 'providerRefundId', op: '==', value: params.refundId }], limit: 1 });
+    refundDocId = found[0]?.id ?? null;
+  }
+  const docId = refundDocId ?? `ext_${params.refundId.replace(/[^A-Za-z0-9_-]/g, '')}`;
+
   return store.runTransaction(async tx => {
     const order = asOrder(await tx.get(orderPath(params.orderId)));
     if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
     if ((order.refunds ?? []).some(r => r.refundId === params.refundId)) return 'duplicate';
+    const refundDoc = (await tx.get(refundPath(docId))) as unknown as RefundDoc | null;
+    if (refundDoc?.status === 'processed') return 'duplicate';
 
     const refundedPaise = (order.refundedPaise ?? 0) + params.amountPaise;
-    const next = refundStatus(refundedPaise, order.amounts.totalPaise);
-    const statusChange = canTransition(order.status, next)
-      ? { status: next, statusHistory: arrayUnion(history(next, now, 'razorpay', `refund ${params.refundId}`)) }
-      : {};
-    if (!statusChange.status) {
+    const collected = collectedPaise(order) || order.amounts.totalPaise;
+    const next = refundStatus(refundedPaise, collected);
+    const reason = refundDoc?.reason ?? 'Refund';
+    const creditNote = await planCreditNote(tx, order.id, docId, now);
+    const statusPlan = canTransition(order.status, next)
+      ? await planStatusChange(tx, order, { to: next, by: params.by ?? 'razorpay', note: `refund ${params.refundId}`, event: 'refund_processed', eventDiscriminator: docId })
+      : null;
+    const eventPlan = statusPlan ? null : await planEvent(tx, order.id, 'refund_processed', docId);
+    if (!statusPlan) {
       console.error(`[payments] refund ${params.refundId} on order ${order.id} in status ${order.status}; status left unchanged`);
     }
-    tx.update(orderPath(order.id), {
-      ...statusChange,
+
+    // ---- writes ----
+    const note = applyCreditNote(tx, creditNote, { refundId: docId, amountPaise: params.amountPaise, reason, now });
+    const pendingRelease = refundDoc && refundDoc.status === 'pending' ? refundDoc.amountPaise : 0;
+    const fields = {
       refunds: arrayUnion({ refundId: params.refundId, amountPaise: params.amountPaise, at: now }),
       refundedPaise,
+      ...(pendingRelease > 0 ? { refundPendingPaise: increment(-pendingRelease) } : {}),
+    };
+    const payloadExtra = { refundAmountPaise: params.amountPaise };
+    if (statusPlan) applyStatusChange(tx, statusPlan, order, now, fields, payloadExtra);
+    else {
+      tx.update(orderPath(order.id), { ...fields, updatedAt: now });
+      if (eventPlan) enqueueNotification(tx, eventPlan, payloadFromOrder(order, payloadExtra), now);
+    }
+    const refundFields = {
+      status: 'processed',
+      providerRefundId: refundDoc?.method === 'manual' ? refundDoc.providerRefundId : params.refundId,
+      processedAt: now,
+      creditNoteId: note?.id ?? refundDoc?.creditNoteId ?? null,
+      creditNoteNumber: note?.number ?? refundDoc?.creditNoteNumber ?? null,
       updatedAt: now,
-    });
+    };
+    if (refundDoc) tx.update(refundPath(docId), refundFields);
+    else {
+      const external: RefundDoc = {
+        id: docId,
+        orderId: order.id,
+        amountPaise: params.amountPaise,
+        reason,
+        method: 'razorpay',
+        source: 'external',
+        requestedBy: 'razorpay',
+        createdAt: now,
+        error: null,
+        ...refundFields,
+        status: 'processed',
+      };
+      tx.create(refundPath(docId), external as unknown as Record<string, unknown>);
+    }
     auditInTransaction(
       store,
       tx,
@@ -268,7 +345,7 @@ export async function recordRefund(
         action: next === 'Refunded' ? 'ORDER_REFUNDED' : 'ORDER_PARTIALLY_REFUNDED',
         targetType: 'order',
         targetId: order.id,
-        details: { refundId: params.refundId, amountPaise: params.amountPaise, refundedPaise },
+        details: { refundId: params.refundId, refundDocId: docId, amountPaise: params.amountPaise, refundedPaise, creditNote: note?.number ?? null },
         now,
       }),
     );

@@ -7,12 +7,38 @@
  * with the same key and body returns the original order; a different body is
  * rejected. If Razorpay is unavailable the order is cancelled, stock returned
  * and the key freed (cancelUnstartedCheckout), so a retry starts clean.
+ *
+ * Cash on delivery (`paymentMethod: 'cod'`, see cod.ts): eligibility is checked
+ * (no custom items, COD-serviceable PIN, order value limit, open COD orders per
+ * mobile), the COD fee is added as its own taxable line, and the order is created
+ * as `Confirmed_COD` with stock committed and the coupon redeemed in the same
+ * transaction. No Razorpay order is created.
  */
 import crypto from 'crypto';
 import { z } from 'zod';
-import { couponFromDoc, couponPath, customerUsagePath, evaluateCoupon, findCouponByCode, normaliseCouponCode } from './coupons';
+import { assertCodOrderAllowed, codRejection, countOpenCodOrders } from './cod';
+import {
+  couponFromDoc,
+  couponPath,
+  customerUsagePath,
+  evaluateCoupon,
+  findCouponByCode,
+  normaliseCouponCode,
+  writeCouponRedemption,
+} from './coupons';
 import { ApiError } from './errors';
-import { buildOrderDoc, asOrder, generateOrderNumber, orderPath, pricingPayload, type CustomerDetails, type OrderDoc } from './orders';
+import { enqueueNotification, payloadFromOrder, planNotification } from './notifications/outbox';
+import {
+  buildOrderDoc,
+  asOrder,
+  generateOrderNumber,
+  orderPath,
+  phoneKey,
+  pricingPayload,
+  type CustomerDetails,
+  type OrderDoc,
+  type PaymentMethod,
+} from './orders';
 import { cancelUnstartedCheckout } from './payments';
 import {
   CUSTOM_PRODUCT_ID,
@@ -24,6 +50,8 @@ import {
   type ProductRecord,
 } from './pricing';
 import type { PaymentGateway } from './razorpay';
+import { itemLeadTimeDays, serviceabilityFor } from './shipping';
+import type { ShippingProvider } from './shipping/types';
 import { increment, type DocStore } from './store';
 import type { StoreConfig } from './storeConfig';
 
@@ -67,11 +95,15 @@ const checkoutRequestObject = z
     couponCode: z.string().trim().max(40).optional().transform(v => (v ? v : undefined)),
     idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/, 'must be 8-128 characters of [A-Za-z0-9_-]'),
     customer: customerSchema,
+    paymentMethod: z.enum(['prepaid', 'cod']).default('prepaid'),
   })
   .superRefine((body, ctx) => {
     const total = body.items.reduce((sum, i) => sum + (i.customDesignRef?.length ?? 0), 0);
     if (total > MAX_TOTAL_DESIGN_REF_CHARS) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items'], message: 'custom design data is too large' });
+    }
+    if (body.paymentMethod === 'cod' && !INDIA.has(body.customer.country.toLowerCase())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['paymentMethod'], message: 'cash on delivery is available only in India' });
     }
   });
 
@@ -80,15 +112,17 @@ export interface CheckoutRequest {
   couponCode?: string;
   idempotencyKey: string;
   customer: CustomerDetails;
+  paymentMethod: Exclude<PaymentMethod, 'replacement'>;
 }
 
 // Explicit output type: the app tsconfig is non-strict, where z.infer would make every field optional.
 export const checkoutRequestSchema = checkoutRequestObject as unknown as z.ZodType<CheckoutRequest, z.ZodTypeDef, unknown>;
 
-export interface CheckoutResponse {
+export interface PrepaidCheckoutResponse {
   success: true;
   orderId: string;
   orderNumber: string;
+  paymentMethod: 'prepaid';
   razorpayOrderId: string;
   keyId: string;
   amount: number;
@@ -96,11 +130,24 @@ export interface CheckoutResponse {
   pricing: ReturnType<typeof pricingPayload>;
 }
 
+export interface CodCheckoutResponse {
+  success: true;
+  orderId: string;
+  orderNumber: string;
+  paymentMethod: 'cod';
+  pricing: ReturnType<typeof pricingPayload>;
+}
+
+export type CheckoutResponse = PrepaidCheckoutResponse | CodCheckoutResponse;
+
 export interface CheckoutDeps {
   store: DocStore;
+  /** Razorpay; not used for COD orders. */
   gateway: PaymentGateway;
   razorpayKeyId: string;
   config: StoreConfig;
+  /** Needed for COD PIN eligibility. */
+  shipping?: ShippingProvider;
   now?: () => number;
 }
 
@@ -109,14 +156,17 @@ function requestHash(req: CheckoutRequest): string {
     items: req.items.map(i => [i.productId, i.sizeLabel ?? null, i.widthMm ?? null, i.heightMm ?? null, i.finish, i.quantity, i.customDesignRef ?? null]),
     coupon: req.couponCode ? normaliseCouponCode(req.couponCode) : null,
     email: req.customer.email,
+    // Only COD changes the hash, so prepaid hashes are unchanged from Phase 1.
+    ...(req.paymentMethod === 'cod' ? { paymentMethod: 'cod' } : {}),
   });
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
 
-const toResponse = (order: OrderDoc, keyId: string): CheckoutResponse => ({
+const toResponse = (order: OrderDoc, keyId: string): PrepaidCheckoutResponse => ({
   success: true,
   orderId: order.id,
   orderNumber: order.orderNumber,
+  paymentMethod: 'prepaid',
   razorpayOrderId: order.razorpayOrderId as string,
   keyId,
   amount: order.amounts.totalPaise,
@@ -124,8 +174,17 @@ const toResponse = (order: OrderDoc, keyId: string): CheckoutResponse => ({
   pricing: pricingPayload(order),
 });
 
+const toCodResponse = (order: OrderDoc): CodCheckoutResponse => ({
+  success: true,
+  orderId: order.id,
+  orderNumber: order.orderNumber,
+  paymentMethod: 'cod',
+  pricing: pricingPayload(order),
+});
+
 async function resolveDuplicate(deps: CheckoutDeps, orderId: string): Promise<CheckoutResponse> {
   const order = asOrder(await deps.store.get(orderPath(orderId)));
+  if (order?.paymentMethod === 'cod') return toCodResponse(order);
   if (order?.status === 'Pending_Payment' && order.razorpayOrderId) return toResponse(order, deps.razorpayKeyId);
   if (order?.status === 'Pending_Payment') {
     throw new ApiError(409, 'VALIDATION_ERROR', 'This checkout is still being prepared. Please retry in a few seconds.');
@@ -142,6 +201,18 @@ export async function createCheckoutIntent(
   const now = (deps.now ?? Date.now)();
   const hash = requestHash(req);
   const idempotencyPath = `idempotency/${req.idempotencyKey}`;
+  const cod = req.paymentMethod === 'cod';
+
+  if (cod && !(await store.get(idempotencyPath))) {
+    // Cheap checks before the transaction; a retried request with a used key skips them.
+    if (!config.cod.enabled) throw codRejection('COD_DISABLED');
+    if (req.items.some(i => i.productId === CUSTOM_PRODUCT_ID)) throw codRejection('CUSTOM_ITEM');
+    if (!deps.shipping) throw new ApiError(500, 'CONFIG_ERROR', 'Cash on delivery is not configured.', 'checkout deps.shipping missing');
+    const lane = await serviceabilityFor(store, deps.shipping, req.customer.pincode, now);
+    if (!lane.serviceable || !lane.codAvailable) throw codRejection('PINCODE_NOT_ELIGIBLE', req.customer.pincode);
+    const open = await countOpenCodOrders(store, phoneKey(req.customer.phone));
+    if (open >= config.cod.maxOpenOrdersPerPhone) throw codRejection('TOO_MANY_OPEN_COD_ORDERS', `${open} open`);
+  }
 
   let couponId: string | null = null;
   if (req.couponCode) {
@@ -178,10 +249,15 @@ export async function createCheckoutIntent(
       discountPaise = evaluation.discountPaise;
       coupon = { id: evaluation.coupon.id, code: evaluation.coupon.code, discountPaise };
     }
-    const totals = computeTotals(lines, discountPaise, config);
+    const totals = computeTotals(lines, discountPaise, config, { cod });
     if (totals.totalPaise < MIN_PAYABLE_PAISE) {
       throw new ApiError(400, 'VALIDATION_ERROR', 'The order total is below the minimum payable amount.');
     }
+    if (cod) assertCodOrderAllowed(lines, totals.totalPaise, config.cod);
+    const leadTimeDays = Math.max(
+      ...lines.map(l => itemLeadTimeDays(l.isCustom, l.isCustom ? null : products.get(l.productId)?.leadTimeDays ?? null, config)),
+    );
+    const notification = cod ? await planNotification(tx, orderId, 'order_confirmed') : null;
 
     // ---- stock ----
     const reserved: Array<{ productId: string; quantity: number }> = [];
@@ -214,9 +290,26 @@ export async function createCheckoutIntent(
       idempotencyKey: req.idempotencyKey,
       reservationTtlMs: config.reservationTtlMs,
       now,
+      paymentMethod: req.paymentMethod,
+      leadTimeDays,
     });
     tx.create(orderPath(orderId), order as unknown as Record<string, unknown>);
     tx.create(idempotencyPath, { orderId, requestHash: hash, createdAt: now, expiresAt: new Date(now + IDEMPOTENCY_TTL_MS) });
+    if (cod) {
+      // A COD order is confirmed at creation: redeem the coupon and notify now (prepaid does both when paid).
+      if (coupon) {
+        writeCouponRedemption(tx, {
+          couponId: coupon.id,
+          couponCode: coupon.code,
+          orderId,
+          email: order.email,
+          discountPaise: coupon.discountPaise,
+          orderTotalPaise: order.amounts.totalPaise,
+          now,
+        });
+      }
+      if (notification) enqueueNotification(tx, notification, payloadFromOrder(order), now);
+    }
     return { order };
   });
 
@@ -228,6 +321,7 @@ export async function createCheckoutIntent(
   }
 
   const { order } = result;
+  if (cod) return toCodResponse(order);
   let razorpayOrderId: string;
   try {
     const rzp = await deps.gateway.createOrder({

@@ -10,6 +10,7 @@ describe('order state machine', () => {
     expect(normalizeOrderStatus('Designing')).toBe('In_Design');
     expect(normalizeOrderStatus('Finished')).toBe('Finishing');
     expect(normalizeOrderStatus('Shipped')).toBe('Shipped');
+    expect(normalizeOrderStatus('Confirmed_COD')).toBe('Confirmed_COD');
     expect(normalizeOrderStatus('nonsense')).toBe('Pending_Payment');
   });
 
@@ -19,24 +20,31 @@ describe('order state machine', () => {
     }
   });
 
-  it('never lets the client set payment or refund outcomes', () => {
+  it('never lets the client set payment, refund, shipping or cancellation outcomes', () => {
     const perms = ROLE_PERMISSIONS.super_admin;
-    expect(nextClientStatuses('Pending_Payment', perms)).toEqual(['Cancelled']);
+    expect(nextClientStatuses('Pending_Payment', perms)).toEqual([]);
     expect(() => assertClientTransition('Pending_Payment', 'Paid', perms)).toThrow();
     expect(() => assertClientTransition('Paid', 'Refunded', perms)).toThrow();
+    expect(() => assertClientTransition('Paid', 'Cancelled', perms)).toThrow();
+    expect(() => assertClientTransition('Packed', 'Shipped', perms)).toThrow();
+    expect(() => assertClientTransition('Delivered', 'Return_Requested', perms)).toThrow();
   });
 
-  it('rejects skipped steps and applies role limits', () => {
+  it('rejects skipped steps and applies role limits to workshop moves', () => {
     expect(() => assertClientTransition('Paid', 'Shipped', ROLE_PERMISSIONS.super_admin)).toThrow();
-    expect(nextClientStatuses('Paid', ROLE_PERMISSIONS.production)).toEqual(['In_Design', 'Cutting']);
-    expect(nextClientStatuses('Packed', ROLE_PERMISSIONS.production)).toEqual([]);
-    expect(nextClientStatuses('Packed', ROLE_PERMISSIONS.shipping)).toEqual(['Shipped']);
+    expect(() => assertClientTransition('Paid', 'Cutting', ROLE_PERMISSIONS.super_admin)).toThrow();
+    expect(nextClientStatuses('Paid', ROLE_PERMISSIONS.production)).toEqual(['In_Design']);
+    expect(nextClientStatuses('Confirmed_COD', ROLE_PERMISSIONS.production)).toEqual(['In_Design']);
+    expect(nextClientStatuses('Quality_Check', ROLE_PERMISSIONS.production)).toEqual(['Packed', 'Finishing', 'Cutting']);
+    expect(nextClientStatuses('Packed', ROLE_PERMISSIONS.shipping)).toEqual([]);
     expect(nextClientStatuses('Paid', ROLE_PERMISSIONS.support)).toEqual([]);
   });
 
-  it('counts only paid, retained orders as revenue', () => {
+  it('counts only confirmed, retained orders as revenue', () => {
     expect(isRevenueStatus('Pending_Payment')).toBe(false);
     expect(isRevenueStatus('Cancelled')).toBe(false);
+    expect(isRevenueStatus('RTO_Delivered')).toBe(false);
+    expect(isRevenueStatus('Confirmed_COD')).toBe(true);
     expect(isRevenueStatus('Delivered')).toBe(true);
   });
 });

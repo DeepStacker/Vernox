@@ -9,13 +9,15 @@
  *  - `coupons/{id}.usedCount` — total redemptions.
  *  - `coupons/{id}/customer_usage/{sha256(email)}.count` — per-customer redemptions.
  *  - `coupon_usages/{orderId}` — one redemption record per paid order.
- * All three are written in the transaction that marks the order Paid (payments.ts).
+ * All three are written by writeCouponRedemption() in the transaction that
+ * confirms the order: when it is marked Paid (payments.ts) or, for cash on
+ * delivery, when the COD order is created (checkout.ts).
  */
 import crypto from 'crypto';
 import type { CouponValidationResult, DiscountType } from '../../src/types/coupon';
 import { isNonNegativeFinite, rupeesToPaise } from './money';
 import type { PricedLine } from './pricing';
-import type { DocData, DocStore } from './store';
+import { increment, type DocData, type DocStore, type StoreTransaction } from './store';
 
 export interface CouponRecord {
   id: string;
@@ -153,4 +155,23 @@ export async function findCouponByCode(store: DocStore, code: string): Promise<C
     limit: 1,
   });
   return results[0] ? couponFromDoc(results[0].id, results[0].data) : null;
+}
+
+/** Records one redemption (write phase of a transaction; the caller has read the coupon and usage docs). */
+export function writeCouponRedemption(
+  tx: StoreTransaction,
+  params: { couponId: string; couponCode: string; orderId: string; email: string; discountPaise: number; orderTotalPaise: number; now: number },
+) {
+  const { couponId, email, now } = params;
+  tx.update(couponPath(couponId), { usedCount: increment(1), updatedAt: now });
+  tx.set(customerUsagePath(couponId, email), { count: increment(1), customerKey: customerKey(email), updatedAt: now }, { merge: true });
+  tx.set(`coupon_usages/${params.orderId}`, {
+    couponId,
+    couponCode: params.couponCode,
+    orderId: params.orderId,
+    customerEmail: email,
+    discountPaise: params.discountPaise,
+    orderTotalPaise: params.orderTotalPaise,
+    usedAt: now,
+  });
 }

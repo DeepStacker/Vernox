@@ -2,7 +2,7 @@ import { useSeo } from '@/lib/seo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Phone, Tag, ShieldCheck } from 'lucide-react';
+import { Phone, Tag, ShieldCheck, Truck } from 'lucide-react';
 import { SiteHeader } from '@/components/shop/SiteHeader';
 import { SiteFooter } from '@/components/shop/SiteFooter';
 import { ShapeThumb } from '@/components/shop/ShapeThumb';
@@ -12,9 +12,12 @@ import { useAuth } from '@/lib/auth/AuthProvider';
 import { trackStoreEvent } from '@/lib/storeAnalytics';
 import { previewCoupon } from '@/lib/data/couponPreview';
 import {
-  CheckoutError, createCheckoutIntent, openRazorpay, verifyPayment,
-  type CheckoutCustomer, type CheckoutIntent,
+  CheckoutError, cartHasCustomItem, createCheckoutIntent, openRazorpay, verifyPayment,
+  type CheckoutCustomer, type CheckoutIntent, type PaymentMethod,
 } from '@/lib/checkout/checkoutApi';
+import { formatDeliveryDate } from '@/lib/shipping/deliveryEstimate';
+import { useDeliveryEstimate } from '@/lib/shipping/useDeliveryEstimate';
+import { CUSTOM_PRODUCT_ID } from '@/types/products';
 import {
   INDIAN_STATES_AND_UTS, normalizeIndianMobile, validateAddress, type AddressErrors, type AddressForm,
 } from '@/lib/checkout/validation';
@@ -97,6 +100,20 @@ export default function Checkout() {
 
   // One checkout attempt = one idempotency key + one server order. Any change to what is being
   // bought or where it ships invalidates the attempt and starts a new one.
+  // Delivery check for the entered PIN code; COD needs a COD-serviceable PIN and a catalogue-only cart.
+  const delivery = useDeliveryEstimate(form.pincode, cartHasCustomItem(items) ? CUSTOM_PRODUCT_ID : undefined);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('prepaid');
+  const codBlockedReason: string | null =
+    storeConfig.codEnabled === false ? 'Cash on delivery is not available right now.'
+      : cartHasCustomItem(items) ? 'Custom studio designs are prepaid only.'
+        : !delivery.isValidPincode ? 'Enter your PIN code to check cash on delivery.'
+          : delivery.estimate && !delivery.estimate.codAvailable ? 'Cash on delivery is not available for this PIN code.'
+            : null;
+  useEffect(() => {
+    if (codBlockedReason && paymentMethod === 'cod' && !delivery.isLoading) setPaymentMethod('prepaid');
+  }, [codBlockedReason, paymentMethod, delivery.isLoading]);
+  const codFee = storeConfig.codFee ?? 0;
+
   const [phase, setPhase] = useState<Phase>('details');
   const [intent, setIntent] = useState<CheckoutIntent | null>(null);
   const [intentFingerprint, setIntentFingerprint] = useState('');
@@ -114,8 +131,8 @@ export default function Checkout() {
   }), [form]);
 
   const fingerprint = useMemo(
-    () => JSON.stringify({ customer, couponCode, items: items.map(i => [i.productId, i.sizeLabel, i.finish, i.quantity, i.customDesignRef]) }),
-    [customer, couponCode, items],
+    () => JSON.stringify({ customer, couponCode, paymentMethod, items: items.map(i => [i.productId, i.sizeLabel, i.finish, i.quantity, i.customDesignRef]) }),
+    [customer, couponCode, paymentMethod, items],
   );
   const intentIsCurrent = intent !== null && fingerprint === intentFingerprint;
 
@@ -136,6 +153,7 @@ export default function Checkout() {
         case 'INSUFFICIENT_STOCK': return `Some items are no longer available in the requested quantity. ${err.message}`;
         case 'INVALID_ITEM': return `An item in your cart is no longer available. ${err.message}`;
         case 'INVALID_COUPON': return `Coupon problem: ${err.message}`;
+        case 'COD_NOT_AVAILABLE': return err.message;
         default: return err.message;
       }
     }
@@ -148,10 +166,23 @@ export default function Checkout() {
     const found = validateAddress(form);
     setErrors(found);
     if (Object.keys(found).length > 0) { toast.error('Please correct the highlighted fields.'); return; }
+    if (delivery.estimate && !delivery.estimate.serviceable) {
+      setErrors(prev => ({ ...prev, pincode: 'We do not deliver to this PIN code yet.' }));
+      toast.error('We do not deliver to this PIN code yet.');
+      return;
+    }
 
     setPhase('creating');
     try {
-      const created = await createCheckoutIntent({ items, couponCode, idempotencyKey: idempotencyKey.current, customer });
+      const created = await createCheckoutIntent({ items, couponCode, idempotencyKey: idempotencyKey.current, customer, paymentMethod });
+      if (created.paymentMethod === 'cod') {
+        // Confirmed at creation: there is no payment step.
+        trackStoreEvent('purchase', { orderId: created.orderId, orderTotal: created.pricing.total });
+        clear();
+        toast.success('Order placed. Pay in cash when it is delivered.');
+        navigate(`/order-confirmation/${created.orderId}?email=${encodeURIComponent(customer.email)}`);
+        return;
+      }
       setIntent(created);
       setIntentFingerprint(fingerprint);
       setPhase('ready');
@@ -160,6 +191,7 @@ export default function Checkout() {
       setPhase('details');
       toast.error(describeError(err));
       if (err instanceof CheckoutError && err.code === 'INVALID_COUPON') cartRemoveCoupon();
+      if (err instanceof CheckoutError && err.code === 'COD_NOT_AVAILABLE') setPaymentMethod('prepaid');
     }
   };
 
@@ -265,6 +297,15 @@ export default function Checkout() {
                 <label className={labelClass} htmlFor="co-pincode">Pincode</label>
                 <input id="co-pincode" inputMode="numeric" maxLength={6} autoComplete="postal-code" value={form.pincode} onChange={set('pincode')} className={inputClass} />
                 <FieldError message={errors.pincode} />
+                <p className="text-[11px] mt-1 text-muted-foreground flex items-center gap-1" aria-live="polite">
+                  {delivery.isLoading && 'Checking delivery…'}
+                  {!delivery.isLoading && delivery.estimate?.serviceable && delivery.estimate.estimatedDeliveryDate && (
+                    <><Truck className="w-3 h-3" aria-hidden /> Estimated delivery by {formatDeliveryDate(delivery.estimate.estimatedDeliveryDate)}</>
+                  )}
+                  {!delivery.isLoading && delivery.estimate && !delivery.estimate.serviceable && (
+                    <span className="text-destructive">We do not deliver to this PIN code yet.</span>
+                  )}
+                </p>
               </div>
               <div>
                 <label className={labelClass} htmlFor="co-country">Country</label>
@@ -273,13 +314,39 @@ export default function Checkout() {
             </div>
           </div>
 
+          <fieldset className="bg-card border border-border/70 rounded-lg p-5 shadow-soft space-y-3" disabled={busy || activeIntent !== null}>
+            <legend className="font-display text-lg text-burgundy font-semibold px-1">Payment</legend>
+            <label className="flex items-start gap-3 text-sm cursor-pointer">
+              <input type="radio" name="payment-method" value="prepaid" checked={paymentMethod === 'prepaid'}
+                onChange={() => setPaymentMethod('prepaid')} className="mt-1 accent-burgundy" />
+              <span>
+                <span className="font-semibold text-dark-brown">Pay online</span>
+                <span className="block text-[11px] text-muted-foreground">UPI, cards, net banking or wallets via Razorpay.</span>
+              </span>
+            </label>
+            <label className={`flex items-start gap-3 text-sm ${codBlockedReason ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
+              <input type="radio" name="payment-method" value="cod" checked={paymentMethod === 'cod'}
+                disabled={codBlockedReason !== null} onChange={() => setPaymentMethod('cod')} className="mt-1 accent-burgundy" />
+              <span>
+                <span className="font-semibold text-dark-brown">
+                  Cash on delivery{codFee > 0 ? ` (+ ${money(codFee)} fee + GST)` : ''}
+                </span>
+                <span className="block text-[11px] text-muted-foreground">
+                  {codBlockedReason ?? 'Pay in cash when your order arrives.'}
+                </span>
+              </span>
+            </label>
+          </fieldset>
+
           {!activeIntent ? (
             <button
               type="submit"
               disabled={busy || items.length === 0}
               className="w-full bg-burgundy hover:bg-burgundy-hover text-cream font-semibold py-4 rounded-[2px] transition text-xs uppercase tracking-[0.2em] disabled:opacity-60 shadow-sm"
             >
-              {phase === 'creating' ? 'Confirming your total…' : 'Continue to payment'}
+              {phase === 'creating'
+                ? (paymentMethod === 'cod' ? 'Placing your order…' : 'Confirming your total…')
+                : (paymentMethod === 'cod' ? 'Place order (cash on delivery)' : 'Continue to payment')}
             </button>
           ) : (
             <button
@@ -366,6 +433,11 @@ export default function Checkout() {
                   <div className="flex justify-between text-muted-foreground">
                     <span>Shipping</span><span className="font-mono">{pricing.shipping === 0 ? 'Free' : money(pricing.shipping)}</span>
                   </div>
+                  {(pricing.codFee ?? 0) > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Cash on delivery fee</span><span className="font-mono">{money(pricing.codFee ?? 0)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-muted-foreground">
                     <span>GST</span><span className="font-mono">{money(pricing.tax)}</span>
                   </div>
@@ -380,7 +452,7 @@ export default function Checkout() {
                     <span>Items subtotal (estimate)</span><span className="font-mono text-foreground">{money(subtotal)}</span>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Shipping, GST and discounts are calculated by our server when you continue. That total is the amount you pay.
+                    Shipping, GST{paymentMethod === 'cod' ? ', the cash on delivery fee' : ''} and discounts are calculated by our server when you continue. That total is the amount you pay.
                   </p>
                 </>
               )}

@@ -1,84 +1,49 @@
 /**
- * Order lifecycle: the single definition of statuses and allowed transitions.
- * Payment outcomes (Paid, Payment_Failed, Expired) and refunds are written by the server
- * (verify-payment, webhooks, refund flow); the client may never move an order into them.
+ * Order lifecycle for the browser. Statuses and transitions come from the shared
+ * definition in src/types/orderStatus.ts (also used by the API and mirrored in
+ * firestore.rules); this module adds the role-aware helpers and labels the UI needs.
+ *
+ * Staff browsers may write only workshop stages directly (STAFF_WORKSHOP_MOVES).
+ * Payment outcomes, shipping and delivery, cancellation, returns and refunds are
+ * written by the API because they have side effects (GST invoice, stock, Razorpay
+ * refunds, notifications); staff trigger them through /api/admin actions
+ * (CREATE_SHIPMENT, UPDATE_DELIVERY_STATUS, CANCEL_ORDER, APPROVE_RETURN, ...; API.md).
  */
 import type { RolePermissions } from '@/lib/auth/permissions';
+import {
+  ORDER_STATUSES,
+  ORDER_TRANSITIONS,
+  STAFF_WORKSHOP_MOVES,
+  canTransition,
+  toOrderStatus,
+  type OrderStatus,
+} from '@/types/orderStatus';
 
-export const ORDER_STATUSES = [
-  'Pending_Payment', 'Paid', 'Payment_Failed', 'Expired', 'In_Design', 'Cutting', 'Finishing',
-  'Quality_Check', 'Packed', 'Shipped', 'Out_For_Delivery', 'Delivered', 'Cancelled',
-  'Return_Requested', 'Returned', 'Partially_Refunded', 'Refunded',
-] as const;
+export { ORDER_STATUSES, ORDER_TRANSITIONS, type OrderStatus };
 
-export type OrderStatus = (typeof ORDER_STATUSES)[number];
-
-const LEGACY_STATUS_MAP: Record<string, OrderStatus> = {
-  Pending: 'Pending_Payment',
-  Designing: 'In_Design',
-  Finished: 'Finishing',
-};
-
+/** Current status for a stored value (legacy Designing/Finished mapped); unknown values read as Pending_Payment. */
 export function normalizeOrderStatus(raw: unknown): OrderStatus {
-  if (typeof raw === 'string') {
-    if ((ORDER_STATUSES as readonly string[]).includes(raw)) return raw as OrderStatus;
-    if (raw in LEGACY_STATUS_MAP) return LEGACY_STATUS_MAP[raw];
-  }
-  return 'Pending_Payment';
+  return toOrderStatus(raw) ?? 'Pending_Payment';
 }
-
-export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
-  Pending_Payment: ['Paid', 'Payment_Failed', 'Expired', 'Cancelled'],
-  Payment_Failed: ['Pending_Payment', 'Expired', 'Cancelled'],
-  Expired: [],
-  Paid: ['In_Design', 'Cutting', 'Cancelled', 'Partially_Refunded', 'Refunded'],
-  In_Design: ['Cutting', 'Cancelled'],
-  Cutting: ['Finishing', 'In_Design', 'Cancelled'],
-  Finishing: ['Quality_Check', 'Cutting'],
-  Quality_Check: ['Packed', 'Finishing'],
-  Packed: ['Shipped', 'Cancelled'],
-  Shipped: ['Out_For_Delivery', 'Delivered', 'Returned'],
-  Out_For_Delivery: ['Delivered', 'Returned'],
-  Delivered: ['Return_Requested'],
-  Cancelled: ['Refunded'],
-  Return_Requested: ['Returned', 'Delivered'],
-  Returned: ['Refunded', 'Partially_Refunded'],
-  Partially_Refunded: ['Refunded'],
-  Refunded: [],
-};
-
-const SERVER_ONLY_TARGETS: ReadonlySet<OrderStatus> = new Set<OrderStatus>([
-  'Paid', 'Payment_Failed', 'Expired', 'Refunded', 'Partially_Refunded', 'Pending_Payment',
-]);
 
 type PermissionKey = keyof RolePermissions;
 
-/** Permissions that allow moving an order INTO the given status (any one suffices). */
-function permissionsForTarget(to: OrderStatus): PermissionKey[] {
-  switch (to) {
-    case 'In_Design': case 'Cutting': case 'Finishing': case 'Quality_Check': case 'Packed':
-      return ['canManageOrders', 'canManageProduction'];
-    case 'Shipped': case 'Out_For_Delivery': case 'Delivered': case 'Returned':
-      return ['canManageOrders', 'canManageShipping'];
-    default:
-      return ['canManageOrders'];
-  }
-}
+/** Permissions that allow moving an order INTO a workshop status (any one suffices). */
+const WORKSHOP_PERMISSIONS: PermissionKey[] = ['canManageOrders', 'canManageProduction'];
 
-/** Orders that represent real, retained revenue (paid and not cancelled or fully refunded). */
+/** Orders that represent real, retained revenue (confirmed and not cancelled, returned to origin or fully refunded). */
 export function isRevenueStatus(status: OrderStatus): boolean {
-  return !['Pending_Payment', 'Payment_Failed', 'Expired', 'Cancelled', 'Refunded'].includes(status);
+  return !['Pending_Payment', 'Payment_Failed', 'Payment_Discrepancy', 'Expired', 'Cancelled', 'RTO_Delivered', 'Refunded'].includes(status);
 }
 
 export function isTransitionAllowed(from: OrderStatus, to: OrderStatus): boolean {
-  return ORDER_TRANSITIONS[from].includes(to);
+  return canTransition(from, to);
 }
 
-/** Statuses an operator may pick next, given the role. Excludes server-owned targets. */
+/** Statuses an operator may pick next and write directly, given the role. Excludes API-only targets. */
 export function nextClientStatuses(from: OrderStatus, perms: RolePermissions): OrderStatus[] {
-  return ORDER_TRANSITIONS[from].filter(
-    to => !SERVER_ONLY_TARGETS.has(to) && permissionsForTarget(to).some(k => perms[k]),
-  );
+  if (!WORKSHOP_PERMISSIONS.some(k => perms[k])) return [];
+  return [...(STAFF_WORKSHOP_MOVES[from] ?? [])];
 }
 
 export function assertClientTransition(from: OrderStatus, to: OrderStatus, perms: RolePermissions): void {
@@ -86,15 +51,16 @@ export function assertClientTransition(from: OrderStatus, to: OrderStatus, perms
     throw new Error(`Order cannot move from ${from} to ${to}.`);
   }
   if (!nextClientStatuses(from, perms).includes(to)) {
-    throw new Error(`Your role may not move an order to ${to}.`);
+    throw new Error(`Moving an order to ${to} must go through the order actions, or your role may not do it.`);
   }
 }
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  Pending_Payment: 'Pending Payment', Paid: 'Paid', Payment_Failed: 'Payment Failed',
-  Expired: 'Expired', In_Design: 'In Design', Cutting: 'Cutting', Finishing: 'Finishing',
-  Quality_Check: 'Quality Check', Packed: 'Packed', Shipped: 'Shipped',
-  Out_For_Delivery: 'Out for Delivery', Delivered: 'Delivered', Cancelled: 'Cancelled',
-  Return_Requested: 'Return Requested', Returned: 'Returned',
+  Pending_Payment: 'Pending Payment', Paid: 'Paid', Confirmed_COD: 'Confirmed (Cash on Delivery)',
+  Payment_Failed: 'Payment Failed', Payment_Discrepancy: 'Payment Under Review', Expired: 'Expired',
+  In_Design: 'In Design', Cutting: 'Cutting', Finishing: 'Finishing', Quality_Check: 'Quality Check',
+  Packed: 'Packed', Shipped: 'Shipped', Out_For_Delivery: 'Out for Delivery', Delivered: 'Delivered',
+  RTO_Initiated: 'Returning to Sender', RTO_Delivered: 'Returned to Sender', Cancelled: 'Cancelled',
+  Return_Requested: 'Return Requested', Return_Approved: 'Return Approved', Returned: 'Returned',
   Partially_Refunded: 'Partially Refunded', Refunded: 'Refunded',
 };

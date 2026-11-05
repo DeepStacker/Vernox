@@ -152,7 +152,10 @@ async function applyEvent(
       if (!refund?.id || typeof refund.amount !== 'number') {
         throw new ApiError(400, 'VALIDATION_ERROR', 'Webhook refund entity is incomplete.');
       }
-      const result = await recordRefund(store, { orderId, refundId: refund.id, amountPaise: refund.amount, now });
+      // Refunds created by this store carry our refund document id in notes (refunds.ts).
+      const notes = refund.notes && !Array.isArray(refund.notes) ? refund.notes : {};
+      const refundDocId = typeof notes.refundDocId === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(notes.refundDocId) ? notes.refundDocId : null;
+      const result = await recordRefund(store, { orderId, refundId: refund.id, amountPaise: refund.amount, refundDocId, now });
       return result === 'recorded' ? 'refund_recorded' : 'refund_duplicate';
     }
     default:

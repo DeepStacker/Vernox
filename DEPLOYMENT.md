@@ -8,16 +8,34 @@
 ## 2. Environment Variables
 The authoritative list with comments is `.env.example`. Required on the server: `FIREBASE_SERVICE_ACCOUNT_BASE64` (or
 `GOOGLE_APPLICATION_CREDENTIALS`), `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `CRON_SECRET`.
-Optional: `FIREBASE_PROJECT_ID`, `STORE_GST_RATE_PERCENT`, `STORE_SHIPPING_FEE_INR`, `STORE_FREE_SHIPPING_THRESHOLD_INR`.
+Optional: `FIREBASE_PROJECT_ID`, the `STORE_*` defaults (GST, shipping, COD, lead times, return window, HSN), Shiprocket
+(`SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_PICKUP_LOCATION`, `SHIPROCKET_PICKUP_PINCODE`, `SHIPROCKET_WEBHOOK_TOKEN`),
+notifications (`RESEND_API_KEY`, `NOTIFY_FROM_EMAIL`, `MSG91_AUTH_KEY`, `MSG91_TEMPLATES`) and `VITE_SITE_URL` (also read by the
+server for links in notifications). Without Shiprocket the manual courier flow is used; without notification keys messages are
+skipped (logged), never failing an order.
 A missing required variable makes the affected endpoint return `CONFIG_ERROR` and logs which variable is missing.
 
 ## 2a. One-time setup
-1. `firebase deploy --only firestore` (rules + indexes) and configure TTL policies (DATABASE.md).
+1. `firebase deploy --only firestore,storage` (rules, indexes, storage rules for return photos) and configure TTL policies
+   (DATABASE.md). Fill `settings/store.seller` (legal name, GSTIN, address, state, 2-digit state code, PIN) before the first
+   dispatch: invoices — and so shipments — are refused until it is complete.
 2. `npm run seed` against an empty project (optional).
 3. Razorpay dashboard: enable auto-capture; add webhook `https://<domain>/api/razorpay-webhook` with secret
    `RAZORPAY_WEBHOOK_SECRET` and events `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`.
-4. Vercel Cron runs `/api/cron/release-reservations` every 5 minutes (`vercel.json`; sub-daily schedules need a Pro plan —
-   on Hobby, call it from an external scheduler with the bearer secret).
+4. Vercel Cron runs `/api/cron/release-reservations` every 5 minutes and `/api/cron/send-notifications` every 2 minutes
+   (`vercel.json`). **Vercel plan:** sub-daily crons need Pro, and the API is now 13 serverless functions (Hobby allows 12) —
+   deploy on Pro, or on Hobby call the crons from an external scheduler with the bearer secret and serve the API from the
+   Docker image (`server/index.ts` routes every endpoint).
+4a. **Shiprocket:** create an API user (Settings → API → Configure) and set `SHIPROCKET_EMAIL` / `SHIPROCKET_PASSWORD`; set
+   `SHIPROCKET_PICKUP_LOCATION` to the pickup nickname and `SHIPROCKET_PICKUP_PINCODE`. Tracking webhook (Settings → API →
+   Webhooks): URL `https://<domain>/api/courier-webhook` (Shiprocket rejects URLs containing "shiprocket", "kartrocket", "sr" or
+   "kr"), token = `SHIPROCKET_WEBHOOK_TOKEN` (sent as `x-api-key`). Enable COD on the Shiprocket account for COD orders; COD
+   remittance is settled by Shiprocket and reconciled by finance (Phase 3 console).
+4b. **Notifications:** Resend — verify the sending domain, set `RESEND_API_KEY` and `NOTIFY_FROM_EMAIL`. MSG91 SMS — register
+   the sender ID and every template on the DLT portal (TRAI requirement in India; unregistered SMS are blocked), create matching
+   MSG91 Flow templates with variables `##var1##` (first name), `##var2##` (order number), `##var3##` (amount / AWB / status, ≤ 30
+   characters), then set `MSG91_AUTH_KEY` and `MSG91_TEMPLATES` (JSON event → template id). WhatsApp is not wired yet (the
+   `NotificationChannel` interface in `api/_lib/notifications/types.ts` is the extension point).
 5. `npm run grant-super-admin -- owner@example.com` to create the first staff account; manage others with `SET_STAFF_ROLE`.
 
 Local development: use Razorpay **test** keys and either real Firebase credentials or the emulators

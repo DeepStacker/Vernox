@@ -43,6 +43,34 @@ export interface PaymentGateway {
   }): Promise<{ id: string; amount: number; currency: string }>;
 }
 
+export interface RefundGateway {
+  /** POST /payments/{id}/refund. `receipt` is our refund document id (Razorpay echoes it and its notes). */
+  createRefund(params: {
+    paymentId: string;
+    amountPaise: number;
+    receipt: string;
+    notes: Record<string, string>;
+  }): Promise<{ id: string; status: string; amount: number }>;
+}
+
+const providerFailure = (err: unknown) =>
+  (err as { error?: { description?: string } })?.error?.description || (err instanceof Error ? err.message : 'unknown Razorpay error');
+
+export function createRazorpayRefundGateway(): RefundGateway {
+  const { keyId, keySecret } = getRazorpayCredentials();
+  const client = new Razorpay({ key_id: keyId, key_secret: keySecret });
+  return {
+    async createRefund({ paymentId, amountPaise, receipt, notes }) {
+      try {
+        const refund = await client.payments.refund(paymentId, { amount: amountPaise, receipt, notes, speed: 'normal' });
+        return { id: refund.id, status: String(refund.status), amount: Number(refund.amount) };
+      } catch (err) {
+        throw new ApiError(502, 'PAYMENT_PROVIDER_ERROR', 'The payment provider could not start this refund. Please try again.', providerFailure(err));
+      }
+    },
+  };
+}
+
 export function createRazorpayGateway(): PaymentGateway {
   const { keyId, keySecret } = getRazorpayCredentials();
   const client = new Razorpay({ key_id: keyId, key_secret: keySecret });
@@ -52,13 +80,7 @@ export function createRazorpayGateway(): PaymentGateway {
         const order = await client.orders.create({ amount: amountPaise, currency, receipt, notes });
         return { id: order.id, amount: Number(order.amount), currency: order.currency };
       } catch (err) {
-        const description = (err as { error?: { description?: string } })?.error?.description;
-        throw new ApiError(
-          502,
-          'PAYMENT_PROVIDER_ERROR',
-          'The payment provider could not start this payment. Please try again.',
-          description || (err instanceof Error ? err.message : 'unknown Razorpay error'),
-        );
+        throw new ApiError(502, 'PAYMENT_PROVIDER_ERROR', 'The payment provider could not start this payment. Please try again.', providerFailure(err));
       }
     },
   };

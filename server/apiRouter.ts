@@ -14,6 +14,12 @@ import orderStatusHandler from '../api/order-status';
 import adminHandler from '../api/admin';
 import razorpayWebhookHandler from '../api/razorpay-webhook';
 import releaseReservationsHandler from '../api/cron/release-reservations';
+import sendNotificationsHandler from '../api/cron/send-notifications';
+import serviceabilityHandler from '../api/serviceability';
+import courierWebhookHandler from '../api/courier-webhook';
+import invoiceHandler from '../api/invoice';
+import orderCancelHandler from '../api/order-cancel';
+import returnRequestHandler from '../api/return-request';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -26,6 +32,12 @@ const ROUTES: Record<string, Handler> = {
   '/api/admin': adminHandler,
   '/api/razorpay-webhook': razorpayWebhookHandler,
   '/api/cron/release-reservations': releaseReservationsHandler,
+  '/api/cron/send-notifications': sendNotificationsHandler,
+  '/api/serviceability': serviceabilityHandler,
+  '/api/courier-webhook': courierWebhookHandler,
+  '/api/invoice': invoiceHandler,
+  '/api/order-cancel': orderCancelHandler,
+  '/api/return-request': returnRequestHandler,
 };
 
 function setSecurityAndCorsHeaders(req: http.IncomingMessage, res: http.ServerResponse) {

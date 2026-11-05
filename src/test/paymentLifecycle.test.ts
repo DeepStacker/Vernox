@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createCheckoutIntent } from '../../api/_lib/checkout';
+import { createCheckoutIntent, type PrepaidCheckoutResponse } from '../../api/_lib/checkout';
 import { confirmPayment } from '../../api/_lib/payments';
 import { releaseExpiredReservations } from '../../api/_lib/reservations';
 import { processWebhookEvent, type RazorpayWebhookEvent } from '../../api/_lib/webhook';
@@ -8,8 +8,7 @@ import { checkoutRequest, deps, NOW, seededStore } from './support/serverFixture
 import type { MemoryStore } from './support/memoryStore';
 
 async function pendingOrder(store: MemoryStore, overrides: Record<string, unknown> = {}) {
-  const res = await createCheckoutIntent(deps(store), checkoutRequest(overrides), null);
-  return res;
+  return (await createCheckoutIntent(deps(store), checkoutRequest(overrides), null)) as PrepaidCheckoutResponse;
 }
 
 const captured = (razorpayOrderId: string, amount: number, paymentId = 'pay_001'): RazorpayWebhookEvent => ({
