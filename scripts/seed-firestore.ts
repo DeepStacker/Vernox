@@ -29,10 +29,10 @@ async function main() {
   const settingsRef = db.doc('settings/store');
   const settingsExist = (await settingsRef.get()).exists;
   if (force || !settingsExist) {
-    // Same defaults as the API (api/_lib/storeConfig.ts); seller and contact fields start empty.
+    // Same defaults as the API (api/_lib/storeConfig.ts); seller and contact fields start as placeholders.
     // --force never blanks business details the owner already entered.
-    const { seller, whatsappNumber, supportPhone, supportEmail, supportHours, workshopAddress, ...pricing } = defaultSettingsDoc();
-    const ownerFields = { seller, whatsappNumber, supportPhone, supportEmail, supportHours, workshopAddress };
+    const { seller, whatsappNumber, supportPhone, supportEmail, supportHours, workshopAddress, grievanceOfficerName, grievanceOfficerEmail, ...pricing } = defaultSettingsDoc();
+    const ownerFields = { seller, whatsappNumber, supportPhone, supportEmail, supportHours, workshopAddress, grievanceOfficerName, grievanceOfficerEmail };
     await settingsRef.set({ ...pricing, ...(settingsExist ? {} : ownerFields), updatedAt: Date.now() }, { merge: true });
     written += 1;
   }

@@ -27,7 +27,7 @@
  *                                        supplier block printed on GST invoices
  */
 import { DEFAULT_CONSULTATION_SETTINGS } from '../../src/types/consultation';
-import type { StoreSettingsDoc } from '../../src/types/settings';
+import { PLACEHOLDER_CONTACT, PLACEHOLDER_SELLER, type StoreSettingsDoc } from '../../src/types/settings';
 import { isNonNegativeFinite, paiseToRupees, rupeesToPaise } from './money';
 import type { DocData, DocStore } from './store';
 import {
@@ -291,12 +291,9 @@ export function defaultSettingsDoc(config: StoreConfig = defaultStoreConfig()): 
       sacCode: config.consultation.sacCode,
       gstRatePercent: config.consultation.gstRateBps / 100,
     },
-    seller: { ...EMPTY_SELLER },
-    whatsappNumber: '',
-    supportPhone: '',
-    supportEmail: '',
-    supportHours: '',
-    workshopAddress: '',
+    // Seeded placeholders keep every flow working until the owner enters real details (invoices are specimens meanwhile).
+    seller: { ...PLACEHOLDER_SELLER },
+    ...PLACEHOLDER_CONTACT,
   };
 }
 

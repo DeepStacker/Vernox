@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StoreConfig } from '@/types/store';
-import { draftFromConfig, missingSellerFields, toStorePatch, validateBusiness } from '../settingsForm';
+import { PLACEHOLDER_CONTACT, PLACEHOLDER_SELLER } from '@/types/settings';
+import { draftFromConfig, launchChecklist, missingSellerFields, toStorePatch, validateBusiness } from '../settingsForm';
 
 const config: StoreConfig = { storeName: 'Vernox', currency: '₹', gstRatePercent: 18, freeShippingThreshold: 5000, shippingFee: 150 };
 
@@ -63,5 +64,14 @@ describe('design consultation settings', () => {
     const d = draftFromConfig(config);
     d.consultation = { ...d.consultation, enabled: true, priceInr: '1499' };
     expect(toStorePatch(d).consultation).toEqual({ enabled: true, priceInr: 1499, creditTowardsOrder: true, creditValidityDays: 60, turnaroundDays: 3, sacCode: '998391', gstRatePercent: 18 });
+  });
+});
+
+describe('launch checklist', () => {
+  it('lists every placeholder and clears once real details are saved', () => {
+    const seeded = { ...config, seller: PLACEHOLDER_SELLER, ...PLACEHOLDER_CONTACT } as StoreConfig;
+    expect(launchChecklist(seeded)).toHaveLength(3);
+    const real = { ...config, seller: { ...PLACEHOLDER_SELLER, gstin: '29ABCDE1234F1Z5', stateCode: '29' }, supportEmail: 'hello@vernox.in', supportPhone: '+91 98000 00000', grievanceOfficerName: 'A. Rao', grievanceOfficerEmail: 'grievance@vernox.in' } as StoreConfig;
+    expect(launchChecklist(real)).toEqual([]);
   });
 });

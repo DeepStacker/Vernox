@@ -27,7 +27,12 @@ fields; `npm run seed` writes the same defaults). **Public document: never store
 `customLeadTimeDays`, `manualTransitDays`, `defaultHsnCode`,
 `consultation: { enabled (default false), priceInr (default 999, before GST, ₹1–1,00,000), creditTowardsOrder (default true), creditValidityDays (default 60), turnaroundDays (default 3), sacCode (default 998391), gstRatePercent (default 18, the service rate, independent of the goods rate) }`,
 `seller: { legalName, tradeName, gstin, address, city, state, stateCode (2-digit GST code = GSTIN prefix), pincode, email, phone }`
-(printed on invoices; invoices cannot be issued until legalName, gstin, address, state, stateCode and pincode are set),
+(printed on invoices; invoices cannot be issued until legalName, gstin, address, state, stateCode and pincode are set).
+`npm run seed` writes placeholder seller, contact and grievance values (`PLACEHOLDER_*` in `src/types/settings.ts`). While the
+seller GSTIN is the placeholder `27AAAAA0000A1Z5`, invoices and credit notes are SPECIMENS (`specimen: true`, series `SP/…` and
+`SC/…`, "not a valid tax document" on the PDF), the real `VX/` and `CN/` counters stay untouched, the storefront hides every
+placeholder value, and the admin home lists what is still to replace. Saving a real GSTIN in Settings ends specimen mode.
+Other fields:
 storefront contact `whatsappNumber`, `supportPhone`, `supportEmail`, `supportHours`, `workshopAddress` (empty = hidden on the storefront),
 `grievanceOfficerName`, `grievanceOfficerEmail` (named on the Terms and Privacy pages with the seller block; email falls back to `supportEmail`).
 The admin Settings screen edits `seller`, the contact fields, `codEnabled`, `codFee`, `codMaxOrderValue`, `defaultLeadTimeDays`,
@@ -122,7 +127,7 @@ Phase 2 (India commerce):
   `ISSUE_SERVICE_INVOICE`, which clears the flag. Never for replacement orders.
 - `credit_notes/{refundId}` — same shape, `type: 'credit_note'`, `againstInvoice{ id, number }`, `refundId`, `reason`. One per
   refund on an invoiced order (and `cancel_{orderId}` for an invoiced COD order that is cancelled after RTO).
-- `counters/{invoice|credit_note}_{YYYY-YY}` — `{ last }`, incremented in the issuing transaction. Numbers: `VX/26-27/000123`
+- `counters/{invoice|credit_note|specimen_invoice|specimen_credit_note}_{YYYY-YY}` — `{ last }`, incremented in the issuing transaction. Numbers: `VX/26-27/000123`
   (invoices) and `CN/26-27/000004` (credit notes): consecutive per financial year (1 April–31 March IST), ≤ 16 characters (Rule 46).
 - `refunds/{id}` — `{ orderId, amountPaise, reason, method: razorpay|manual, source: staff|customer_cancel|external, status:
   pending|processed|failed, requestedBy, providerRefundId (Razorpay id or manual bank/UPI reference), createdAt, processedAt,

@@ -199,7 +199,9 @@ the one revision message.
 - Firebase projects for staging and production, created in `asia-south1` (Mumbai), plus a service account for the server.
 - A Vercel Pro team (Hobby does not allow commercial use); the API runs in `bom1`.
 - Shiprocket account API credentials; email and SMS/WhatsApp notification providers.
-- Business GSTIN, legal name, registered address and state (Settings → Seller); invoices cannot be issued without them.
+- Business GSTIN, legal name, registered address and state, support contacts and the grievance officer (Admin → Settings). Seeded
+  placeholders keep every flow working meanwhile: invoices are specimens (`SP/…`), placeholders never reach the storefront, and the
+  admin home shows a launch checklist until they are replaced.
 - Resend account and verified sending domain; MSG91 account with DLT-registered sender ID and templates.
 - Shiprocket API user, pickup location nickname, COD enablement and webhook token.
 - Real catalogue, photographs and price list before launch.

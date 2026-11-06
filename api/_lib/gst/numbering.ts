@@ -10,9 +10,10 @@
  */
 import type { StoreTransaction } from '../store';
 
-export type DocumentSeries = 'invoice' | 'credit_note';
+/** `specimen_*` series are used while the seller is on placeholder details, so real numbering starts at 000001. */
+export type DocumentSeries = 'invoice' | 'credit_note' | 'specimen_invoice' | 'specimen_credit_note';
 
-const PREFIX: Record<DocumentSeries, string> = { invoice: 'VX', credit_note: 'CN' };
+const PREFIX: Record<DocumentSeries, string> = { invoice: 'VX', credit_note: 'CN', specimen_invoice: 'SP', specimen_credit_note: 'SC' };
 const IST_OFFSET_MS = 5.5 * 3600_000;
 
 /** Financial year containing the instant, as `2026-27`. */

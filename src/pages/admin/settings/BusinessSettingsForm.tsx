@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { AdminNotice, Field } from '@/components/admin/AdminUi';
 import { useSettingsMutations } from '@/lib/data/settings';
 import type { StoreConfig } from '@/types/store';
+import { isPlaceholderSeller } from '@/types/settings';
 import { describeSellerFields, draftFromConfig, missingSellerFields, toStorePatch, validateBusiness, type BusinessDraft } from './settingsForm';
 
 const SELLER_TEXT: Array<{ key: keyof BusinessDraft['seller']; label: string; error?: string; hint?: string; mono?: boolean }> = [
@@ -56,6 +57,7 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
     <form onSubmit={save} className="space-y-8 rounded-lg border border-border bg-card p-5 shadow-soft">
       <Section title="Seller details" hint="Printed on every GST invoice. Shipments cannot be booked until legal name, GSTIN, address, state, state code and PIN are set.">
         {missing.length > 0 && <div className="sm:col-span-2"><AdminNotice>Still missing for invoices: {describeSellerFields(missing)}.</AdminNotice></div>}
+        {missing.length === 0 && isPlaceholderSeller(draft.seller) && <div className="sm:col-span-2"><AdminNotice>These are placeholder details. Invoices are issued as specimens (SP/…) and nothing here is shown on the storefront until you enter your real GSTIN.</AdminNotice></div>}
         {SELLER_TEXT.map(f => (
           <Field key={f.key} label={f.label} hint={f.hint} error={f.error ? errors[f.error] : undefined}>
             <input value={draft.seller[f.key]} onChange={e => setSeller(f.key, f.key === 'gstin' ? e.target.value.toUpperCase() : e.target.value)}

@@ -13,6 +13,7 @@ import { ORDER_STATUS_LABELS } from '@/lib/orders/orderStateMachine';
 import { isAssignedTo, oldestFirst, PRODUCTION_STAGES, stageCounts, workshopStage } from '@/lib/orders/productionQueue';
 import { AdminPageHeader, StatTile } from '@/components/admin/AdminUi';
 import { StatusBadge, SlaBadge } from '../shared/badges';
+import { LaunchChecklist } from './LaunchChecklist';
 import { useWorkshopQueue } from '../shared/useWorkshopQueue';
 
 type Go = (tab: AdminTabId) => void;
@@ -122,6 +123,7 @@ export function RoleHome({ role, onSelectTab }: { role: NonNullable<ReturnType<t
   return (
     <div className="space-y-8 animate-fade-in">
       <AdminPageHeader title="My work" line={`Signed in as ${formatRole(role)}.`} />
+      {p.canManageSettings && <LaunchChecklist go={onSelectTab} />}
       {p.canManageProduction && <WorkshopSection go={onSelectTab} />}
       {p.canManageShipping && !p.canManageProduction && <DispatchSection go={onSelectTab} />}
       {p.canManageSupport && <SupportSection go={onSelectTab} />}

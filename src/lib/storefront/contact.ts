@@ -1,9 +1,10 @@
 /**
  * Public contact details. Values come from `settings/store` when the owner sets them
  * (supportEmail, supportPhone, whatsappNumber, supportHours, workshopAddress); until then the
- * field is an empty string and the UI omits it, so customers never see a placeholder.
- * TODO(contact): owner to fill the settings/store contact fields before launch.
+ * field is empty or a seeded placeholder (PLACEHOLDER_CONTACT) and the UI omits it, so customers never see one.
+ * The admin home's launch checklist lists what is still to fill in.
  */
+import { isPlaceholderValue } from '@/types/settings';
 import type { StoreConfig } from '@/types/store';
 
 export interface StoreContact {
@@ -24,14 +25,17 @@ type ContactSettings = Partial<{
   workshopAddress: string;
 }>;
 
+/** Seeded placeholder values count as unset, so customers never see them. */
+export const publicValue = (value: string | undefined | null): string => (value && !isPlaceholderValue(value) ? value : '');
+
 export function resolveContact(config: StoreConfig): StoreContact {
   const c = config as StoreConfig & ContactSettings;
   return {
-    email: c.supportEmail || config.adminEmail || '',
-    phone: c.supportPhone || '',
-    whatsapp: (c.whatsappNumber ?? '').replace(/\D/g, ''),
+    email: publicValue(c.supportEmail) || config.adminEmail || '',
+    phone: publicValue(c.supportPhone),
+    whatsapp: publicValue(c.whatsappNumber).replace(/\D/g, ''),
     hours: c.supportHours || 'Mon to Sat, 10 am to 6 pm IST',
-    address: c.workshopAddress || '',
+    address: publicValue(c.workshopAddress),
   };
 }
 

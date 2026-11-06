@@ -16,6 +16,7 @@
  * Records are immutable: `invoices/{orderId}` (one per order) and
  * `credit_notes/{refundId}` (one per refund), both server-only.
  */
+import { isPlaceholderSeller } from '../../../src/types/settings';
 import { configError } from '../errors';
 import type { OrderDoc } from '../orders';
 import { allocateProRata } from '../pricing';
@@ -70,6 +71,8 @@ export interface TaxDocument {
   taxInclusive: false;
   reverseCharge: false;
   paymentMethod: OrderDoc['paymentMethod'];
+  /** Issued under placeholder seller details: not a valid tax invoice (see PLACEHOLDER_GSTIN). */
+  specimen?: boolean;
   /** Credit notes only. */
   againstInvoice?: { id: string; number: string } | null;
   refundId?: string | null;
@@ -218,6 +221,7 @@ export function buildInvoice(order: OrderDoc, seller: SellerDetails, reservation
     taxInclusive: false,
     reverseCharge: false,
     paymentMethod: order.paymentMethod ?? 'prepaid',
+    ...(reservation.series === 'specimen_invoice' ? { specimen: true } : {}),
     againstInvoice: null,
     refundId: null,
     reason: null,
@@ -294,7 +298,7 @@ export async function planInvoice(tx: StoreTransaction, order: OrderDoc, seller:
   if (existing) return { existing, reservation: null };
   if (order.paymentMethod === 'replacement') return { existing: null, reservation: null }; // no consideration: delivery challan, not an invoice
   assertSellerConfigured(seller);
-  return { existing: null, reservation: await reserveNumber(tx, 'invoice', now) };
+  return { existing: null, reservation: await reserveNumber(tx, isPlaceholderSeller(seller) ? 'specimen_invoice' : 'invoice', now) };
 }
 
 /** Write phase. Returns the order fields to set (`invoiceId`, `invoiceNumber`), or {} when none is issued. */
@@ -318,7 +322,7 @@ export async function planCreditNote(tx: StoreTransaction, orderId: string, refu
   const invoice = (await tx.get(invoicePath(orderId))) as unknown as TaxDocument | null;
   if (!invoice) return { invoice: null, existing: false, reservation: null };
   if (await tx.get(creditNotePath(refundId))) return { invoice, existing: true, reservation: null };
-  return { invoice, existing: false, reservation: await reserveNumber(tx, 'credit_note', now) };
+  return { invoice, existing: false, reservation: await reserveNumber(tx, invoice.specimen ? 'specimen_credit_note' : 'credit_note', now) };
 }
 
 export function applyCreditNote(tx: StoreTransaction, plan: CreditNotePlan, params: { refundId: string; amountPaise: number; reason: string; now: number }) {

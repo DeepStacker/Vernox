@@ -72,7 +72,7 @@ class Writer {
 
 export async function renderTaxDocumentPdf(docData: TaxDocument): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  pdf.setTitle(`${docData.type === 'invoice' ? 'Tax Invoice' : 'Credit Note'} ${docData.number}`);
+  pdf.setTitle(`${docData.specimen ? 'Specimen ' : ''}${docData.type === 'invoice' ? 'Tax Invoice' : 'Credit Note'} ${docData.number}`);
   pdf.setProducer('Vernox');
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -82,7 +82,8 @@ export async function renderTaxDocumentPdf(docData: TaxDocument): Promise<Uint8A
   const s = docData.seller;
   const intra = docData.supplyType === 'intra_state';
 
-  w.text(docData.type === 'invoice' ? 'TAX INVOICE' : 'CREDIT NOTE', left, { size: 16, bold: true });
+  const title = docData.type === 'invoice' ? 'TAX INVOICE' : 'CREDIT NOTE';
+  w.text(docData.specimen ? `SPECIMEN ${title}` : title, left, { size: 16, bold: true });
   w.text(`No. ${docData.number}`, right, { size: 10, bold: true, align: 'right' });
   w.down(16);
   w.text(`Date: ${istDate(docData.issuedAt)}`, right, { align: 'right' });
@@ -90,6 +91,10 @@ export async function renderTaxDocumentPdf(docData: TaxDocument): Promise<Uint8A
   w.down(12);
   if (docData.againstInvoice) {
     w.text(`Against invoice ${docData.againstInvoice.number}${docData.reason ? ` - ${docData.reason}` : ''}`, left, { width: right - left });
+    w.down(12);
+  }
+  if (docData.specimen) {
+    w.text('SPECIMEN - NOT A VALID TAX DOCUMENT. Issued under placeholder business details for testing.', left, { bold: true, width: right - left });
     w.down(12);
   }
   w.down(8);

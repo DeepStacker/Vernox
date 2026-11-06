@@ -4,7 +4,7 @@
  * (src/types/settings.ts); the server parses the same document (api/_lib/storeConfig.ts) and its
  * GSTIN pattern is mirrored here so a bad value is caught before it blocks every invoice.
  */
-import type { SellerSettings } from '@/types/settings';
+import { isPlaceholderSeller, isPlaceholderValue, type SellerSettings } from '@/types/settings';
 import type { StoreConfig } from '@/types/store';
 import { DEFAULT_CONSULTATION_SETTINGS } from '@/types/consultation';
 
@@ -152,4 +152,16 @@ export function toStorePatch(d: BusinessDraft): Partial<StoreConfig> {
   ];
   for (const [key, value] of optional) if (value !== undefined) Object.assign(patch, { [key]: value });
   return patch;
+}
+
+/** Business details still on seeded placeholders or empty: the owner's launch checklist (admin home, Settings). */
+export function launchChecklist(config: StoreConfig): string[] {
+  const c = config as StoreConfig & { grievanceOfficerName?: string; grievanceOfficerEmail?: string };
+  const pending = (value: string | undefined) => !value?.trim() || isPlaceholderValue(value);
+  const items: string[] = [];
+  if (isPlaceholderSeller(c.seller)) items.push('Seller legal name, GSTIN and registered address (invoices are specimens until then)');
+  else if (missingSellerFields(c.seller ?? {}).length > 0) items.push(`Seller details: ${describeSellerFields(missingSellerFields(c.seller ?? {}))}`);
+  if (pending(c.supportEmail) || pending(c.supportPhone)) items.push('Support email and phone');
+  if (pending(c.grievanceOfficerName) || pending(c.grievanceOfficerEmail)) items.push('Grievance officer name and email');
+  return items;
 }

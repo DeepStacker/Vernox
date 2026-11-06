@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../api/_lib/errors';
 import { applyInvoice, buildCreditNote, planInvoice, type TaxDocument } from '../../api/_lib/gst/invoice';
@@ -10,6 +11,8 @@ import { createShipment } from '../../api/_lib/shipping/shipments';
 import { ManualShippingProvider } from '../../api/_lib/shipping/manual';
 import { NOW, paidOrder, seededStore, SELLER_CONFIG, setStatus, STAFF_ACTOR, TEST_CONFIG } from './support/serverFixtures';
 import type { MemoryStore } from './support/memoryStore';
+import { defaultSettingsDoc, mergeStoreConfig } from '../../api/_lib/storeConfig';
+import { isPlaceholderSeller, isPlaceholderValue, PLACEHOLDER_CONTACT, PLACEHOLDER_GSTIN, PLACEHOLDER_SELLER } from '../types/settings';
 
 const IST = (iso: string) => Date.parse(`${iso}+05:30`);
 const manual = new ManualShippingProvider({ transitDays: 5, codEnabled: true });
@@ -167,5 +170,40 @@ describe('legacy (Phase 1) orders', () => {
     await createShipment(store, manual, SELLER_CONFIG, { orderId: res.orderId, manual: { courier: 'DTDC', awb: 'D7654321' }, actor: STAFF_ACTOR });
     const invoice = store.read(`invoices/${res.orderId}`) as unknown as TaxDocument;
     expect(invoice.totals.totalPaise).toBe(order.amounts.totalPaise);
+  });
+});
+
+describe('placeholder seller details (UAT before the real GSTIN is entered)', () => {
+  const placeholderConfig = mergeStoreConfig(TEST_CONFIG, { seller: PLACEHOLDER_SELLER });
+
+  it('issues SPECIMEN invoices in their own series and leaves the real series untouched', async () => {
+    const store = seededStore();
+    const res = await paidOrder(store);
+    setStatus(store, res.orderId, 'Packed');
+    await createShipment(store, manual, placeholderConfig, { orderId: res.orderId, manual: { courier: 'Delhivery', awb: 'AWBSPEC0001' }, actor: STAFF_ACTOR });
+    const invoice = store.read(`invoices/${res.orderId}`) as unknown as TaxDocument;
+    expect(invoice.number).toMatch(/^SP\/\d{2}-\d{2}\/000001$/);
+    expect(invoice.number.length).toBeLessThanOrEqual(16);
+    expect(invoice.specimen).toBe(true);
+    expect(store.read(`counters/invoice_${financialYear(NOW)}`) ?? null).toBeNull();
+
+    const note = buildCreditNote({ invoice, refundId: 'r-spec', amountPaise: 1000, reason: 'test', reservation: await store.runTransaction(tx => reserveNumber(tx, 'specimen_credit_note', NOW)), now: NOW });
+    expect(note.specimen).toBe(true);
+    const pdf = await PDFDocument.load(await renderTaxDocumentPdf(invoice));
+    expect(pdf.getTitle()).toMatch(/^Specimen Tax Invoice SP\//);
+  });
+
+  it('switches to the real series once a real GSTIN is saved', async () => {
+    const { invoice } = await invoicedOrder(seededStore());
+    expect(invoice.number).toMatch(/^VX\//);
+    expect(invoice.specimen).toBeUndefined();
+  });
+
+  it('recognises placeholders so the storefront can hide them', () => {
+    expect(isPlaceholderSeller(PLACEHOLDER_SELLER)).toBe(true);
+    expect(isPlaceholderSeller(SELLER_CONFIG.seller)).toBe(false);
+    expect(isPlaceholderValue(PLACEHOLDER_CONTACT.supportEmail)).toBe(true);
+    expect(isPlaceholderValue('hello@vernox.in')).toBe(false);
+    expect(defaultSettingsDoc().seller.gstin).toBe(PLACEHOLDER_GSTIN);
   });
 });
