@@ -182,7 +182,7 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 | OM-03 | Order detail | Any order | Open detail | Items with variants and custom design files, address, payment reference, timeline | |
 | OM-04 | Verify payment state | Paid and failed orders | Compare with gateway dashboard | Statuses match exactly | |
 | OM-05 | Move order to production | Paid order | Open Production console as Order manager; move the order to "In Design" | Order shows in the In Design column; timeline records the user | |
-| OM-06 | Hold order | Paid order | Put on hold with reason | Status "On hold"; reason visible; Production cannot start it | Blocked: Phase 3b (no hold status in the state machine yet) |
+| OM-06 | Hold order | Paid or in-production order | Orders > open the order > Put on hold, give a reason; then Release hold | Amber "On hold" banner with reason, who and when on the order and on the production card; the stage cannot advance or ship (server and rules refuse); cancelling still works; after release the order moves on from the same stage; both actions audited | Testable in the UI |
 | OM-07 | Edit address before dispatch | Order not shipped | Change address and pincode | Saved, audited; shipping rate recomputed | Blocked: Phase 2 |
 | OM-08 | Cancel order | Paid order, not in production | Cancel with reason | `CANCEL_ORDER`: Cancelled; stock restored; full refund requested when the role has `orders.refund` (else `refund: false` and finance refunds) | Testable via API (UI: Phase 3) |
 | OM-09 | Invalid status jump | Any order | Try Delivered from Paid | Refused; only valid transitions offered | |
@@ -197,7 +197,7 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 | PR-03 | Download work order PDF and job sheet | Same | Download PDF; press the print icon on the card | PDF has material, thickness, finish, order number; job sheet prints one page per order with barcode, items, size, finish, material and checklists | |
 | PR-04 | Stage progression | Order in queue | Claim, then move Waiting to start > In Design > Cutting > Finishing > Quality Check | Each move recorded in the timeline with the operator email; card shows "Assigned to you"; buttons are at least 44 px tall | |
 | PR-05 | Skip stage refused | Order at Cutting | Look for a button to jump to Quality Check or Packed | Only the next stage is offered; production cannot move Quality Check to Packed (QC console does) | |
-| PR-06 | Material shortage | Low raw stock | Add an internal note "Material shortage: ..." | Note saved with author and time and visible to Order manager. Flag and notification are not built | |
+| PR-06 | Material shortage | Low raw stock | Production > open the job > Material shortage, name the material | Card shows "Waiting for material: …" in every console; the stage is frozen until an order manager or production releases it; audited. No automatic notification | Testable in the UI |
 | PR-07 | Rework | Failed QC (QC-02) | Open the order in Production | Order is in Cutting or Finishing as chosen at QC; the failure reason is in the QC log (QC-02) | |
 | PR-08 | Operator cannot see finance | Production login | Open Analytics, Customers, Team, Settings by navigation; check customer details in the console | Tabs absent; production screens show no customer name, email, phone or address | |
 | PR-09 | Mine only and search | Several orders, some claimed | Toggle "Mine only"; search an order number | Only matching orders shown | |

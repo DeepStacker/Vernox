@@ -80,6 +80,18 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     await assertFails(updateDoc(doc(as('f', { role: 'finance' }), 'orders/o1'), { notes: 'x' }));
   });
 
+  it('orders: a held order keeps its stage; clients cannot set or clear the hold', async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'orders/o2'), { userId: 'alice', email: 'alice@example.com', status: 'Cutting', total: 100,
+        hold: { kind: 'material_shortage', reason: 'brass sheet', by: 'p@vernox.in', at: 1 } });
+    });
+    const production = as('p', { role: 'production' });
+    await assertFails(updateDoc(doc(production, 'orders/o2'), { status: 'Finishing', updatedAt: 1 }));
+    await assertFails(updateDoc(doc(production, 'orders/o2'), { hold: null, updatedAt: 1 }));
+    await assertSucceeds(updateDoc(doc(production, 'orders/o2'), { notes: 'Waiting for the supplier', updatedAt: 2 }));
+    await assertFails(updateDoc(doc(production, 'orders/o1'), { hold: { kind: 'hold', reason: 'x', by: 'p', at: 1 } }));
+  });
+
   it('coupons are staff-only and usedCount is not client-writable', async () => {
     await assertFails(getDoc(doc(guest(), 'coupons/c1')));
     await assertFails(getDoc(doc(as('alice'), 'coupons/c1')));

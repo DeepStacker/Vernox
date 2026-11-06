@@ -119,7 +119,7 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
      lead times, return window), `ADD_ORDER_NOTE` so support can add notes, one admin shell and shared UI components, COD orders in the production
      queue, and the customer order summary reading the same API shape on every path.
    - **Not built (3b):** courier rate list and ETA at booking; bulk label or manifest printing (the API is per order); importing Razorpay settlement
-     or courier remittance files (reconciliation compares loaded orders only); hold status and material-shortage flag (below).
+     or courier remittance files (reconciliation compares loaded orders only); (hold and material shortage are done, below).
 4. **Storefront redesign:** simpler navigation, shop by room/theme, filters, PDP with MRP,
    delivery estimate, room view and trust, SEO and performance.
 5. **UAT:** scripted end-to-end scenarios per role (see `UAT.md` once written) on a staging project.
@@ -238,4 +238,5 @@ previews are the flat metal shape, not the wall preview.
   `TODO(support-tickets)`: only the `contact_form` channel exists; `orderId` is not linked (the customer's order number is stored as free text). Replies are emailed to the customer through the outbox.
 - Done in 3b: `defaultLeadTimeDays` and `customLeadTimeDays` are in the settings form and the `StoreConfig` type.
 - Workshop queues load up to 200 orders per status group; move to counters or a dedicated `workshop` index if volume exceeds that.
-- Hold status and material-shortage flag (UAT OM-06, PR-06) need new order statuses in the shared state machine.
+- Done: hold and material shortage (UAT OM-06, PR-06) as an `OrderHold` flag beside the status, not new statuses: the order keeps its stage
+  and resumes from it, the customer sees no change, and the state machine is untouched (`SET_ORDER_HOLD` / `RELEASE_ORDER_HOLD`).

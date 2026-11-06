@@ -9,6 +9,7 @@
 import { ApiError } from './errors';
 import { enqueueNotification, payloadFromOrder, planNotification, type NotificationPlan } from './notifications/outbox';
 import type { NotificationEvent, NotificationPayload } from './notifications/types';
+import { HOLD_BLOCKED_TARGETS } from '../../src/types/orderStatus';
 import { canTransition, type OrderStatus, type StatusHistoryEntry } from './orderLifecycle';
 import { orderPath, type OrderDoc } from './orders';
 import { arrayUnion, type DocData, type StoreTransaction } from './store';
@@ -59,6 +60,10 @@ export function assertPath(order: OrderDoc, path: OrderStatus[]) {
 export async function planStatusChange(tx: StoreTransaction, order: OrderDoc, request: StatusChangeRequest): Promise<StatusChangePlan> {
   const path = Array.isArray(request.to) ? request.to : [request.to];
   assertPath(order, path);
+  if (order.hold && path.some(s => HOLD_BLOCKED_TARGETS.includes(s))) {
+    const what = order.hold.kind === 'material_shortage' ? 'waiting for material' : 'on hold';
+    throw new ApiError(409, 'CONFLICT', `This order is ${what}: ${order.hold.reason}. Release the hold first.`);
+  }
   const final = path[path.length - 1];
   const event = request.event === undefined ? EVENT_FOR_STATUS[final] : request.event;
   const notification = event ? await planNotification(tx, order.id, event, request.eventDiscriminator) : null;

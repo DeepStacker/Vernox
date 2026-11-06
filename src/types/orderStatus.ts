@@ -112,3 +112,25 @@ export const PAID_STATUSES: readonly OrderStatus[] = [
   'Delivered', 'RTO_Initiated', 'RTO_Delivered', 'Return_Requested', 'Return_Approved', 'Returned',
   'Partially_Refunded', 'Refunded',
 ];
+
+/**
+ * Hold: a flag beside the status, not a status, so a held order keeps its stage and resumes from it, the
+ * customer's status is unchanged and the state machine stays as it is. `material_shortage` is a hold that
+ * production raises when raw stock runs out. Written only by the API (SET_ORDER_HOLD / RELEASE_ORDER_HOLD);
+ * firestore.rules refuse direct status moves while it is set.
+ */
+export const HOLD_KINDS = ['hold', 'material_shortage'] as const;
+export type HoldKind = (typeof HOLD_KINDS)[number];
+
+export interface OrderHold {
+  kind: HoldKind;
+  reason: string;
+  by: string;
+  at: number;
+}
+
+/** Statuses a hold can be placed in: confirmed, in production or packed (not yet with the courier). */
+export const HOLDABLE_STATUSES: readonly OrderStatus[] = ['Paid', 'Confirmed_COD', ...STAFF_SETTABLE_STATUSES, 'Partially_Refunded'];
+
+/** Moves a held order cannot make: fulfilment progress and dispatch. Cancellation and refunds stay possible. */
+export const HOLD_BLOCKED_TARGETS: readonly OrderStatus[] = [...STAFF_SETTABLE_STATUSES, 'Shipped'];

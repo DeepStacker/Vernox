@@ -178,7 +178,9 @@ service cloud.firestore {
         && changedKeys().hasOnly(['status', 'statusHistory', 'assignedTo', 'tracking', 'notes', 'updatedAt'])
         && (
           request.resource.data.status == resource.data.status
-          || request.resource.data.status in staffWorkshopMoves().get(resource.data.status, [])
+          || (request.resource.data.status in staffWorkshopMoves().get(resource.data.status, [])
+              // A held order (hold set by the API) keeps its stage until the hold is released.
+              && resource.data.get('hold', null) == null)
         )
         // QC / packing records are stored in `notes` by the staff consoles.
         && request.resource.data.get('notes', '') is string

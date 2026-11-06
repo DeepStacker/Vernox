@@ -48,7 +48,9 @@ totalPaise, gstRateBps }`, `coupon{ id, code, discountPaise } | null`, `stockRes
 items[{ productId, quantity }] }`, `reservationExpiresAt` (ms, placed + 15 min), `idempotencyKey`, `razorpayOrderId`,
 `razorpayPaymentId`, `paidAt`, `refunds[{ refundId, amountPaise, at }]`, `refundedPaise`, `refundPendingPaise` (requested, not
 yet processed), `flags[]` (e.g. `AMOUNT_MISMATCH`, `STOCK_SHORTFALL_AFTER_LATE_PAYMENT`, `COUPON_LIMIT_EXCEEDED_AT_PAYMENT`,
-`DUPLICATE_PAYMENT`, `REFUND_NOT_STARTED`), `placedAt`/`createdAt`/`updatedAt` (ms).
+`DUPLICATE_PAYMENT`, `REFUND_NOT_STARTED`), `hold` (`{ kind: hold|material_shortage, reason, by, at }` or null: fulfilment paused
+without changing `status`; set and released only by the admin actions `SET_ORDER_HOLD` / `RELEASE_ORDER_HOLD`, and firestore.rules
+refuse direct stage moves while it is set), `placedAt`/`createdAt`/`updatedAt` (ms).
 Phase 2: `paymentMethod` (`prepaid` | `cod` | `replacement`; absent = prepaid), `phoneKey` (10-digit mobile, COD limits),
 `leadTimeDays`, `amounts.codFeePaise`, `amounts.taxBreakdown{ lines[{ discountPaise, taxablePaise, gstRateBps, taxPaise }],
 charges[{ kind: shipping|cod_fee, taxablePaise, gstRateBps, taxPaise }] }`, per item `hsnCode`, `gstRateBps`, `discountPaise`,

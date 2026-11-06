@@ -74,7 +74,7 @@ export function ProductionConsole() {
             {groups[stage].length === 0 && <p className="text-xs text-muted-foreground">Nothing here.</p>}
             {groups[stage].map(order => {
               // Quality_Check -> Packed belongs to the QC console, which enforces the checklist.
-              const next = actions.permissions && order.status !== 'Quality_Check' ? nextStageFor(order.status, actions.permissions) : null;
+              const next = actions.permissions && order.status !== 'Quality_Check' && !order.hold ? nextStageFor(order.status, actions.permissions) : null;
               return (
                 <JobCard key={order.id} order={order} sla={queue.slaFor(order)} who={actions.who}
                   nextStage={actions.canWrite ? next : null} canWrite={actions.canWrite} busy={busyId === order.id}

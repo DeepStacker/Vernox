@@ -33,6 +33,7 @@ import {
 import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/AdminUi';
 import { StatusBadge } from './shared/badges';
+import { HoldPanel } from './shared/HoldPanel';
 
 export interface AdminOrdersProps {
   initialFilter?: 'all' | 'open' | 'unfulfilled' | 'unpaid' | 'paid' | 'customers' | 'custom';
@@ -608,13 +609,16 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
               
+              <HoldPanel order={orders.find(o => o.id === inspectingOrder.id) ?? inspectingOrder} canWrite={canEdit} />
+
               {/* Status update: only transitions the state machine allows for this role */}
               <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-3">
                 <span className="text-[11px] font-bold text-foreground uppercase tracking-wider block">
                   Order status
                 </span>
                 {(() => {
-                  const next = permissions ? nextClientStatuses(inspectingOrder.status, permissions) : [];
+                  const held = Boolean((orders.find(o => o.id === inspectingOrder.id) ?? inspectingOrder).hold);
+                  const next = permissions && !held ? nextClientStatuses(inspectingOrder.status, permissions) : [];
                   return (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>

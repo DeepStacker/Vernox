@@ -5,6 +5,7 @@
  * refreshes the admin order feeds afterwards and hands the error back to the caller so dialogs can
  * show it inline.
  */
+import type { HoldKind } from '@/types/orderStatus';
 import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { auth } from '@/lib/firebase';
@@ -73,6 +74,8 @@ export const opsApi = {
     adminAction<{ status: string; refund: RefundView | null; refundError: string | null }>('CANCEL_ORDER', { orderId, reason, refund }),
   createRefund: (input: { orderId: string; amount: number; reason: string; method: RefundMethod; reference?: string; idempotencyKey: string }) =>
     adminAction<{ refund: RefundView }>('CREATE_REFUND', input),
+  setOrderHold: (orderId: string, kind: HoldKind, reason: string) => adminAction('SET_ORDER_HOLD', { orderId, kind, reason }),
+  releaseOrderHold: (orderId: string) => adminAction('RELEASE_ORDER_HOLD', { orderId }),
   issueServiceInvoice: (orderId: string) => adminAction<{ invoiceNumber?: string }>('ISSUE_SERVICE_INVOICE', { orderId }),
   getOrderDocuments: (orderId: string) => adminAction<OrderDocuments>('GET_ORDER_DOCUMENTS', { orderId }),
   approveReturn: (orderId: string, resolution: 'refund' | 'replacement', note?: string) => adminAction('APPROVE_RETURN', { orderId, resolution, note }),

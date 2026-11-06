@@ -1,11 +1,13 @@
 import { AlertTriangle, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/auth/AuthProvider';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { downloadOrderZip, downloadProductionFile, manufacturabilityWarnings, type CamFormat } from '@/lib/orders/camDownload';
 import type { Order, Product } from '@/types/store';
 import { StatusBadge } from '../shared/badges';
 import { isCustomItem } from '../shared/itemSpec';
 import { OrderItemSpecs } from '../shared/OrderItemSpecs';
+import { HoldPanel } from '../shared/HoldPanel';
 import { OrderNotesPanel } from '../shared/OrderNotesPanel';
 
 const FORMATS: CamFormat[] = ['dxf', 'svg', 'pdf'];
@@ -33,6 +35,7 @@ function downloadAll(order: Order, format: CamFormat) {
 
 /** Full order detail for the workshop: specs, production files, manufacturability warnings, notes. */
 export function JobDetail({ order, products, onClose }: { order: Order | null; products: readonly Product[]; onClose: () => void }) {
+  const { permissions } = useAuth();
   return (
     <Dialog open={Boolean(order)} onOpenChange={open => !open && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -44,6 +47,7 @@ export function JobDetail({ order, products, onClose }: { order: Order | null; p
               </DialogTitle>
               <DialogDescription>Placed {new Date(order.placedAt).toLocaleString('en-IN')}</DialogDescription>
             </DialogHeader>
+            <HoldPanel order={order} canWrite={Boolean(permissions?.canUpdateOrders)} />
             <OrderItemSpecs order={order} products={products} />
             <section aria-label="Production files" className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">

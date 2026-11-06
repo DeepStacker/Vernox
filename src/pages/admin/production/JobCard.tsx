@@ -28,6 +28,11 @@ export function JobCard({ order, sla, who, nextStage, canWrite, busy, onOpen, on
           <span className="font-mono text-sm font-bold">{order.orderNumber || order.id}</span>
           <SlaBadge sla={sla} />
         </div>
+        {order.hold && (
+          <p className="mt-1 rounded bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900">
+            {order.hold.kind === 'material_shortage' ? 'Waiting for material' : 'On hold'}: {order.hold.reason}
+          </p>
+        )}
         <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
           {order.items.map(i => (
             <li key={i.id}>

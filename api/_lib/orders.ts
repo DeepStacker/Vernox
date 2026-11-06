@@ -7,6 +7,7 @@
  * display copies written once at creation, for the existing admin UI; never read
  * them back for money logic.
  */
+import type { OrderHold } from '../../src/types/orderStatus';
 import crypto from 'crypto';
 import { paiseToRupees } from './money';
 import { CUSTOMER_CANCELLABLE_STATUSES, type OrderStatus, type StatusHistoryEntry } from './orderLifecycle';
@@ -122,6 +123,8 @@ export interface OrderDoc {
   parentOrderId?: string | null;
   replacementOrderId?: string | null;
   flags: string[];
+  /** Fulfilment paused (src/types/orderStatus.ts OrderHold); null or absent when not held. */
+  hold?: OrderHold | null;
   /**
    * `service` orders sell a design consultation (api/_lib/consultations.ts): nothing ships, so they
    * stay out of the workshop queues and cannot be cancelled by the customer (refunds go through finance).

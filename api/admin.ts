@@ -22,6 +22,7 @@ import { applyInvoice, invoicePath, planInvoice, type TaxDocument } from './_lib
 import { clientIp } from './_lib/http';
 import { rupeesToPaise } from './_lib/money';
 import { STAFF_SETTABLE_STATUSES, type OrderStatus } from './_lib/orderLifecycle';
+import { HOLDABLE_STATUSES, HOLD_KINDS, type OrderHold } from '../src/types/orderStatus';
 import { applyStatusChange, planStatusChange } from './_lib/orderTransitions';
 import { asOrder, orderPath } from './_lib/orders';
 import { createRazorpayRefundGateway } from './_lib/razorpay';
@@ -218,6 +219,43 @@ const ACTIONS: Record<string, ActionDefinition> = {
         auditInTransaction(ctx.store, tx, audit(ctx, 'ORDER_STATUS_UPDATED', 'order', order.id, { from: order.status, to: p.status }));
       });
       return { orderId: p.orderId, status: p.status };
+    },
+  },
+
+  // Pause fulfilment without changing the status (see OrderHold). Production raises material shortages;
+  // order managers hold for any reason. Releasing resumes from the same stage.
+  SET_ORDER_HOLD: {
+    method: 'POST',
+    permission: 'orders.update_status',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: orderIdField, kind: z.enum(HOLD_KINDS), reason: reasonField }), ctx.params);
+      const now = Date.now();
+      const hold: OrderHold = { kind: p.kind, reason: p.reason, by: ctx.actor.email ?? ctx.actor.uid, at: now };
+      await ctx.store.runTransaction(async tx => {
+        const order = asOrder(await tx.get(orderPath(p.orderId)));
+        if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
+        if (!HOLDABLE_STATUSES.includes(order.status)) throw new ApiError(409, 'CONFLICT', `An order in status ${order.status} cannot be put on hold.`);
+        tx.update(orderPath(order.id), { hold, updatedAt: now });
+        auditInTransaction(ctx.store, tx, audit(ctx, 'ORDER_HOLD_SET', 'order', order.id, { kind: p.kind, reason: p.reason, replaced: order.hold?.kind ?? null }));
+      });
+      return { orderId: p.orderId, hold };
+    },
+  },
+
+  RELEASE_ORDER_HOLD: {
+    method: 'POST',
+    permission: 'orders.update_status',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: orderIdField, note: z.string().trim().max(300).optional() }), ctx.params);
+      const now = Date.now();
+      await ctx.store.runTransaction(async tx => {
+        const order = asOrder(await tx.get(orderPath(p.orderId)));
+        if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
+        if (!order.hold) throw new ApiError(409, 'CONFLICT', 'This order is not on hold.');
+        tx.update(orderPath(order.id), { hold: null, updatedAt: now });
+        auditInTransaction(ctx.store, tx, audit(ctx, 'ORDER_HOLD_RELEASED', 'order', order.id, { kind: order.hold.kind, reason: order.hold.reason, note: p.note ?? null }));
+      });
+      return { orderId: p.orderId };
     },
   },
 

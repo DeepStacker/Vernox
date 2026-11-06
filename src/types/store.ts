@@ -2,6 +2,7 @@
  * Client-side domain types for the storefront and admin data layer.
  * Orders are created by the server only; the client reads them through `normalizeOrder`.
  */
+import type { OrderHold } from './orderStatus';
 import type { Product, ProductCategory } from '@/lib/catalog';
 import type { OrderStatus } from '@/lib/orders/orderStateMachine';
 import type { StaffRole } from '@/lib/auth/permissions';
@@ -176,6 +177,8 @@ export interface Order {
   assignedTo?: string;
   adminNotes?: string;
   statusHistory: StatusHistoryEntry[];
+  /** Fulfilment paused (set by the API); the stage cannot advance until it is released. */
+  hold?: OrderHold | null;
   /** Staff-only money, payment and shipment fields; present when the document carries them (orderOps.ts). */
   ops?: OrderOps;
 }
