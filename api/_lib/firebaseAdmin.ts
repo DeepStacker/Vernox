@@ -11,6 +11,7 @@
  *  3. GOOGLE_APPLICATION_CREDENTIALS → path to a service-account file (Docker / local).
  * If none is set, every call fails with CONFIG_ERROR; there is no fallback.
  */
+import { randomUUID } from 'crypto';
 import { applicationDefault, cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
@@ -104,7 +105,9 @@ export function getPhotoStorage(): PhotoStorage & ReviewPhotoStorage {
   return {
     async copy(fromPath, toPath) {
       const b = bucket();
-      await b.file(fromPath).copy(b.file(toPath));
+      // A GCS copy keeps the source's custom metadata, including its Firebase download token. A fresh token
+      // stops the copy's URL (e.g. a published review photo) from also opening the private original.
+      await b.file(fromPath).copy(b.file(toPath), { metadata: { firebaseStorageDownloadTokens: randomUUID() } });
     },
     async exists(path) {
       const [found] = await bucket().file(path).exists();
