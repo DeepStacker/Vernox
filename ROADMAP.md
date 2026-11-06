@@ -195,7 +195,8 @@ the one revision message.
 
 ## Still needed from the owner
 
-- Firebase service-account credentials for the server, and a staging Firebase project for UAT.
+- Firebase projects for staging and production, created in `asia-south1` (Mumbai), plus a service account for the server.
+- A Vercel Pro team (Hobby does not allow commercial use); the API runs in `bom1`.
 - Shiprocket account API credentials; email and SMS/WhatsApp notification providers.
 - Business GSTIN, legal name, registered address and state (Settings → Seller); invoices cannot be issued without them.
 - Resend account and verified sending domain; MSG91 account with DLT-registered sender ID and templates.

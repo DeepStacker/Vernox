@@ -2,8 +2,8 @@
 
 ## 1. Hosting Architecture
 - **Frontend SPA**: Hosted on Vercel Edge Global CDN with immutable static caching for compiled bundles and aggressive asset hashing.
-- **Serverless API**: Vercel Serverless Functions running Node.js 20.x in `iad1` (US East) or closest geographical region to customer clusters.
-- **Database**: Google Cloud Firestore configured in multi-region high availability (`nam5` or `asia-south1`).
+- **Serverless API**: Vercel Serverless Functions on Node.js 20.x in `bom1` (Mumbai; `regions` in `vercel.json`), next to the customers and the database.
+- **Database and files**: Firestore and Cloud Storage in `asia-south1` (Mumbai). The location is fixed when the Firebase project is created, so pick it then. Keeping customer data in India is the conservative choice under the DPDP Act, 2023.
 
 ## 2. Environment Variables
 The authoritative list with comments is `.env.example`. Required on the server: `FIREBASE_SERVICE_ACCOUNT_BASE64` (or
@@ -23,9 +23,8 @@ A missing required variable makes the affected endpoint return `CONFIG_ERROR` an
 3. Razorpay dashboard: enable auto-capture; add webhook `https://<domain>/api/razorpay-webhook` with secret
    `RAZORPAY_WEBHOOK_SECRET` and events `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`.
 4. Vercel Cron runs `/api/cron/release-reservations` every 5 minutes and `/api/cron/send-notifications` every 2 minutes
-   (`vercel.json`). **Vercel plan:** sub-daily crons need Pro, and the API is now 13 serverless functions (Hobby allows 12) —
-   deploy on Pro, or on Hobby call the crons from an external scheduler with the bearer secret and serve the API from the
-   Docker image (`server/index.ts` routes every endpoint).
+   (`vercel.json`). **Vercel plan: Pro (decided 2026-11-06).** Hobby is for non-commercial use only, sub-daily crons need Pro, and the API is
+   14 serverless functions (Hobby allows 12). The Docker image (`server/index.ts` routes every endpoint) is the fallback host.
 4a. **Shiprocket:** create an API user (Settings → API → Configure) and set `SHIPROCKET_EMAIL` / `SHIPROCKET_PASSWORD`; set
    `SHIPROCKET_PICKUP_LOCATION` to the pickup nickname and `SHIPROCKET_PICKUP_PINCODE`. Tracking webhook (Settings → API →
    Webhooks): URL `https://<domain>/api/courier-webhook` (Shiprocket rejects URLs containing "shiprocket", "kartrocket", "sr" or

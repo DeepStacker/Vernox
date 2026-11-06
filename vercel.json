@@ -1,6 +1,9 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "regions": [
+    "bom1"
+  ],
   "crons": [
     {
       "path": "/api/cron/release-reservations",
