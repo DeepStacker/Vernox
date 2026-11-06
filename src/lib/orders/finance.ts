@@ -65,7 +65,7 @@ export function paymentTotals(orders: readonly Order[]): PaymentTotals {
 }
 
 /** Order flags that mean money needs a human look. */
-export const RECONCILIATION_FLAGS = ['AMOUNT_MISMATCH', 'DUPLICATE_PAYMENT', 'REFUND_NOT_STARTED'] as const;
+export const RECONCILIATION_FLAGS = ['AMOUNT_MISMATCH', 'DUPLICATE_PAYMENT', 'REFUND_NOT_STARTED', 'INVOICE_PENDING_SELLER_SETTINGS'] as const;
 
 export interface Reconciliation {
   /** Prepaid orders past payment with no Razorpay payment id on record. */

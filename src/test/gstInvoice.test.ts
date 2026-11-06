@@ -78,7 +78,7 @@ describe('GST invoice', () => {
     const order = asOrder(store.read(orderPath(res.orderId))!)!;
     expect(invoice).toMatchObject({ type: 'invoice', supplyType: 'intra_state', taxInclusive: false, placeOfSupply: { stateCode: '29' } });
     expect(invoice.totals).toEqual({ taxablePaise: 53_800, cgstPaise: 4_842, sgstPaise: 4_842, igstPaise: 0, taxPaise: 9_684, totalPaise: order.amounts.totalPaise });
-    expect(invoice.lines[0]).toMatchObject({ hsnCode: '8306', quantity: 2, gstRateBps: 1_800 });
+    expect(invoice.lines[0]).toMatchObject({ hsnCode: '830629', quantity: 2, gstRateBps: 1_800 });
     expect(order.invoiceNumber).toBe(invoice.number);
     expect(order.status).toBe('Shipped');
   });

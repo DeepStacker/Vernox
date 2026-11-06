@@ -246,7 +246,7 @@ export function priceCustomLine(item: CheckoutItemInput, config: StoreConfig): P
  * never from a client-supplied item, so no `products/` document can impersonate it.
  */
 export function priceConsultationLine(config: StoreConfig): PricedLine {
-  const { pricePaise, sacCode } = config.consultation;
+  const { pricePaise, sacCode, gstRateBps } = config.consultation;
   return {
     productId: CONSULTATION_SERVICE_ID,
     name: 'Design consultation',
@@ -261,7 +261,7 @@ export function priceConsultationLine(config: StoreConfig): PricedLine {
     isCustom: false,
     customDesignRef: null,
     hsnCode: sacCode,
-    gstRateBps: config.gstRateBps,
+    gstRateBps,
     isService: true,
   };
 }
@@ -332,7 +332,8 @@ export function computeTotals(
     codFeePaise,
     taxPaise,
     totalPaise: subtotalPaise - discount + shippingPaise + codFeePaise + taxPaise,
-    gstRateBps: config.gstRateBps,
+    // Headline rate for legacy readers; per-line rates in taxBreakdown are authoritative.
+    gstRateBps: chargeRateBps,
     taxBreakdown: { lines: lineTaxes, charges },
   };
 }

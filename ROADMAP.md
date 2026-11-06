@@ -134,6 +134,23 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
 - **Courier:** Shiprocket (pincode serviceability, AWB, labels, tracking webhooks, COD remittance).
 - **COD:** offered on catalogue items only, with a COD fee; custom studio designs are prepaid only.
 
+## Business and tax decisions (2026-11-06)
+
+The owner delegated these decisions. Each one is a setting, so it can be changed in Settings or `settings/store` without
+a code change. A CA should review the tax rows once before the first invoice is issued.
+
+| Topic | Decision | Basis |
+| --- | --- | --- |
+| Goods GST | 5%, HSN 830629 (other ornaments of base metal) | Notification 13/2025-Central Tax (Rate): heading 8306 at 2.5% CGST + 2.5% SGST from 22 Sep 2025 (was 12%). Per-product `hsnCode` / `gstRatePercent` override it (for example 7326, 18%, for a functional steel article). |
+| Shipping and COD fee | Taxed at the goods rate on the same invoice | Composite supply: an ancillary charge follows the rate of the principal supply (CGST Act s.8). |
+| Consultation | SAC 998391, 18%, its own setting (`consultation.gstRatePercent`) | Specialty (interior) design services, unchanged by the GST 2.0 revision. Invoiced on payment (time of supply for services). |
+| Consultation credit | ₹999 fee credited against the next order as a single-use coupon, 60 days | The coupon is a discount on the later goods supply, so it lowers that invoice's taxable value; the consultation invoice is unchanged. |
+| Free shipping | Above ₹1,499, which is every order (the minimum piece price) | Competitors such as Livingshapes ship free on all orders; ₹150 still applies if cheaper items are added later. |
+| COD | ₹49 fee, up to ₹10,000 order value, catalogue items only | The fee is within the usual ₹40–₹99 range for Indian D2C stores; the cap limits return-to-origin losses on high-value parcels. |
+| Returns | 7 days after delivery for catalogue pieces; damage reported with photos within 48 hours; studio pieces are made to order, so only damage or defects qualify | Matches the 7-day norm (Pepperfry, Exotic India) and the 48-hour damage window. |
+| Custom pieces | ₹750 setup + ₹1.10/cm² (steel finishes) or ₹1.40/cm² (copper alloys), minimum ₹1,499 | Finished-retail pricing anchored to the sample catalogue. Workshop cutting rates (about ₹120–₹1,200 per sq ft on IndiaMART) are the cost floor. |
+| Consultation launch | Off until a staff member has the `designer` role | Customers must not pay for a service nobody is staffed to deliver. Switch it on in Settings. |
+
 ## Decision: room scanning and interior planning (2026-11-05)
 
 The owner proposed scanning a whole home from a phone video (QR → camera) into a 3D model for
@@ -165,21 +182,14 @@ Not yet verified live: the Razorpay payment step (test keys are not configured h
 photo copy are covered by `src/test/consultations.test.ts` against the in-memory store and a fake gateway). Everything else was driven
 in the browser against the emulators.
 
-Owner decisions needed before launch:
-- **Price**: default ₹999 + GST (`settings/store.consultation.priceInr`, shown in Settings).
-- **Credit policy**: default is to credit the fee (before GST) against the next order, valid 60 days, single use, bound to the
-  buyer's email. Alternatives: no credit, or a shorter/longer validity (Settings).
-- **SAC code**: default 998391 (specialty design services). Confirm with the CA; it is stored on the service line and printed
-  nowhere yet.
-- **GST invoice for the service**: issued on payment confirmation (time of supply for services) with the SAC code on the
-  line; if seller settings are incomplete the payment is still confirmed and the order is flagged
-  `INVOICE_PENDING_SELLER_SETTINGS`. Follow-up: a Finance action to issue pending invoices once settings are complete, and
-  the CA to confirm the SAC and the GST treatment of the credit coupon.
+Price, credit, SAC and GST are decided in "Business and tax decisions" above. Seller settings being incomplete still confirms the
+payment and flags the order `INVOICE_PENDING_SELLER_SETTINGS`; Finance then issues the invoice from the order's finance panel
+(`ISSUE_SERVICE_INVOICE`) once the GSTIN is saved.
 - **Turnaround**: default 3 days (Settings); it is shown to customers and drives the designer queue's deadline.
 - Designers need the `designer` role (Team screen). Production needs the Storage bucket CORS entry for the site origin
   (DEPLOYMENT.md) so wall photos can be read for the preview.
 
-Follow-ups noted, not built: a service invoice (above); the Razorpay webhook path does not copy the photos itself (the first claim
+Follow-ups noted, not built: the Razorpay webhook path does not copy the photos itself (the first claim
 retries it); one preview image per piece rather than several pieces composed on one wall image; no designer-to-customer chat beyond
 the one revision message.
 
@@ -187,8 +197,7 @@ the one revision message.
 
 - Firebase service-account credentials for the server, and a staging Firebase project for UAT.
 - Shiprocket account API credentials; email and SMS/WhatsApp notification providers.
-- Business GSTIN, state of registration and HSN codes for the products (default HSN is 8306, alternative 7326 — confirm with the
-  CA), plus the GST treatment of shipping and the COD fee (implemented as taxable at the goods rate).
+- Business GSTIN, legal name, registered address and state (Settings → Seller); invoices cannot be issued without them.
 - Resend account and verified sending domain; MSG91 account with DLT-registered sender ID and templates.
 - Shiprocket API user, pickup location nickname, COD enablement and webhook token.
 - Real catalogue, photographs and price list before launch.

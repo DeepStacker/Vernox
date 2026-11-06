@@ -38,8 +38,10 @@ export interface ConsultationSettings {
   creditValidityDays: number;
   /** Days from purchase to a proposal; the designer queue shows it as the SLA. */
   turnaroundDays: number;
-  /** SAC printed on the service line; owner to confirm. */
+  /** SAC printed on the service line: 998391, specialty (interior) design services. */
   sacCode: string;
+  /** GST on the service, independent of the goods rate: 18% for SAC 998391 (unchanged by GST 2.0). */
+  gstRatePercent: number;
 }
 
 export const DEFAULT_CONSULTATION_SETTINGS: ConsultationSettings = {
@@ -49,6 +51,7 @@ export const DEFAULT_CONSULTATION_SETTINGS: ConsultationSettings = {
   creditValidityDays: 60,
   turnaroundDays: 3,
   sacCode: DEFAULT_CONSULTATION_SAC,
+  gstRatePercent: 18,
 };
 
 /** One wall of a space. Photo at `spaces/{uid}/{spaceId}/{id}.jpg`; the scale is stored, not the marks. */

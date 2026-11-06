@@ -18,7 +18,7 @@ import { cancelOrder } from './_lib/cancellation';
 import { normaliseCouponCode } from './_lib/coupons';
 import { ApiError, badRequest, sendError } from './_lib/errors';
 import { getAdminAuth, getPhotoStorage, getStore } from './_lib/firebaseAdmin';
-import { invoicePath, type TaxDocument } from './_lib/gst/invoice';
+import { applyInvoice, invoicePath, planInvoice, type TaxDocument } from './_lib/gst/invoice';
 import { clientIp } from './_lib/http';
 import { rupeesToPaise } from './_lib/money';
 import { STAFF_SETTABLE_STATUSES, type OrderStatus } from './_lib/orderLifecycle';
@@ -416,6 +416,35 @@ const ACTIONS: Record<string, ActionDefinition> = {
         ip: ctx.ip,
       });
       return { refund };
+    },
+  },
+
+  // A paid consultation whose invoice was deferred (INVOICE_PENDING_SELLER_SETTINGS, see confirmPayment):
+  // issued once the seller's GSTIN is saved. Goods are invoiced by CREATE_SHIPMENT, never here.
+  ISSUE_SERVICE_INVOICE: {
+    method: 'POST',
+    permission: 'orders.refund',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: orderIdField }), ctx.params);
+      const { seller } = await loadStoreConfig(ctx.store);
+      const now = Date.now();
+      const fields = await ctx.store.runTransaction(async tx => {
+        const order = asOrder(await tx.get(orderPath(p.orderId)));
+        if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
+        if (order.kind !== 'service') throw new ApiError(409, 'CONFLICT', 'Products are invoiced when the shipment is booked.');
+        if (!order.razorpayPaymentId) throw new ApiError(409, 'CONFLICT', 'This consultation has not been paid.');
+        const plan = await planInvoice(tx, order, seller, now).catch(err => {
+          if (err instanceof ApiError && err.code === 'CONFIG_ERROR') {
+            throw new ApiError(409, 'CONFLICT', 'Save the seller GSTIN, legal name and address in Settings first.');
+          }
+          throw err;
+        });
+        const invoice = applyInvoice(tx, plan, order, seller, now);
+        tx.update(orderPath(order.id), { ...invoice, flags: order.flags.filter(f => f !== 'INVOICE_PENDING_SELLER_SETTINGS'), updatedAt: now });
+        auditInTransaction(ctx.store, tx, audit(ctx, 'SERVICE_INVOICE_ISSUED', 'order', order.id, invoice));
+        return invoice;
+      });
+      return { orderId: p.orderId, ...fields };
     },
   },
 

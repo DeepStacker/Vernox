@@ -105,8 +105,11 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
         <Field label="Credit valid for (days)" error={errors.creditValidityDays}>
           <input inputMode="numeric" value={draft.consultation.creditValidityDays} onChange={e => setConsultation('creditValidityDays', e.target.value)} className="field font-mono" />
         </Field>
-        <Field label="SAC code" hint="Owner to confirm with the CA; 998391 is specialty design services." error={errors.sacCode}>
+        <Field label="SAC code" hint="998391: specialty (interior) design services." error={errors.sacCode}>
           <input value={draft.consultation.sacCode} onChange={e => setConsultation('sacCode', e.target.value)} className="field font-mono" />
+        </Field>
+        <Field label="GST on the consultation (%)" hint="Services are taxed apart from products: 18% for SAC 998391." error={errors.consultationGst}>
+          <input inputMode="decimal" value={draft.consultation.gstRatePercent} onChange={e => setConsultation('gstRatePercent', e.target.value)} className="field font-mono" />
         </Field>
       </Section>
 

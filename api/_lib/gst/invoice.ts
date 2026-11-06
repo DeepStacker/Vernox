@@ -138,7 +138,7 @@ function orderTaxLines(order: OrderDoc, supplyType: SupplyType): TaxDocumentLine
     return line(
       {
         description: [item.name, item.sizeLabel, item.finish].filter(Boolean).join(' · '),
-        hsnCode: item.hsnCode ?? '8306',
+        hsnCode: item.hsnCode ?? '830629',
         quantity: item.quantity,
         unitPricePaise: item.unitPricePaise,
         grossPaise: item.lineTotalPaise,

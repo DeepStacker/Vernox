@@ -6,7 +6,7 @@
  * not set. Request bodies never influence these values.
  *
  * `settings/store` fields (all optional, rupee amounts):
- *   gstRatePercent: number               e.g. 18
+ *   gstRatePercent: number               goods rate, default 5 (HSN 8306, GST 2.0 from 22 Sep 2025)
  *   shippingFee: number                  flat fee when below the threshold
  *   freeShippingThreshold: number        merchandise subtotal (before discount) at or above
  *                                        which shipping is free (`>=`)
@@ -20,8 +20,8 @@
  *   defaultLeadTimeDays: number          production days for catalogue items without leadTimeDays
  *   customLeadTimeDays: number           production days for Crafting Studio pieces
  *   manualTransitDays: number            courier transit estimate when Shiprocket is not configured
- *   defaultHsnCode: string               HSN for products without hsnCode (owner must confirm)
- *   consultation: { enabled, priceInr, creditTowardsOrder, creditValidityDays, turnaroundDays, sacCode }
+ *   defaultHsnCode: string               HSN for products without hsnCode, default 830629 (other base-metal ornaments)
+ *   consultation: { enabled, priceInr, creditTowardsOrder, creditValidityDays, turnaroundDays, sacCode, gstRatePercent }
  *                                        paid design consultation (see ConsultationSettings; price is GST-exclusive)
  *   seller: { legalName, tradeName, gstin, address, city, state, stateCode, pincode, email, phone }
  *                                        supplier block printed on GST invoices
@@ -77,11 +77,13 @@ export interface ConsultationConfig {
   creditValidityDays: number;
   turnaroundDays: number;
   sacCode: string;
+  /** GST on the consultation in basis points; services are taxed apart from the goods rate. */
+  gstRateBps: number;
 }
 
 export interface StoreConfig {
   currency: 'INR';
-  /** GST in basis points (1800 = 18%). */
+  /** Goods GST in basis points (500 = 5%); products may override it per item. */
   gstRateBps: number;
   shippingFeePaise: number;
   freeShippingThresholdPaise: number;
@@ -134,9 +136,9 @@ function envNumber(env: NodeJS.ProcessEnv, name: string, fallback: number): numb
 export function defaultStoreConfig(env: NodeJS.ProcessEnv = process.env): StoreConfig {
   return {
     currency: 'INR',
-    gstRateBps: Math.round(envNumber(env, 'STORE_GST_RATE_PERCENT', 18) * 100),
+    gstRateBps: Math.round(envNumber(env, 'STORE_GST_RATE_PERCENT', 5) * 100),
     shippingFeePaise: rupeesToPaise(envNumber(env, 'STORE_SHIPPING_FEE_INR', 150)),
-    freeShippingThresholdPaise: rupeesToPaise(envNumber(env, 'STORE_FREE_SHIPPING_THRESHOLD_INR', 5000)),
+    freeShippingThresholdPaise: rupeesToPaise(envNumber(env, 'STORE_FREE_SHIPPING_THRESHOLD_INR', 1499)),
     reservationTtlMs: 15 * 60 * 1000,
     cod: {
       enabled: envBoolean(env, 'STORE_COD_ENABLED', true),
@@ -150,7 +152,7 @@ export function defaultStoreConfig(env: NodeJS.ProcessEnv = process.env): StoreC
       manualTransitDays: Math.floor(envNumber(env, 'STORE_MANUAL_TRANSIT_DAYS', 5)),
       returnWindowDays: Math.floor(envNumber(env, 'STORE_RETURN_WINDOW_DAYS', 7)),
     },
-    defaultHsnCode: env.STORE_DEFAULT_HSN_CODE?.trim() || '8306',
+    defaultHsnCode: env.STORE_DEFAULT_HSN_CODE?.trim() || '830629',
     consultation: {
       enabled: DEFAULT_CONSULTATION_SETTINGS.enabled,
       pricePaise: rupeesToPaise(DEFAULT_CONSULTATION_SETTINGS.priceInr),
@@ -158,6 +160,7 @@ export function defaultStoreConfig(env: NodeJS.ProcessEnv = process.env): StoreC
       creditValidityDays: DEFAULT_CONSULTATION_SETTINGS.creditValidityDays,
       turnaroundDays: DEFAULT_CONSULTATION_SETTINGS.turnaroundDays,
       sacCode: DEFAULT_CONSULTATION_SETTINGS.sacCode,
+      gstRateBps: Math.round(DEFAULT_CONSULTATION_SETTINGS.gstRatePercent * 100),
     },
     seller: { ...EMPTY_SELLER },
     customPieces: { ...CUSTOM_PIECE_LIMITS, finishes: { ...DEFAULT_CUSTOM_FINISH_RATES } },
@@ -239,6 +242,10 @@ export function mergeStoreConfig(defaults: StoreConfig, doc: DocData | null): St
       if (typeof raw.sacCode === 'string' && /^[0-9]{4,8}$/.test(raw.sacCode.trim())) c.sacCode = raw.sacCode.trim();
       else warn('consultation.sacCode');
     }
+    if (raw.gstRatePercent !== undefined) {
+      if (isNonNegativeFinite(raw.gstRatePercent) && raw.gstRatePercent <= 100) c.gstRateBps = Math.round(raw.gstRatePercent * 100);
+      else warn('consultation.gstRatePercent');
+    }
   }
   if (doc.seller && typeof doc.seller === 'object') {
     const raw = doc.seller as Record<string, unknown>;
@@ -282,6 +289,7 @@ export function defaultSettingsDoc(config: StoreConfig = defaultStoreConfig()): 
       creditValidityDays: config.consultation.creditValidityDays,
       turnaroundDays: config.consultation.turnaroundDays,
       sacCode: config.consultation.sacCode,
+      gstRatePercent: config.consultation.gstRateBps / 100,
     },
     seller: { ...EMPTY_SELLER },
     whatsappNumber: '',

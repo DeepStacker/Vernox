@@ -21,11 +21,11 @@ rate) and `leadTimeDays` (production days; default `defaultLeadTimeDays`).
 ### `settings/store` — public read, `settings.write`
 Shape: `StoreSettingsDoc` in `src/types/settings.ts`; parsing and defaults: `api/_lib/storeConfig.ts` (env `STORE_*` for absent
 fields; `npm run seed` writes the same defaults). **Public document: never store secrets here.**
-`gstRatePercent`, `shippingFee` (₹), `freeShippingThreshold` (₹, free when subtotal ≥ it),
+`gstRatePercent` (goods, default 5), `shippingFee` (₹, default 150), `freeShippingThreshold` (₹, free when subtotal ≥ it, default 1,499),
 `customPieces: { [finishId]: { label, setupFee (₹), ratePerCm2 (₹), minimum (₹) } }` merged over the built-in defaults,
 `codEnabled`, `codFee` (₹), `codMaxOrderValue` (₹), `codMaxOpenOrdersPerPhone`, `returnWindowDays`, `defaultLeadTimeDays`,
 `customLeadTimeDays`, `manualTransitDays`, `defaultHsnCode`,
-`consultation: { enabled (default false), priceInr (default 999, before GST, ₹1–1,00,000), creditTowardsOrder (default true), creditValidityDays (default 60), turnaroundDays (default 3), sacCode (default 998391) }`,
+`consultation: { enabled (default false), priceInr (default 999, before GST, ₹1–1,00,000), creditTowardsOrder (default true), creditValidityDays (default 60), turnaroundDays (default 3), sacCode (default 998391), gstRatePercent (default 18, the service rate, independent of the goods rate) }`,
 `seller: { legalName, tradeName, gstin, address, city, state, stateCode (2-digit GST code = GSTIN prefix), pincode, email, phone }`
 (printed on invoices; invoices cannot be issued until legalName, gstin, address, state, stateCode and pincode are set),
 storefront contact `whatsappNumber`, `supportPhone`, `supportEmail`, `supportHours`, `workshopAddress` (empty = hidden on the storefront).
@@ -117,7 +117,8 @@ Phase 2 (India commerce):
   sgstPaise, igstPaise, totalPaise }]`, `totals`, `taxInclusive: false`, `paymentMethod`. Issued once per order: goods when the shipment
   is created (time of supply = removal of goods); services (`kind: 'service'`, design consultations) on payment
   confirmation, with the SAC code on the line. If seller settings are incomplete at payment, the service order is still
-  marked Paid and flagged `INVOICE_PENDING_SELLER_SETTINGS`. Never for replacement orders.
+  marked Paid and flagged `INVOICE_PENDING_SELLER_SETTINGS`; finance issues it later with the admin action
+  `ISSUE_SERVICE_INVOICE`, which clears the flag. Never for replacement orders.
 - `credit_notes/{refundId}` — same shape, `type: 'credit_note'`, `againstInvoice{ id, number }`, `refundId`, `reason`. One per
   refund on an invoiced order (and `cancel_{orderId}` for an invoiced COD order that is cancelled after RTO).
 - `counters/{invoice|credit_note}_{YYYY-YY}` — `{ last }`, incremented in the issuing transaction. Numbers: `VX/26-27/000123`

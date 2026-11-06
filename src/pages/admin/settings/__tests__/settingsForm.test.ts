@@ -46,7 +46,7 @@ describe('business settings form', () => {
 
 describe('design consultation settings', () => {
   it('starts from the defaults (disabled, 999, credit on, 60 days, 3 days)', () => {
-    expect(draftFromConfig(config).consultation).toEqual({ enabled: false, priceInr: '999', creditTowardsOrder: true, creditValidityDays: '60', turnaroundDays: '3', sacCode: '998391' });
+    expect(draftFromConfig(config).consultation).toEqual({ enabled: false, priceInr: '999', creditTowardsOrder: true, creditValidityDays: '60', turnaroundDays: '3', sacCode: '998391', gstRatePercent: '18' });
   });
 
   it('validates the fee, the day counts and the SAC code', () => {
@@ -62,6 +62,6 @@ describe('design consultation settings', () => {
   it('writes the consultation block with numbers into the patch', () => {
     const d = draftFromConfig(config);
     d.consultation = { ...d.consultation, enabled: true, priceInr: '1499' };
-    expect(toStorePatch(d).consultation).toEqual({ enabled: true, priceInr: 1499, creditTowardsOrder: true, creditValidityDays: 60, turnaroundDays: 3, sacCode: '998391' });
+    expect(toStorePatch(d).consultation).toEqual({ enabled: true, priceInr: 1499, creditTowardsOrder: true, creditValidityDays: 60, turnaroundDays: 3, sacCode: '998391', gstRatePercent: 18 });
   });
 });

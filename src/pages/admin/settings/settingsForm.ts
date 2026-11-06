@@ -28,7 +28,7 @@ export interface BusinessDraft {
   defaultLeadTimeDays: string;
   customLeadTimeDays: string;
   returnWindowDays: string;
-  consultation: { enabled: boolean; priceInr: string; creditTowardsOrder: boolean; creditValidityDays: string; turnaroundDays: string; sacCode: string };
+  consultation: { enabled: boolean; priceInr: string; creditTowardsOrder: boolean; creditValidityDays: string; turnaroundDays: string; sacCode: string; gstRatePercent: string };
 }
 
 export type BusinessErrors = Partial<Record<string, string>>;
@@ -57,6 +57,7 @@ export function draftFromConfig(config: StoreConfig): BusinessDraft {
       creditValidityDays: str(config.consultation?.creditValidityDays ?? DEFAULT_CONSULTATION_SETTINGS.creditValidityDays),
       turnaroundDays: str(config.consultation?.turnaroundDays ?? DEFAULT_CONSULTATION_SETTINGS.turnaroundDays),
       sacCode: str(config.consultation?.sacCode ?? DEFAULT_CONSULTATION_SETTINGS.sacCode),
+      gstRatePercent: str(config.consultation?.gstRatePercent ?? DEFAULT_CONSULTATION_SETTINGS.gstRatePercent),
     },
   };
 }
@@ -109,6 +110,7 @@ export function validateBusiness(d: BusinessDraft): BusinessErrors {
   checkNumber(errors, 'creditValidityDays', c.creditValidityDays, 'Credit validity', { integer: true, max: 365 });
   checkNumber(errors, 'turnaroundDays', c.turnaroundDays, 'Turnaround', { integer: true, max: 30 });
   if (c.sacCode.trim() && !/^\d{4,8}$/.test(c.sacCode.trim())) errors.sacCode = 'A SAC code is 4 to 8 digits, for example 998391.';
+  if (c.gstRatePercent.trim() !== '' && !(Number(c.gstRatePercent) >= 0 && Number(c.gstRatePercent) <= 100)) errors.consultationGst = 'Enter a GST rate between 0 and 100.';
   return errors;
 }
 
@@ -134,6 +136,7 @@ export function toStorePatch(d: BusinessDraft): Partial<StoreConfig> {
       ...(num(d.consultation.creditValidityDays) !== undefined ? { creditValidityDays: num(d.consultation.creditValidityDays) } : {}),
       ...(num(d.consultation.turnaroundDays) !== undefined ? { turnaroundDays: num(d.consultation.turnaroundDays) } : {}),
       ...(d.consultation.sacCode.trim() ? { sacCode: d.consultation.sacCode.trim() } : {}),
+      ...(num(d.consultation.gstRatePercent) !== undefined ? { gstRatePercent: num(d.consultation.gstRatePercent) } : {}),
     },
   };
   const optional: Array<[keyof StoreConfig, number | undefined]> = [

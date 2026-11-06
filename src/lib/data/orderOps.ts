@@ -73,6 +73,7 @@ export const opsApi = {
     adminAction<{ status: string; refund: RefundView | null; refundError: string | null }>('CANCEL_ORDER', { orderId, reason, refund }),
   createRefund: (input: { orderId: string; amount: number; reason: string; method: RefundMethod; reference?: string; idempotencyKey: string }) =>
     adminAction<{ refund: RefundView }>('CREATE_REFUND', input),
+  issueServiceInvoice: (orderId: string) => adminAction<{ invoiceNumber?: string }>('ISSUE_SERVICE_INVOICE', { orderId }),
   getOrderDocuments: (orderId: string) => adminAction<OrderDocuments>('GET_ORDER_DOCUMENTS', { orderId }),
   approveReturn: (orderId: string, resolution: 'refund' | 'replacement', note?: string) => adminAction('APPROVE_RETURN', { orderId, resolution, note }),
   rejectReturn: (orderId: string, reason: string) => adminAction('REJECT_RETURN', { orderId, reason }),

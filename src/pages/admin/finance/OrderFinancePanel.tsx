@@ -3,7 +3,7 @@ import { FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { AdminError, AdminLoading } from '@/components/admin/AdminUi';
 import { useAuth } from '@/lib/auth/AuthProvider';
-import { downloadTaxDocument, useOrderDocuments, type RefundView } from '@/lib/data/orderOps';
+import { downloadTaxDocument, opsApi, useOpsRunner, useOrderDocuments, type RefundView } from '@/lib/data/orderOps';
 import { collectedPaise, formatInr, paymentState, refundCeilingPaise, totalPaise } from '@/lib/orders/finance';
 import type { Order } from '@/types/store';
 import { Badge, StatusBadge, type BadgeTone } from '../shared/badges';
@@ -25,6 +25,14 @@ export function OrderFinancePanel({ order }: { order: Order }) {
   const [refunding, setRefunding] = useState(false);
   const ceiling = docs.data?.refundablePaise ?? refundCeilingPaise(order);
   const canRefund = Boolean(permissions?.canRefund);
+  const { run, busy } = useOpsRunner();
+  const invoicePending = order.ops?.flags.includes('INVOICE_PENDING_SELLER_SETTINGS') ?? false;
+
+  const issueInvoice = async () => {
+    const result = await run(() => opsApi.issueServiceInvoice(order.id));
+    if (result.ok) toast.success(`Invoice ${result.value.invoiceNumber ?? ''} issued.`);
+    else toast.error(result.error);
+  };
 
   const download = async (name: string, creditNoteId?: string) => {
     try {
@@ -85,7 +93,13 @@ export function OrderFinancePanel({ order }: { order: Order }) {
 
           <section aria-label="Tax documents" className="space-y-2">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Invoice and credit notes</h4>
-            {!docs.data.invoice && <p className="text-sm text-muted-foreground">The invoice is issued when the shipment is booked.</p>}
+            {!docs.data.invoice && !invoicePending && <p className="text-sm text-muted-foreground">The invoice is issued when the shipment is booked.</p>}
+            {!docs.data.invoice && invoicePending && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3 text-sm">
+                <span>Paid before the seller GSTIN was saved.</span>
+                {canRefund && <button type="button" className="btn-primary" disabled={busy} onClick={() => void issueInvoice()}>{busy ? 'Issuing…' : 'Issue invoice'}</button>}
+              </div>
+            )}
             <ul className="space-y-2">
               {docs.data.invoice && (
                 <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3 text-sm">

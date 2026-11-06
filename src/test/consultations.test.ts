@@ -13,7 +13,7 @@ import { ApiError } from '../../api/_lib/errors';
 import { confirmPayment } from '../../api/_lib/payments';
 import { claimConsultation, closeConsultation, requestRevision, saveProposalDraft, sendProposal } from '../../api/_lib/proposals';
 import { computeTotals, priceConsultationLine } from '../../api/_lib/pricing';
-import { mergeStoreConfig } from '../../api/_lib/storeConfig';
+import { defaultStoreConfig, mergeStoreConfig } from '../../api/_lib/storeConfig';
 import { previewCoupon } from '../../api/_lib/checkout';
 import type { ConsultationDoc, ProposalItem } from '../../src/types/consultation';
 import { MemoryStore } from './support/memoryStore';
@@ -57,7 +57,14 @@ async function buy(store: MemoryStore, cfg = config(), storage = new FakeStorage
 }
 
 describe('consultation pricing', () => {
-  it('prices the service from settings, with GST at the store rate and no shipping', () => {
+  it('taxes the service at its own SAC rate (18%), not the 5% goods rate', () => {
+    const line = priceConsultationLine(defaultStoreConfig({} as NodeJS.ProcessEnv));
+    expect(defaultStoreConfig({} as NodeJS.ProcessEnv).gstRateBps).toBe(500);
+    expect(line.gstRateBps).toBe(1800);
+    expect(config({ gstRatePercent: 12 }).consultation.gstRateBps).toBe(1200);
+  });
+
+  it('prices the service from settings, with GST at the service rate and no shipping', () => {
     const line = priceConsultationLine(config());
     expect(line).toMatchObject({ productId: 'design-consultation', unitPricePaise: 99_900, isService: true, hsnCode: '998391', gstRateBps: 1800 });
     const totals = computeTotals([line], 0, config());
