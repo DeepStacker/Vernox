@@ -5,7 +5,7 @@
  */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, Redo2, Save, Undo2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Redo2, Save, Table2, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore } from 'zustand';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
@@ -19,6 +19,7 @@ import { redo, undo, useStudio } from '@/lib/studio/store';
 import { getTemplate } from '@/lib/studio/templates/registry';
 import { cn } from '@/lib/utils';
 import { importVectorFile, startBlank, startFromTemplate } from './actions';
+import { BatchStep } from './batch/BatchStep';
 import { BottomBar } from './BottomBar';
 import { Inspector, InspectorBody } from './Inspector';
 import { ReviewStep } from './ReviewStep';
@@ -79,7 +80,13 @@ function Header() {
         ))}
       </nav>
       <div className="ml-auto flex items-center gap-1">
-        {step !== 'start' && <UndoRedo />}
+        {step !== 'start' && (
+          <button type="button" onClick={() => setStep(step === 'batch' ? 'design' : 'batch')} aria-pressed={step === 'batch'} aria-label={t('step.batch')} title={t('step.batch')}
+            className={cn('flex h-9 items-center gap-1 rounded-md px-2 text-sm hover:bg-muted', step === 'batch' && 'bg-muted font-semibold')}>
+            <Table2 className="h-4 w-4" /><span className="hidden sm:inline">{t('step.batch')}</span>
+          </button>
+        )}
+        {(step === 'design' || step === 'review') && <UndoRedo />}
         {step !== 'start' && <button type="button" onClick={save} aria-label="Save design" title="Save design" className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-muted"><Save className="h-4 w-4" /></button>}
         <div role="radiogroup" aria-label="Mode" className="flex rounded-full border border-border p-0.5 text-xs">
           {(['simple', 'pro'] as const).map(m => (
@@ -183,6 +190,7 @@ export function StudioApp() {
           )}
         </>
       )}
+      {step === 'batch' && <BatchStep ctx={ctx} />}
       {step === 'review' && <ReviewStep ctx={ctx} rules={rules} pricedFinishes={pricedFinishes} />}
       <TraceDialog />
       <ShortcutsDialog />

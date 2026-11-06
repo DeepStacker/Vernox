@@ -11,6 +11,7 @@
  * Reference: docs/studio.md ("Developer API").
  */
 import { CUSTOM_PIECE_LIMITS, DEFAULT_CUSTOM_FINISH_RATES, quoteCustomPiece, type CustomFinishRate, type CustomPieceLimits, type CustomPieceQuote } from '@/lib/pricing/customPiece';
+import { ORDER_LIMITS } from '@/lib/pricing/orderLimits';
 import { CUSTOM_PRODUCT_ID } from '@/types/products';
 import { exportProductionDXF, exportProductionSVG, type CamExportOptions } from '@/lib/exportCAM';
 import { composeDocument, plateOutline, type Composition } from './compose';
@@ -205,7 +206,7 @@ export function plateOutlinePath(doc: StudioDocument): string {
 // ---------- ordering ----------
 
 /** Server limit for one line's design JSON (api/_lib/checkout.ts MAX_DESIGN_REF_CHARS). */
-export const MAX_DESIGN_REF_CHARS = 200_000;
+export const MAX_DESIGN_REF_CHARS = ORDER_LIMITS.maxDesignRefChars;
 
 /**
  * Freezes production geometry into the document and serialises it for the order. Cached

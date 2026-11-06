@@ -73,6 +73,24 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | CG-32 | 404 page | None | Open `/does-not-exist` | Friendly 404 with navigation; not indexed (`noindex`) | |
 | CG-33 | Review submit as guest | Delivered order exists | Open the product page signed out; POST `SUBMIT_REVIEW` without a token | No "Write a review" button; the API answers 401 | |
 
+## 1a. Studio batch (business buyers)
+
+| ID | Case | Preconditions | Steps | Expected result | Result |
+|---|---|---|---|---|---|
+| BT-01 | Mark variables | Studio with a plate and one text | Click Batch in the header; type `{name}` in the variable box of the text | Batch screen opens; chips for CSV columns appear once a sheet is loaded | |
+| BT-02 | Paste CSV | BT-01 | Paste `name,qty` then 3 rows (include a name with a comma in quotes) | Table shows 3 rows with thumbnails after a moment; quoted comma stays in one cell | |
+| BT-03 | Upload CSV | Excel-exported CSV with BOM | Upload CSV | Headers have no stray characters; rows match the file | |
+| BT-04 | Spreadsheet paste | Range copied from Excel or Sheets | Paste into the box | Tab-separated data is read correctly | |
+| BT-05 | Row validation | Sheet with a blank row, a row with empty name, qty `abc`, qty `0`, qty `101` | Load the sheet | Each bad row is flagged inline with its reason; empty rows are shown but not counted; flagged rows are not in the cart count | |
+| BT-06 | Missing column | Variable `{room}` but no `room` column | Load a sheet without it | Message "No column room"; no rows can be added | |
+| BT-07 | Text too long | A name much longer than the plate allows | Load a sheet with it | That row shows "Text is N mm too long for the plate"; other rows stay valid | |
+| BT-08 | 500-row cap and performance | Sheet with 800 rows | Load it | Notice that only the first 500 are used; the page stays responsive while previews fill in; scrolling shows previews for visible rows first | |
+| BT-09 | Price and total | 3 valid rows with qty 2, 1, 5 | Read the Price column and Total | Each row shows unit price x qty; Total is the sum; the price of a row equals the price shown in the normal studio for that text | |
+| BT-10 | Add to cart | BT-09 | Add to cart | Cart shows one custom line per distinct name with the right quantity; identical names are merged and quantities added | |
+| BT-11 | Checkout re-prices | BT-10 | Check out (prepaid) | Order total equals the server price for the sizes and finishes; each order line has its own design | |
+| BT-12 | Order limit | Sheet with 60 distinct names | Add to cart | Lines are added up to the order limit (50 lines, or fewer if designs are large); a message says how many did not fit; after checkout the rest can be added | |
+| BT-13 | Re-add guard | BT-10 | Return to Batch | Added rows show "In cart"; the button counts only the remaining rows | |
+
 ## 2. Customer (signed in)
 
 | ID | Case | Preconditions | Steps | Expected result | Result |
@@ -184,6 +202,7 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 | PR-08 | Operator cannot see finance | Production login | Open Analytics, Customers, Team, Settings by navigation; check customer details in the console | Tabs absent; production screens show no customer name, email, phone or address | |
 | PR-09 | Mine only and search | Several orders, some claimed | Toggle "Mine only"; search an order number | Only matching orders shown | |
 | PR-10 | Manufacturability warning | Studio order with a feature below minimum width | Open order detail | Warning listed under the item | |
+| PR-12 | All variant files in one zip | A paid order from a batch (BT-11) | Open the order in the production console > "All N lines (zip)" > DXF | One zip with a numbered DXF per line, named with the variant text; each opens and matches its plate; repeat for SVG and PDF | |
 | PR-11 | Notes are preserved | Order with QC data | Add a production note; then edit notes in Orders > Inspector and save | QC results and package data are still present afterwards | |
 
 ## 6. QC and packing
