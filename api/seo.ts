@@ -18,11 +18,18 @@ const TEMPLATE_TTL_MS = 5 * 60_000;
 async function indexHtml(req: VercelRequest): Promise<string> {
   if (template && Date.now() - template.at < TEMPLATE_TTL_MS) return template.html;
   const host = req.headers['x-forwarded-host'] ?? req.headers.host;
-  const proto = req.headers['x-forwarded-proto'] ?? 'https';
+  // Vercel always sends x-forwarded-proto; the local adapter serves plain http.
+  const proto = req.headers['x-forwarded-proto'] ?? (/^(localhost|127\.0\.0\.1)(:|$)/.test(String(host)) ? 'http' : 'https');
   const res = await fetch(`${proto}://${host}/index.html`);
   if (!res.ok) throw new Error(`index.html fetch failed: ${res.status}`);
   template = { html: await res.text(), at: Date.now() };
   return template.html;
+}
+
+/** status + end, which both Vercel and the Node adapter (server/apiRouter.ts) support; `send` is Vercel-only. */
+function sendBody(res: VercelResponse, body: string) {
+  res.status(200);
+  return res.end(body);
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -36,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const slugs = products.map(p => str(p.data.slug)).filter(Boolean);
       res.setHeader('Content-Type', 'application/xml; charset=utf-8');
       res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
-      return res.status(200).send(buildSitemapXml(siteOrigin(), slugs));
+      return sendBody(res, buildSitemapXml(siteOrigin(), slugs));
     }
 
     const slug = str(req.query.slug).slice(0, 160);
@@ -44,9 +51,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const [match] = slug ? await store.query('products', { where: [{ field: 'slug', op: '==', value: slug }], limit: 1 }) : [];
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=86400');
-    if (!match) return res.status(200).send(html);
+    if (!match) return sendBody(res, html);
     const p = match.data;
-    return res.status(200).send(injectProductMeta(html, {
+    return sendBody(res, injectProductMeta(html, {
       slug,
       name: str(p.name) || slug,
       description: str(p.tagline) ? `${str(p.tagline)}. ${str(p.description)}` : str(p.description),
@@ -58,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('[seo] product meta failed, serving the plain page', err);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
-      return res.status(200).send(template.html);
+      return sendBody(res, template.html);
     }
     return sendError(res, err, 'seo');
   }
