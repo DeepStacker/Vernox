@@ -63,12 +63,15 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | CG-27 | Studio manufacturability warning | Studio open | Create a feature below minimum cut width | Warning shown; blocked or flagged per manufacturing rules | |
 | CG-28 | Redirect aliases | None | Open `/b2b`, `/customize`, `/shipping-returns` | Redirect to `/trade`, `/studio`, `/returns` respectively | |
 | CG-29 | B2B enquiry | Trade page | Submit the trade form with valid data | Success message; enquiry visible to Support and Super admin | |
-| CG-30 | Contact form | Contact page | Submit valid and invalid messages | Valid accepted; invalid rejected with field errors | |
+| CG-30 | Contact form | Contact page | Submit valid and invalid messages | Valid: confirmation with a reference (T-XXXXXX), a ticket appears in Support > Tickets, and an alert is queued for `supportEmail`. Invalid (bad email, message under 5 characters): rejected, nothing stored. More than 5 messages in an hour from one IP: 429 | |
+| CG-38 | Contact form honeypot | Contact page | POST `/api/engage` `CONTACT` with a non-empty `website` | 200 success, no ticket and no alert stored | |
+| CG-39 | Newsletter signup | Any page footer | Subscribe with a new email, then again with the same email (different case) | Thank-you message both times; one `newsletter_subscribers` document with consent time and source `footer`; no token in the response; 11th signup in an hour from one IP: 429 | |
+| CG-40 | Newsletter unsubscribe | CG-39 | Open `/newsletter/unsubscribe?h=<hash>&t=<token>` from the export, press Unsubscribe, press again; try a wrong token | First press unsubscribes (status `unsubscribed`); repeat is fine; wrong token shows the not-valid message and changes nothing | |
 | CG-31 | Policy pages | None | Open `/privacy`, `/terms`, `/shipping`, `/returns`, `/faqs` | Pages render with correct content and titles | |
 | CG-36 | COD refused for custom studio item | Cart with a studio design | Open payment step; also POST checkout-intent with `paymentMethod: "cod"` | COD disabled with "Custom studio designs are prepaid only"; API returns 400 `COD_NOT_AVAILABLE` | |
 | CG-37 | COD limit per mobile | Two undelivered COD orders on one mobile | Place a third COD order | Refused with `COD_NOT_AVAILABLE`; after one is delivered, allowed. 4th COD attempt in an hour from one number: 429 | |
 | CG-32 | 404 page | None | Open `/does-not-exist` | Friendly 404 with navigation; not indexed (`noindex`) | |
-| CG-33 | Review submit as guest | Delivered order exists | Try to review a product | Prompted to sign in, or review only allowed for verified purchase | |
+| CG-33 | Review submit as guest | Delivered order exists | Open the product page signed out; POST `SUBMIT_REVIEW` without a token | No "Write a review" button; the API answers 401 | |
 
 ## 2. Customer (signed in)
 
@@ -80,8 +83,8 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | CS-04 | Saved addresses | Signed in | Add, edit, delete address; use at checkout | Persisted; prefilled at checkout | |
 | CS-05 | Wishlist | Signed in | Add and remove wishlist items; reload | Persisted across reload and devices | |
 | CS-06 | Guest cart merge | Guest cart has items | Sign in | Cart merged without duplicate lines | |
-| CS-07 | Submit review (verified purchase) | Delivered order | Submit rating, text, photo | Review goes to moderation; not public until approved | |
-| CS-08 | Review validation | Signed in | Submit empty text, very long text, script tags | Rejected or sanitized; no script executes | |
+| CS-07 | Submit review (verified purchase) | Delivered order containing the product | Open that product page, Write a review, pick a rating, write 10+ characters, submit | Review is stored `pending` and `verified`, not public until approved; the page then shows "waiting for approval" and no second review is possible. No photo upload (text only). A customer without a Delivered order for the product sees no button and the API answers 403 | |
+| CS-08 | Review validation | Signed in with a Delivered order | Submit rating 0 or 6, text under 10 or over 2000 characters, script tags | Rating and length rejected with 400; script tags are stored as text and render escaped, no script executes. Writing `reviews` directly from the browser is refused by Firestore rules | |
 | CS-09 | Request cancellation | Order not yet in production | Cancel from order page | `POST /api/order-cancel` while Paid / Confirmed_COD: order Cancelled, stock restored, Razorpay refund created (prepaid), cancellation notification; status Refunded after the refund webhook | Testable via API (UI: Phase 3) |
 | CS-10 | Cancellation not allowed | Order already cut or shipped | Try to cancel | `POST /api/order-cancel` after In_Design returns 409 with "already in production" text | Testable via API (UI: Phase 3) |
 | CS-11 | Request return or replacement | Delivered within return window | Raise return with reason and photos | Photo upload to `returns/{orderId}/` allowed (image ≤ 5 MB); `POST /api/return-request` moves the order to Return_Requested; `GET_ORDER_DOCUMENTS` shows the return | Testable via API (UI: Phase 3) |
@@ -232,7 +235,7 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 | ID | Case | Preconditions | Steps | Expected result | Result |
 |---|---|---|---|---|---|
 | SP-01 | Look up order | None | Support console: search by order number, phone, email, pincode, name | Matching orders listed; detail shows customer, items, totals, timeline | |
-| SP-02 | Handle contact message | CG-30 done | Open message, reply, close | Status tracked | Blocked: Phase 3b |
+| SP-02 | Handle contact message | CG-30 done | Support > Tickets: filter Open, open the ticket, Log reply, Add note, then set Resolved | Thread shows customer message, reply and note with who and when; logging a reply moves Open to Waiting; status persisted after reload; each change audited. Roles without `tickets.write` (view only) see no buttons; finance, shipping, designer and catalog roles do not see the Tickets tab | |
 | SP-03 | Handle B2B enquiry to quote | CG-29 done | Trade enquiries: open the enquiry, mark Contacted, then Quoted, Won or Lost | Status saved and shown in the list filter. Sending a quote document and converting to an order are not built | |
 | SP-04 | Process return request | CS-11 done | Returns > To review: read reason, details and photos; Approve (refund or replacement, optional message); then "Awaiting parcel" > Mark received (optionally restock) | Refund resolution: "Received" shows "Go to Finance", where finance issues the refund; replacement resolution: a linked zero-value order is created in Paid. Photos load for staff with `orders.read` | Testable in the UI |
 | SP-05 | Reject return | CS-11 done | Returns > Reject (reason required) | Order back to Delivered; the customer notification carries the reason | Testable in the UI |

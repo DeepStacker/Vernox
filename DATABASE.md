@@ -148,15 +148,32 @@ Earlier collections:
 - `idempotency/{key}` — `{ orderId, requestHash, createdAt, expiresAt }`.
 - `webhook_events/{eventId}` — `{ event, outcome, orderId, razorpayOrderId, razorpayPaymentId, razorpayRefundId, amountPaise,
   receivedAt, expiresAt }`; outcome `unmatched` = needs reconciliation.
-- `rate_limits/{scope_hash_window}` — `{ count, scope, windowStart, expiresAt }`.
+- `rate_limits/{scope_hash_window}` — `{ count, scope, windowStart, expiresAt }`. Scopes include `contact` (5/h per IP), `newsletter` (10/h) and `review` (30/min).
 - `audit_logs/{id}` — `AuditLog` (`src/types/admin.ts`); readable by `super_admin`.
 - `staff/{uid}` — `StaffMember` mirror of the role claim; readable by the member and `staff.read` roles.
 
 ### Client collections
 - `users/{uid}` — owner read/write; `role`/`isAdmin` cannot be set by clients (roles are claims). Readable by `customers.read`.
 - `wishlists/{uid}` — owner only.
-- `reviews/{id}` — public read when `status == 'published'`; signed-in users create with `userId == uid`, `status: 'pending'`;
-  moderation by `reviews.moderate` roles. List queries from the storefront must filter `status == 'published'`.
+- `reviews/{id}` — public read when `status == 'published'` (authors also read their own); **no client create**: customers submit through
+  `POST /api/engage` `SUBMIT_REVIEW`, which needs a Delivered order containing the product (matched by `userId`, or by the verified account
+  email for guest checkouts) and writes `{ id: rv_<hash(uid:productId)>, productId, userId, orderId, customerName ("Asha R."), location?,
+  rating, comment, verified: true, status: 'pending', placedAt, createdAt, updatedAt }`. One review per customer and product (the id is
+  derived, a repeat is a 409). Text only: `storage.rules` has no path for review photos. Moderation by `reviews.moderate` roles through
+  `SAVE_REVIEW`. List queries from the storefront must filter `status == 'published'`.
+- `tickets/{id}` — support tickets from the contact form (`POST /api/engage` `CONTACT`); read by `tickets.read` roles
+  (`super_admin`, `admin`, `order_manager`, `support`), **never written by clients**. `{ ref ("T-ABC123"), channel: 'contact_form', topic,
+  subject, orderNumber?, customerName, customerEmail, customerPhone?, status: open | waiting | resolved, assignedTo (first staff to act),
+  messages[{ at, by, direction: inbound | reply | note, text }] (max 100), createdAt, updatedAt }`. Staff change them through the admin
+  actions `ADD_TICKET_MESSAGE` / `SET_TICKET_STATUS` (`tickets.write`, audited). A `reply` is a record of what staff sent from their own
+  mailbox or WhatsApp; the system does not email customers. Creating a ticket also writes a `notifications_outbox/{ticketId}_support_ticket`
+  alert to `settings/store.supportEmail` in the same transaction (skipped when that address is empty; the ticket is still saved).
+- `newsletter_subscribers/{sha256(email)}` — server-only (closed to clients; holds emails and tokens). `{ email, status: subscribed |
+  unsubscribed, source, consentAt, unsubscribedAt, unsubscribeToken, updatedAt }`. Signing up again is idempotent (a current subscriber is
+  unchanged); someone returning after unsubscribing gets a new `consentAt` and keeps the token. There is no email provider: export the list
+  with `npm run export:newsletter > subscribers.csv` (needs the Firebase service account; subscribed addresses only, with the unsubscribe
+  token and hash for building `/newsletter/unsubscribe?h=<hash>&t=<token>` links) and import it into whichever tool sends the campaign.
+  Re-export before each campaign so unsubscribes are honoured.
 - `b2b_inquiries/{id}` — validated public create (shape of `B2BTradeModal`, `status: 'pending_review'`), read and updated by `b2b.read` roles. The
   admin screen moves `status` through `pending_review → contacted → quoted → won | lost`; no other field is written.
 - `admin_users` — legacy, closed.

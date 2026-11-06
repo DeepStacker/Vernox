@@ -1,7 +1,8 @@
 /**
  * Support console: find an order by number, email, phone, pincode or name, then read its timeline,
  * customer, items and totals, add an internal note (support through ADD_ORDER_NOTE) and copy or send
- * customer messages. There is no ticketing backend; notes live on the order (see ROADMAP.md).
+ * customer messages (Orders view), and work contact-form tickets (Tickets view, TicketsConsole.tsx).
+ * Notes about an order live on the order.
  */
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
@@ -11,9 +12,34 @@ import { searchOrdersRemote } from '@/lib/data/orders';
 import { matchesOrder } from '@/lib/orders/orderSearch';
 import type { Order } from '@/types/store';
 import { StatusBadge } from '../shared/badges';
+import { useAuth } from '@/lib/auth/AuthProvider';
 import { OrderDetailPanel } from './OrderDetailPanel';
+import { TicketsConsole } from './TicketsConsole';
 
 export function SupportConsole() {
+  const { permissions } = useAuth();
+  const [view, setView] = useState<'orders' | 'tickets'>('orders');
+  return (
+    <div className="space-y-5 animate-fade-in">
+      <div>
+        <h2 className="font-display text-3xl">Support</h2>
+      </div>
+      {permissions?.canReadTickets && (
+        <div className="flex gap-2" role="tablist" aria-label="Support view">
+          {(['orders', 'tickets'] as const).map(v => (
+            <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => setView(v)}
+              className={`min-h-11 rounded-lg px-4 text-sm font-semibold ${view === v ? 'bg-oxblood text-ivory' : 'bg-muted/50 text-muted-foreground'}`}>
+              {v === 'orders' ? 'Orders' : 'Tickets'}
+            </button>
+          ))}
+        </div>
+      )}
+      {view === 'tickets' && permissions?.canReadTickets ? <TicketsConsole /> : <OrderSupport />}
+    </div>
+  );
+}
+
+function OrderSupport() {
   const { orders, ordersLoading, ordersError, hasMoreOrders, loadMoreOrders, isLoadingMoreOrders, storeConfig } = useAdminData();
   const [query, setQuery] = useState('');
   const [remote, setRemote] = useState<Order[]>([]);
@@ -39,11 +65,8 @@ export function SupportConsole() {
   };
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <div>
-        <h2 className="font-display text-3xl">Support</h2>
-        <p className="text-sm text-muted-foreground">Search by order number, email, phone, pincode or name.</p>
-      </div>
+    <div className="space-y-5">
+      <p className="text-sm text-muted-foreground">Search by order number, email, phone, pincode or name.</p>
       <div className="relative max-w-xl">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="VX-20261105-ABC123, name@email.com, 98xxxxxx, 560001"

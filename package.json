@@ -18,6 +18,7 @@
     "test:rules": "firebase emulators:exec --only firestore,storage --project demo-vernox 'vitest run src/test/firestore.rules.test.ts src/test/storage.rules.test.ts'",
     "seed": "tsx scripts/seed-firestore.ts",
     "grant-super-admin": "tsx scripts/grant-super-admin.ts",
+    "export:newsletter": "tsx scripts/export-newsletter.ts",
     "emulators": "firebase emulators:start --only firestore,auth,storage --project vernox-1b5d5",
     "seed:local": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_PROJECT_ID=vernox-1b5d5 tsx scripts/seed-firestore.ts --force",
     "dev:local": "VITE_USE_FIREBASE_EMULATOR=true FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_PROJECT_ID=vernox-1b5d5 vite"

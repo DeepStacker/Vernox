@@ -49,6 +49,7 @@ service cloud.firestore {
     function canModerateReviews() { return hasRole(['super_admin', 'admin', 'catalog_manager', 'support']); }
     function canReadCustomers()   { return hasRole(['super_admin', 'admin', 'order_manager', 'support']); }
     function canReadB2b()         { return hasRole(['super_admin', 'admin', 'order_manager', 'support']); }
+    function canReadTickets()     { return hasRole(['super_admin', 'admin', 'order_manager', 'support']); }
     function canReadConsultations() { return hasRole(['super_admin', 'admin', 'designer']); }
     function canReadStaff()       { return hasRole(['super_admin', 'admin']); }
     function canReadAudit()       { return hasRole(['super_admin']); }
@@ -140,14 +141,8 @@ service cloud.firestore {
     match /reviews/{reviewId} {
       allow read: if resource.data.status == 'published' || canModerateReviews()
         || (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if signedIn()
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.status == 'pending'
-        && request.resource.data.rating is int
-        && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
-        && request.resource.data.comment is string
-        && request.resource.data.comment.size() > 0 && request.resource.data.comment.size() <= 5000
-        && !request.resource.data.keys().hasAny(['verified', 'featured', 'conciergeResponse', 'helpfulCount']);
+      // Submissions go through POST /api/engage (SUBMIT_REVIEW), which verifies a delivered purchase.
+      allow create: if false;
       allow update, delete: if canModerateReviews();
     }
 
@@ -211,6 +206,19 @@ service cloud.firestore {
     match /b2b_inquiries/{inquiryId} {
       allow create: if validInquiry(request.resource.data);
       allow read, update, delete: if canReadB2b();
+    }
+
+    // ---------- support tickets (contact form; created and changed only by the API) ----------
+
+    match /tickets/{ticketId} {
+      allow read: if canReadTickets();
+      allow write: if false;
+    }
+
+    // ---------- newsletter (server-only: holds subscriber emails and unsubscribe tokens) ----------
+
+    match /newsletter_subscribers/{emailHash} {
+      allow read, write: if false;
     }
 
     // ---------- coupons (staff only; evaluation happens in the API) ----------

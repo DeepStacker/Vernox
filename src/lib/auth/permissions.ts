@@ -32,6 +32,9 @@ export interface RolePermissions {
   /** May write order status, assignment and notes (orders.update_status). Support is read-only. */
   canUpdateOrders: boolean;
   canReadB2b: boolean;
+  /** tickets.read / tickets.write: the Tickets view in Support. */
+  canReadTickets: boolean;
+  canWriteTickets: boolean;
   /** consultations.read: the designer queue and proposals. */
   canReadConsultations: boolean;
   /** consultations.manage: claim, draft and send proposals. */
@@ -60,6 +63,8 @@ function derivePermissions(role: StaffRole): RolePermissions {
     canManageSupport: seesCustomers,
     canUpdateOrders: updatesStatus,
     canReadB2b: has('b2b.read'),
+    canReadTickets: has('tickets.read'),
+    canWriteTickets: has('tickets.write'),
     canReadConsultations: has('consultations.read'),
     canManageConsultations: has('consultations.manage'),
   };

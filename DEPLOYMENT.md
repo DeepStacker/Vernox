@@ -24,7 +24,9 @@ A missing required variable makes the affected endpoint return `CONFIG_ERROR` an
    `RAZORPAY_WEBHOOK_SECRET` and events `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`.
 4. Vercel Cron runs `/api/cron/release-reservations` every 5 minutes and `/api/cron/send-notifications` every 2 minutes
    (`vercel.json`). **Vercel plan: Pro (decided 2026-11-06).** Hobby is for non-commercial use only, sub-daily crons need Pro, and the API is
-   14 serverless functions (Hobby allows 12). The Docker image (`server/index.ts` routes every endpoint) is the fallback host.
+   15 serverless functions (Hobby allows 12; `api/engage.ts` serves contact, newsletter and reviews). The Docker image
+   (`server/index.ts` routes every endpoint) is the fallback host.
+4c. **Support alerts:** set `supportEmail` in Settings so new contact-form tickets alert that inbox (needs the Resend email channel); without it, or while it is the seeded placeholder, tickets are still saved and visible in Support > Tickets. The newsletter list is exported with `npm run export:newsletter` (see DATABASE.md).
 4a. **Shiprocket:** create an API user (Settings → API → Configure) and set `SHIPROCKET_EMAIL` / `SHIPROCKET_PASSWORD`; set
    `SHIPROCKET_PICKUP_LOCATION` to the pickup nickname and `SHIPROCKET_PICKUP_PINCODE`. Tracking webhook (Settings → API →
    Webhooks): URL `https://<domain>/api/courier-webhook` (Shiprocket rejects URLs containing "shiprocket", "kartrocket", "sr" or

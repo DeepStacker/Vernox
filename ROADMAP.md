@@ -211,21 +211,19 @@ the one revision message.
 - Catalogue in `src/lib/catalog.ts` is SAMPLE data (`isSample: true`), seeded by `scripts/seed-firestore.ts`; the storefront reads Firestore. Replace products, prices and photography (`TODO(catalogue)`) before launch.
 - Shop filters are URL-driven (`src/lib/storefront/listing.ts`); contact details come from `settings/store` (`supportEmail`, `supportPhone`, `whatsappNumber`, `supportHours`, `workshopAddress`) via `src/lib/storefront/contact.ts`.
 - Light theme only (the old `.dark` block duplicated the light values). Legacy colour tokens remain as aliases for account, checkout and admin screens.
-- Not built (no backend yet): newsletter signup, contact-form storage (the form opens email/WhatsApp), review submission, EMI messaging, save-for-later.
+- Built after this pass: contact form to support tickets, newsletter signup (list kept in Firestore, no ESP), and review submission by verified buyers (all through `POST /api/engage`).
+  Product cards crossfade to `lifestyleImage` on hover when a product has one; the cart drawer settles with a soft spring (`--ease-spring-soft`); shop filter changes already re-run the staggered reveal.
+- Not built: EMI messaging, save-for-later, review photos (needs a `storage.rules` path for reviews), a welcome or double opt-in newsletter email and campaign sending (needs an ESP), emailing ticket replies from the console, tickets for WhatsApp/phone/email channels (only `contact_form` is created).
 
 ## Phase 3a follow-ups (status after 3b)
 
 - `TODO(catalog-images)`: product images are URL fields. File upload needs `storage.rules` (owned by the commerce backend work) and an
   upload field in `src/pages/admin/catalog/ProductFormDialog.tsx`; QC "photo taken" is a tick for the same reason (store the photo
   in Storage and keep its URL in the `qc` block).
-- `TODO(support-tickets)`: there is no ticketing backend; support notes live on the order. Proposed `tickets/{id}` collection:
-  `{ orderId?, customerEmail, channel (whatsapp|email|phone|contact_form), subject, status (open|waiting|resolved), assignedTo,
-  messages[{ at, by, direction, text }], createdAt, updatedAt }`, readable by `customers.read`, writable by a new `tickets.write`
-  permission (support, order manager) so support no longer needs `orders.update_status` just to leave a note; contact-form
-  submissions would create tickets.
-- Done in 3b: support adds order notes through the `ADD_ORDER_NOTE` server action (permission `customers.read`), which appends inside a transaction and
-  keeps the `#vernox:v1` block. Firestore rules are unchanged. The `tickets` collection above is still the answer for real ticketing (contact-form
-  messages, assignment), not for notes.
+- Done: `tickets/{id}` with `tickets.read` / `tickets.write` (support, order manager, admins) in `src/types/admin.ts`, mirrored in `firestore.rules`.
+  The contact form creates tickets through `POST /api/engage`; the Support console has a Tickets view (status filter, thread, reply log, internal note,
+  status change). Support notes on orders still go through `ADD_ORDER_NOTE` (3b), which keeps the `#vernox:v1` block.
+  `TODO(support-tickets)`: only the `contact_form` channel exists; `orderId` is not linked (the customer's order number is stored as free text), and replies are logged, not emailed.
 - Done in 3b: `defaultLeadTimeDays` and `customLeadTimeDays` are in the settings form and the `StoreConfig` type.
 - Workshop queues load up to 200 orders per status group; move to counters or a dedicated `workshop` index if volume exceeds that.
 - Hold status and material-shortage flag (UAT OM-06, PR-06) need new order statuses in the shared state machine.

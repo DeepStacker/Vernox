@@ -29,6 +29,7 @@ import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
 import { claimConsultation, proposalDraftSchema, saveProposalDraft, sendProposal } from './_lib/proposals';
 import { createRefund, refundCeilingPaise } from './_lib/refunds';
 import { decideReturn, markReturnReceived, returnPath } from './_lib/returns';
+import { addTicketMessage, setTicketStatus, ticketIdSchema, TICKET_STATUSES } from './_lib/tickets';
 import { createShippingProvider } from './_lib/shipping';
 import { applyCourierStatus, cancelShipment, createShipment, getLabel, type ManualShipmentDetails } from './_lib/shipping/shipments';
 import type { PackageDetails } from './_lib/shipping/types';
@@ -244,6 +245,33 @@ const ACTIONS: Record<string, ActionDefinition> = {
         return next;
       });
       return { orderId: p.orderId, notes };
+    },
+  },
+
+  // ---------- support tickets (permission tickets.write; reads are firestore.rules) ----------
+
+  ADD_TICKET_MESSAGE: {
+    method: 'POST',
+    permission: 'tickets.write',
+    async run(ctx) {
+      const p = parse(
+        z.object({ ticketId: ticketIdSchema, direction: z.enum(['reply', 'note']), text: z.string().trim().min(1).max(2000) }),
+        ctx.params,
+      );
+      const ticket = await addTicketMessage(ctx.store, { id: p.ticketId, by: ctx.actor.email ?? ctx.actor.uid, direction: p.direction, text: p.text });
+      await recordAudit(ctx.store, audit(ctx, 'TICKET_MESSAGE_ADDED', 'ticket', p.ticketId, { direction: p.direction }));
+      return { ticketId: p.ticketId, status: ticket.status };
+    },
+  },
+
+  SET_TICKET_STATUS: {
+    method: 'POST',
+    permission: 'tickets.write',
+    async run(ctx) {
+      const p = parse(z.object({ ticketId: ticketIdSchema, status: z.enum(TICKET_STATUSES) }), ctx.params);
+      await setTicketStatus(ctx.store, { id: p.ticketId, status: p.status, by: ctx.actor.email ?? ctx.actor.uid });
+      await recordAudit(ctx.store, audit(ctx, 'TICKET_STATUS_SET', 'ticket', p.ticketId, { status: p.status }));
+      return { ticketId: p.ticketId, status: p.status };
     },
   },
 

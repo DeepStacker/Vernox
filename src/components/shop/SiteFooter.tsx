@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
 import { useCatalog } from '@/lib/catalogContext';
 import { resolveContact, whatsappLink } from '@/lib/storefront/contact';
+import { NewsletterForm } from '@/components/shop/NewsletterForm';
 import { MobileBottomNav } from '@/components/shop/MobileBottomNav';
 
 const COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
@@ -69,6 +70,10 @@ export function SiteFooter() {
               </ul>
             </nav>
           ))}
+        </div>
+
+        <div className="border-t border-border">
+          <div className="container py-6"><NewsletterForm /></div>
         </div>
 
         <div className="border-t border-border">

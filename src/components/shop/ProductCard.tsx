@@ -46,7 +46,7 @@ export function ProductCard({ product, stats, isWishlisted, onToggleWishlist, pr
     <article className="group lift flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
       <div className="relative">
         <Link to={`/product/${product.slug}`} aria-label={product.name} className="block">
-          <ProductVisual product={product} finish={finish} priority={priority} />
+          <ProductVisual product={product} finish={finish} priority={priority} hoverSrc={product.lifestyleImage} />
         </Link>
         <div className="pointer-events-none absolute left-2 top-2 flex flex-col gap-1">
           {off > 0 && <span className="rounded bg-burgundy px-2 py-0.5 text-xs font-semibold text-cream">{off}% off</span>}
