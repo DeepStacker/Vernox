@@ -13,7 +13,7 @@ export function CartDrawer() {
 
   return (
     <Sheet open={isDrawerOpen} onOpenChange={setDrawerOpen}>
-      <SheetContent side="right" className="flex w-[92vw] max-w-md flex-col bg-background p-0">
+      <SheetContent side="right" className="flex w-[92vw] max-w-md flex-col bg-background p-0 data-[state=open]:duration-[var(--dur-4)] data-[state=open]:[animation-timing-function:var(--ease-spring-soft)]">
         <SheetHeader className="border-b border-border p-4">
           <SheetTitle className="font-display text-2xl">Your cart ({count})</SheetTitle>
         </SheetHeader>

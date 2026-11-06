@@ -30,6 +30,7 @@ const Shipping = lazy(() => import("./pages/Shipping.tsx"));
 const Returns = lazy(() => import("./pages/Returns.tsx"));
 const Faqs = lazy(() => import("./pages/Faqs.tsx"));
 const Contact = lazy(() => import("./pages/Contact.tsx"));
+const NewsletterUnsubscribe = lazy(() => import("./pages/NewsletterUnsubscribe.tsx"));
 const TrackOrder = lazy(() => import("./pages/TrackOrder.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -76,6 +77,7 @@ const App = () => (
                   <Route path="/returns" element={<Returns />} />
                   <Route path="/faqs" element={<Faqs />} />
                   <Route path="/contact" element={<Contact />} />
+                  <Route path="/newsletter/unsubscribe" element={<NewsletterUnsubscribe />} />
                   <Route path="/track-order" element={<TrackOrder />} />
                   <Route path="/customize" element={<Navigate to="/studio" replace />} />
                   <Route path="/studio" element={<Index />} />

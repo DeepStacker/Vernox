@@ -29,6 +29,9 @@ export const RATE_LIMITS = {
   orderCancel: { scope: 'order_cancel', limit: 10, windowMs: 60_000 },
   returnRequest: { scope: 'return_request', limit: 10, windowMs: 60_000 },
   consultation: { scope: 'consultation', limit: 20, windowMs: 60_000 },
+  contact: { scope: 'contact', limit: 5, windowMs: 3600_000 },
+  newsletter: { scope: 'newsletter', limit: 10, windowMs: 3600_000 },
+  review: { scope: 'review', limit: 30, windowMs: 60_000 },
   // COD abuse: per mobile number and per email, independent of IP.
   codCheckoutPhone: { scope: 'cod_phone', limit: 3, windowMs: 3600_000 },
   codCheckoutEmail: { scope: 'cod_email', limit: 3, windowMs: 3600_000 },

@@ -23,9 +23,10 @@ A missing required variable makes the affected endpoint return `CONFIG_ERROR` an
 3. Razorpay dashboard: enable auto-capture; add webhook `https://<domain>/api/razorpay-webhook` with secret
    `RAZORPAY_WEBHOOK_SECRET` and events `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`.
 4. Vercel Cron runs `/api/cron/release-reservations` every 5 minutes and `/api/cron/send-notifications` every 2 minutes
-   (`vercel.json`). **Vercel plan:** sub-daily crons need Pro, and the API is now 13 serverless functions (Hobby allows 12) —
+   (`vercel.json`). **Vercel plan:** sub-daily crons need Pro, and the API is now 15 serverless functions (`api/engage.ts` serves contact, newsletter and reviews) (Hobby allows 12) —
    deploy on Pro, or on Hobby call the crons from an external scheduler with the bearer secret and serve the API from the
    Docker image (`server/index.ts` routes every endpoint).
+4b. **Support alerts:** set `supportEmail` in Settings so new contact-form tickets alert that inbox (needs the Resend email channel); without it tickets are still saved and visible in Support > Tickets. The newsletter list is exported with `npm run export:newsletter` (see DATABASE.md).
 4a. **Shiprocket:** create an API user (Settings → API → Configure) and set `SHIPROCKET_EMAIL` / `SHIPROCKET_PASSWORD`; set
    `SHIPROCKET_PICKUP_LOCATION` to the pickup nickname and `SHIPROCKET_PICKUP_PINCODE`. Tracking webhook (Settings → API →
    Webhooks): URL `https://<domain>/api/courier-webhook` (Shiprocket rejects URLs containing "shiprocket", "kartrocket", "sr" or

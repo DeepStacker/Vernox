@@ -296,3 +296,20 @@ Reads of consultations and drafts are by Firestore rules (`consultations.read`),
 New event `proposal_ready` (outbox id `{orderId}_proposal_ready_v{n}`). `order_confirmed` carries `service: 'consultation'` plus
 `creditCode/creditPaise/creditExpiresAt` for consultation orders. Consultation orders are never shipped or invoiced by the shipping
 flow, are excluded from the workshop queues, and cannot be cancelled by the customer (`409`); finance refunds them with `CREATE_REFUND`.
+
+## Customer engagement
+
+### `POST /api/engage`
+One function for the storefront's engagement writes (the deployment is near its function limit). Body `{ "action": ..., ... }`; errors use the usual `{ success: false, code, message }`.
+
+| Action | Auth | Params | Rate limit (per IP) | Result |
+|---|---|---|---|---|
+| `CONTACT` | none | `name, email, phone?, topic (Order help \| Custom or bulk order \| Product question \| Something else), orderNumber?, message (5–4000), website` | 5 / hour | `{ success: true, ref }`; creates `tickets/{id}` and queues a `support_ticket` alert |
+| `NEWSLETTER_SUBSCRIBE` | none | `email, source? (footer \| checkout \| account), website` | 10 / hour | `{ success: true }` (same answer for new and existing subscribers) |
+| `NEWSLETTER_UNSUBSCRIBE` | none | `emailHash, token` | 10 / hour | `{ success: true }`; `404` for an unknown hash or wrong token |
+| `REVIEW_STATUS` | Bearer ID token | `productId` | 30 / minute | `{ success: true, eligible, reason?: not_purchased \| already_reviewed, reviewStatus? }` |
+| `SUBMIT_REVIEW` | Bearer ID token | `productId, rating (1–5), comment (10–2000)` | 30 / minute | `{ success: true }`; `403` without a Delivered order containing the product, `409` if already reviewed |
+
+- `website` is a honeypot: a non-empty value is answered with `200` and nothing is stored.
+- Tickets are worked through `/api/admin` actions `ADD_TICKET_MESSAGE { ticketId, direction: reply \| note, text }` and
+  `SET_TICKET_STATUS { ticketId, status: open \| waiting \| resolved }` (permission `tickets.write`, audited).

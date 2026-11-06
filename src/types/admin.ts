@@ -39,6 +39,8 @@ export const PERMISSIONS = [
   'reviews.moderate',
   'customers.read',
   'b2b.read',
+  'tickets.read', // contact-form support tickets
+  'tickets.write', // reply notes and status changes (server-side only)
   'consultations.read', // design consultations: walls, photos, proposals
   'consultations.manage', // claim, draft and send proposals
   'reports.export',
@@ -55,11 +57,11 @@ export const STAFF_ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = 
   super_admin: ALL_PERMISSIONS,
   admin: ALL_PERMISSIONS.filter(p => p !== 'staff.manage' && p !== 'audit.read'),
   catalog_manager: ['catalog.write', 'inventory.write', 'reviews.moderate'],
-  order_manager: ['orders.read', 'orders.update_status', 'orders.tracking', 'customers.read', 'b2b.read'],
+  order_manager: ['orders.read', 'orders.update_status', 'orders.tracking', 'customers.read', 'b2b.read', 'tickets.read', 'tickets.write'],
   production: ['orders.read', 'orders.update_status'],
   shipping: ['orders.read', 'orders.update_status', 'orders.tracking'],
   finance: ['orders.read', 'orders.refund', 'coupons.read', 'reports.export'],
-  support: ['orders.read', 'customers.read', 'reviews.moderate', 'b2b.read', 'coupons.read'],
+  support: ['orders.read', 'customers.read', 'reviews.moderate', 'b2b.read', 'coupons.read', 'tickets.read', 'tickets.write'],
   // The catalogue is world-readable, so a designer needs no catalogue permission to pick products.
   designer: ['consultations.read', 'consultations.manage'],
 };
@@ -111,6 +113,7 @@ export type AuditTargetType =
   | 'admin'
   | 'staff'
   | 'review'
+  | 'ticket'
   | 'inventory'
   | 'consultation'
   | 'config';

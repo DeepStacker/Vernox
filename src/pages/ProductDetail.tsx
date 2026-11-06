@@ -10,6 +10,7 @@ import { flyToCart } from '@/lib/storefront/motion';
 import { ProductGallery } from '@/components/shop/ProductGallery';
 import { PriceTag } from '@/components/shop/PriceTag';
 import { ProductFaq, ProductReviews, SpecsTable } from '@/components/shop/ProductInfo';
+import { ReviewForm } from '@/components/shop/ReviewForm';
 import { ProductGrid } from '@/components/shop/ProductGrid';
 import { RecentlyViewed } from '@/components/shop/RecentlyViewed';
 import { StarRating } from '@/components/shop/StarRating';
@@ -228,6 +229,7 @@ export default function ProductDetail() {
         <section className="mt-12" aria-labelledby="reviews-heading">
           <h2 id="reviews-heading" className="section-title mb-3">Reviews</h2>
           <ProductReviews reviews={productReviews} />
+          <div className="mt-4"><ReviewForm productId={product.id} /></div>
         </section>
 
         {related.length > 0 && (

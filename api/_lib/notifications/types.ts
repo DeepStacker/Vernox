@@ -12,6 +12,10 @@
  * Design consultations (api/_lib/consultations.ts) use the same outbox: the consultation id is its
  * order id, `order_confirmed` carries `service: 'consultation'` for the purchase receipt, and
  * `proposal_ready` is enqueued with a per-version discriminator.
+ *
+ * `support_ticket` is the one internal event: a new contact-form ticket (api/_lib/tickets.ts) alerts the
+ * support inbox. The ticket id is its `orderId`, `orderNumber` is the ticket reference, `email` is the
+ * support address (settings/store `supportEmail`) and `note` carries the sender and subject.
  */
 
 export const NOTIFICATION_EVENTS = [
@@ -27,6 +31,7 @@ export const NOTIFICATION_EVENTS = [
   'return_rejected',
   'return_received',
   'proposal_ready',
+  'support_ticket',
 ] as const;
 
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];

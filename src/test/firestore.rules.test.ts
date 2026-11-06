@@ -114,13 +114,48 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     await assertSucceeds(setDoc(doc(as('a', { role: 'admin' }), 'settings/store'), { codFee: 49 }));
   });
 
-  it('reviews: create pending as self; moderation by moderators only', async () => {
+  it('reviews: no client create (the API verifies the purchase); moderation by moderators only', async () => {
     const alice = as('alice');
-    await assertSucceeds(setDoc(doc(alice, 'reviews/r2'), { userId: 'alice', status: 'pending', rating: 4, comment: 'Lovely' }));
-    await assertFails(setDoc(doc(alice, 'reviews/r3'), { userId: 'alice', status: 'published', rating: 4, comment: 'x' }));
-    await assertFails(setDoc(doc(alice, 'reviews/r4'), { userId: 'bob', status: 'pending', rating: 4, comment: 'x' }));
+    await assertFails(setDoc(doc(alice, 'reviews/r2'), { userId: 'alice', status: 'pending', rating: 4, comment: 'Lovely' }));
+    await assertSucceeds(getDoc(doc(guest(), 'reviews/r1')));
     await assertFails(updateDoc(doc(alice, 'reviews/r1'), { status: 'archived' }));
     await assertSucceeds(updateDoc(doc(as('sup', { role: 'support' }), 'reviews/r1'), { status: 'archived' }));
+  });
+
+  it('reviews: authors read their own pending review, others do not', async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'reviews/r5'), { userId: 'alice', status: 'pending', rating: 4, comment: 'x' });
+    });
+    await assertSucceeds(getDoc(doc(as('alice'), 'reviews/r5')));
+    await assertFails(getDoc(doc(as('bob'), 'reviews/r5')));
+    await assertFails(getDoc(doc(guest(), 'reviews/r5')));
+  });
+
+  it('tickets: read by tickets.read roles only; nobody writes from a client', async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'tickets/t1'), { customerEmail: 'alice@example.com', status: 'open', messages: [] });
+    });
+    for (const role of ['support', 'order_manager', 'admin', 'super_admin']) {
+      await assertSucceeds(getDoc(doc(as('s', { role }), 'tickets/t1')));
+    }
+    for (const role of ['finance', 'shipping', 'catalog_manager', 'designer']) {
+      await assertFails(getDoc(doc(as('s', { role }), 'tickets/t1')));
+    }
+    await assertFails(getDoc(doc(as('alice'), 'tickets/t1')));
+    await assertFails(getDoc(doc(guest(), 'tickets/t1')));
+    await assertFails(setDoc(doc(guest(), 'tickets/t2'), { status: 'open' }));
+    await assertFails(updateDoc(doc(as('s', { role: 'support' }), 'tickets/t1'), { status: 'resolved' }));
+    await assertFails(setDoc(doc(as('s', { role: 'super_admin' }), 'tickets/t2'), { status: 'open' }));
+  });
+
+  it('newsletter subscribers hold emails and tokens: closed to every client', async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'newsletter_subscribers/h1'), { email: 'a@b.in', unsubscribeToken: 't' });
+    });
+    for (const ctx of [guest(), as('alice'), as('boss', { role: 'super_admin' })]) {
+      await assertFails(getDoc(doc(ctx, 'newsletter_subscribers/h1')));
+      await assertFails(setDoc(doc(ctx, 'newsletter_subscribers/h2'), { email: 'x@y.in' }));
+    }
   });
 
   it('users cannot grant themselves roles', async () => {

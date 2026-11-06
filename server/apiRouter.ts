@@ -21,6 +21,7 @@ import invoiceHandler from '../api/invoice';
 import orderCancelHandler from '../api/order-cancel';
 import returnRequestHandler from '../api/return-request';
 import consultationHandler from '../api/consultation';
+import engageHandler from '../api/engage';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -40,6 +41,7 @@ const ROUTES: Record<string, Handler> = {
   '/api/order-cancel': orderCancelHandler,
   '/api/return-request': returnRequestHandler,
   '/api/consultation': consultationHandler,
+  '/api/engage': engageHandler,
 };
 
 function setSecurityAndCorsHeaders(req: http.IncomingMessage, res: http.ServerResponse) {

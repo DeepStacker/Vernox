@@ -71,6 +71,13 @@ function copyFor(event: NotificationEvent, p: NotificationPayload, base: string)
         smsValue: 'proposal ready',
         link: { label: 'View your proposal', url: `${base}/account/consultations/${encodeURIComponent(p.orderId)}` },
       };
+    case 'support_ticket':
+      return {
+        subject: `New support ticket ${p.orderNumber}`,
+        lines: [p.note ?? 'A customer sent a message through the contact form.', 'Open the Support console in the admin to reply.'],
+        smsValue: 'new ticket',
+        link: { label: 'Open the admin', url: `${base}/admin` },
+      };
     case 'in_production':
       return {
         subject: `Order ${p.orderNumber} is in production`,
@@ -161,14 +168,16 @@ export function renderNotification(event: NotificationEvent, payload: Notificati
   const base = siteUrl(env);
   const copy = copyFor(event, payload, base);
   const firstName = payload.customerName.trim().split(/\s+/)[0] || 'there';
-  const greeting = `Hello ${firstName},`;
+  const internal = event === 'support_ticket';
+  const greeting = internal ? 'Hello team,' : `Hello ${firstName},`;
+  const reference = `${internal ? 'Ticket' : 'Order'} ${payload.orderNumber}`;
   const sign = 'Vernox, made in India';
-  const text = [greeting, '', ...copy.lines, ...(copy.link ? ['', `${copy.link.label}: ${copy.link.url}`] : []), '', `Order ${payload.orderNumber}`, sign].join('\n');
+  const text = [greeting, '', ...copy.lines, ...(copy.link ? ['', `${copy.link.label}: ${copy.link.url}`] : []), '', reference, sign].join('\n');
   const html = [
     `<p>${escapeHtml(greeting)}</p>`,
     ...copy.lines.map(l => `<p>${escapeHtml(l)}</p>`),
     copy.link ? `<p><a href="${escapeHtml(copy.link.url)}">${escapeHtml(copy.link.label)}</a></p>` : '',
-    `<p style="color:#666;font-size:12px">Order ${escapeHtml(payload.orderNumber)}<br>${escapeHtml(sign)}</p>`,
+    `<p style="color:#666;font-size:12px">${escapeHtml(reference)}<br>${escapeHtml(sign)}</p>`,
   ].join('');
   return { subject: copy.subject, text, html, smsVars: [firstName, payload.orderNumber, copy.smsValue] };
 }
