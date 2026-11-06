@@ -22,6 +22,8 @@ export interface BusinessDraft {
   supportEmail: string;
   supportHours: string;
   workshopAddress: string;
+  grievanceOfficerName: string;
+  grievanceOfficerEmail: string;
   codEnabled: boolean;
   codFee: string;
   codMaxOrderValue: string;
@@ -44,6 +46,8 @@ export function draftFromConfig(config: StoreConfig): BusinessDraft {
     supportEmail: str(config.supportEmail),
     supportHours: str(config.supportHours),
     workshopAddress: str(config.workshopAddress),
+    grievanceOfficerName: str(config.grievanceOfficerName),
+    grievanceOfficerEmail: str(config.grievanceOfficerEmail),
     codEnabled: config.codEnabled === true,
     codFee: str(config.codFee),
     codMaxOrderValue: str(config.codMaxOrderValue),
@@ -97,6 +101,7 @@ export function validateBusiness(d: BusinessDraft): BusinessErrors {
   if (s.pincode.trim() && !/^[1-9]\d{5}$/.test(s.pincode.trim())) errors.pincode = 'Enter a 6-digit PIN code.';
   if (s.email.trim() && !EMAIL.test(s.email.trim())) errors.sellerEmail = 'Enter a valid email address.';
   if (d.supportEmail.trim() && !EMAIL.test(d.supportEmail.trim())) errors.supportEmail = 'Enter a valid email address.';
+  if (d.grievanceOfficerEmail.trim() && !EMAIL.test(d.grievanceOfficerEmail.trim())) errors.grievanceOfficerEmail = 'Enter a valid email address.';
   for (const [key, value] of [['whatsappNumber', d.whatsappNumber], ['supportPhone', d.supportPhone], ['sellerPhone', s.phone]] as const) {
     if (value.trim() && !/^\d{10,15}$/.test(digitsOnly(value))) errors[key] = 'Enter 10 to 15 digits, with the country code for WhatsApp.';
   }
@@ -128,6 +133,8 @@ export function toStorePatch(d: BusinessDraft): Partial<StoreConfig> {
     supportEmail: d.supportEmail.trim(),
     supportHours: d.supportHours.trim(),
     workshopAddress: d.workshopAddress.trim(),
+    grievanceOfficerName: d.grievanceOfficerName.trim(),
+    grievanceOfficerEmail: d.grievanceOfficerEmail.trim(),
     codEnabled: d.codEnabled,
     consultation: {
       enabled: d.consultation.enabled,

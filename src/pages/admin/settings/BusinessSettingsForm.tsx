@@ -78,6 +78,12 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
         <div className="sm:col-span-2">
           <Field label="Workshop address"><input value={draft.workshopAddress} onChange={e => set('workshopAddress', e.target.value)} className="field" /></Field>
         </div>
+        <Field label="Grievance officer" hint="Named on the policy pages (Consumer Protection (E-Commerce) Rules and DPDP Act).">
+          <input value={draft.grievanceOfficerName} onChange={e => set('grievanceOfficerName', e.target.value)} className="field" />
+        </Field>
+        <Field label="Grievance officer email" error={errors.grievanceOfficerEmail}>
+          <input type="email" value={draft.grievanceOfficerEmail} onChange={e => set('grievanceOfficerEmail', e.target.value)} className="field" />
+        </Field>
       </Section>
 
       <Section title="Cash on delivery" hint="Custom studio pieces are always prepaid.">

@@ -101,6 +101,9 @@ export interface StoreConfig {
   supportEmail?: string;
   supportHours?: string;
   workshopAddress?: string;
+  /** Grievance officer named on the policy pages (Consumer Protection (E-Commerce) Rules, 2020; DPDP Act, 2023). */
+  grievanceOfficerName?: string;
+  grievanceOfficerEmail?: string;
   /** Paid design consultation (display; the server prices it). */
   consultation?: Partial<ConsultationSettings>;
 }

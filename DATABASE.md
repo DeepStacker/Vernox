@@ -28,7 +28,8 @@ fields; `npm run seed` writes the same defaults). **Public document: never store
 `consultation: { enabled (default false), priceInr (default 999, before GST, ₹1–1,00,000), creditTowardsOrder (default true), creditValidityDays (default 60), turnaroundDays (default 3), sacCode (default 998391), gstRatePercent (default 18, the service rate, independent of the goods rate) }`,
 `seller: { legalName, tradeName, gstin, address, city, state, stateCode (2-digit GST code = GSTIN prefix), pincode, email, phone }`
 (printed on invoices; invoices cannot be issued until legalName, gstin, address, state, stateCode and pincode are set),
-storefront contact `whatsappNumber`, `supportPhone`, `supportEmail`, `supportHours`, `workshopAddress` (empty = hidden on the storefront).
+storefront contact `whatsappNumber`, `supportPhone`, `supportEmail`, `supportHours`, `workshopAddress` (empty = hidden on the storefront),
+`grievanceOfficerName`, `grievanceOfficerEmail` (named on the Terms and Privacy pages with the seller block; email falls back to `supportEmail`).
 The admin Settings screen edits `seller`, the contact fields, `codEnabled`, `codFee`, `codMaxOrderValue`, `defaultLeadTimeDays`,
 `customLeadTimeDays`, `returnWindowDays` and the `consultation` block (form model and GSTIN check: `src/pages/admin/settings/settingsForm.ts`, mirroring
 `GSTIN_PATTERN` in `api/_lib/storeConfig.ts`).

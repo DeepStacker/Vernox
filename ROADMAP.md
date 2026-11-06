@@ -149,6 +149,7 @@ a code change. A CA should review the tax rows once before the first invoice is 
 | COD | ₹49 fee, up to ₹10,000 order value, catalogue items only | The fee is within the usual ₹40–₹99 range for Indian D2C stores; the cap limits return-to-origin losses on high-value parcels. |
 | Returns | 7 days after delivery for catalogue pieces; damage reported with photos within 48 hours; studio pieces are made to order, so only damage or defects qualify | Matches the 7-day norm (Pepperfry, Exotic India) and the 48-hour damage window. |
 | Custom pieces | ₹750 setup + ₹1.10/cm² (steel finishes) or ₹1.40/cm² (copper alloys), minimum ₹1,499 | Finished-retail pricing anchored to the sample catalogue. Workshop cutting rates (about ₹120–₹1,200 per sq ft on IndiaMART) are the cost floor. |
+| Policies | Terms, Privacy, Shipping and Returns rewritten to the Consumer Protection (E-Commerce) Rules, 2020 (seller identity, grievance officer: acknowledge in 48 hours, resolve in one month, country of origin) and the DPDP Act, 2023 / Rules, 2025 (what is collected, purpose, sharing, retention, rights, Data Protection Board). Seller and officer details render from Settings | Razorpay checks these pages before activating a live account. Counsel to review once. |
 | Consultation launch | Off until a staff member has the `designer` role | Customers must not pay for a service nobody is staffed to deliver. Switch it on in Settings. |
 
 ## Decision: room scanning and interior planning (2026-11-05)

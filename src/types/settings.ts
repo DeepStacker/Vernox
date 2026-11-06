@@ -47,6 +47,9 @@ export interface StoreSettingsDoc {
   supportEmail: string;
   supportHours: string;
   workshopAddress: string;
+  /** Grievance officer named on the policy pages; contact falls back to supportEmail. */
+  grievanceOfficerName?: string;
+  grievanceOfficerEmail?: string;
   /** Paid design consultation (Stage 2); absent = disabled with defaults. */
   consultation?: Partial<ConsultationSettings>;
   customPieces?: Record<string, { label?: string; setupFee?: number; ratePerCm2?: number; minimum?: number }>;
