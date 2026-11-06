@@ -14,11 +14,14 @@ notifications (`RESEND_API_KEY`, `NOTIFY_FROM_EMAIL`, `MSG91_AUTH_KEY`, `MSG91_T
 server for links in notifications). Without Shiprocket the manual courier flow is used; without notification keys messages are
 skipped (logged), never failing an order.
 A missing required variable makes the affected endpoint return `CONFIG_ERROR` and logs which variable is missing.
+Required at build time (browser): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`,
+`VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_APP_ID` (and `VITE_FIREBASE_MESSAGING_SENDER_ID`), set per environment in Vercel;
+`npm run build` fails without them. Locally put them in the gitignored `.env.local`.
 
 ## 2a. One-time setup
 1. `firebase deploy --only firestore,storage` (rules, indexes, storage rules for return photos) and configure TTL policies
-   (DATABASE.md). Fill `settings/store.seller` (legal name, GSTIN, address, state, 2-digit state code, PIN) before the first
-   dispatch: invoices — and so shipments — are refused until it is complete.
+   (DATABASE.md). `npm run seed` fills `settings/store` with placeholder business details, so invoices are specimens
+   (`SP/…`) until the real seller (legal name, GSTIN, address, state, state code, PIN) is saved in Admin → Settings.
 2. `npm run seed` against an empty project (optional).
 3. Razorpay dashboard: enable auto-capture; add webhook `https://<domain>/api/razorpay-webhook` with secret
    `RAZORPAY_WEBHOOK_SECRET` and events `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`.

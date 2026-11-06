@@ -39,8 +39,13 @@ function siteUrlHtmlPlugin(env: Record<string, string>): Plugin {
 }
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  // A production bundle without its Firebase project would load a blank site; fail the build instead.
+  if (command === "build" && mode === "production" && env.VITE_USE_FIREBASE_EMULATOR !== "true") {
+    const missing = ["VITE_FIREBASE_API_KEY", "VITE_FIREBASE_AUTH_DOMAIN", "VITE_FIREBASE_PROJECT_ID", "VITE_FIREBASE_STORAGE_BUCKET", "VITE_FIREBASE_APP_ID"].filter(k => !env[k]);
+    if (missing.length > 0) throw new Error(`Missing ${missing.join(", ")} (see .env.example)`);
+  }
 
   return {
     server: {
@@ -91,6 +96,10 @@ export default defineConfig(({ mode }) => {
               // whichever vendor chunk imports it first (charts/pdf), forcing them into the initial load.
               if (/node_modules\/(react|react-dom|scheduler|react-router|react-router-dom|@remix-run|clsx|tailwind-merge|class-variance-authority)\//.test(id)) {
                 return 'vendor-react';
+              }
+              // Storage is only loaded for uploads (photoStorage.ts imports it dynamically); keep it out of the entry.
+              if (/@firebase\/storage|firebase\/storage/.test(id)) {
+                return 'vendor-firebase-storage';
               }
               if (id.includes('firebase')) {
                 return 'vendor-firebase';
