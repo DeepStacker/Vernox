@@ -6,7 +6,7 @@ import { create } from 'zustand';
 import type { GeometryResult } from '@/workers/geometryWorker';
 import { readSavedMode, saveMode, type StudioMode } from '@/lib/studio/modes';
 
-export type StudioStep = 'start' | 'design' | 'review';
+export type StudioStep = 'start' | 'design' | 'review' | 'batch';
 export type LengthUnit = 'mm' | 'cm' | 'in';
 export type Panel = 'templates' | 'text' | 'shape' | 'plate' | 'layers' | 'inspect' | null;
 

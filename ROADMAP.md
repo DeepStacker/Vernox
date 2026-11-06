@@ -193,6 +193,18 @@ Follow-ups noted, not built: the Razorpay webhook path does not copy the photos 
 retries it); one preview image per piece rather than several pieces composed on one wall image; no designer-to-customer chat beyond
 the one revision message.
 
+## Studio: CSV batch for business buyers (built on `phase1-foundation`, awaiting UAT)
+
+Hotels, offices and builders can turn one design into many personalised plates: mark text objects as `{field}`
+variables, paste or upload a CSV (max 500 rows, optional `qty`), see a validated table with lazy thumbnails and
+one `quoteCustomPiece` price per design plus the total, and add the batch to the cart as one custom line per
+distinct design (each with its own `customDesignRef`; the server still re-prices). Production gets "All lines (zip)"
+in the order detail. Details: `docs/studio.md` ("Batch"). UAT: `BT-*` and `PR-12` in `UAT.md`.
+
+Known limits: one order takes at most 50 lines and 700,000 design characters (`src/lib/pricing/orderLimits.ts`), so a
+large batch is added in several rounds (the screen says how many did not fit); too-long text is flagged, not shrunk;
+previews are the flat metal shape, not the wall preview.
+
 ## Still needed from the owner
 
 - Firebase service-account credentials for the server, and a staging Firebase project for UAT.

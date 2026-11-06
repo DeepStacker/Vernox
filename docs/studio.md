@@ -110,7 +110,35 @@ and add a migration for any breaking change.
 `/studio?template=house-name&text=The%20Iyers&finish=brass&w=400&h=180` — `text` fills the template's first field; without
 `template`, a blank plate is created with that text, finish and size.
 
+### Batch (CSV) for business buyers
+
+The **Batch** button in the studio header opens a screen for many personalised variants of one design (door plates,
+apartment numbers). Code: `src/lib/studio/batch/` (pure logic, tested) and `src/components/editor/batch/` (UI).
+
+- **Variables:** each text object gets an optional template such as `{name}` or `Flat {block}-{number}`; `{field}` is
+  replaced by the CSV cell (column names match case-insensitively). Bindings live in `batchStore.ts`, not in the design.
+- **Sheet:** paste or upload CSV (`csv.ts`: BOM, CRLF, quotes, comma/semicolon/tab, first row = headers, max 500 rows).
+  An optional `qty` (or `quantity`) column gives pieces per row (1 to 100); blank means 1.
+- **Checks per row:** empty row, empty variable value, bad or too-high quantity (`plan.ts`, instant); text too long for
+  the plate, blocking manufacturability errors and pricing problems (`evaluate.ts`, geometry worker). Flagged rows are
+  skipped when adding to the cart.
+- **Performance:** rows are grouped into distinct designs (identical resolved text is one design; quantities add up).
+  Each design is evaluated once, one at a time in the geometry worker with a yield between jobs, rows on screen first.
+  The table is virtualised (fixed 60 px rows).
+- **Price:** `quoteCustomPiece` per design (the function the server uses), total = unit price x quantity. The server
+  still re-prices every line from width, height and finish at checkout.
+- **Cart:** one custom line per distinct design via `toCartLine`, so each line carries its own `customDesignRef` (the
+  existing order storage; nothing new). Quantity above 100 for one design is split into several lines. Checkout limits
+  come from `src/lib/pricing/orderLimits.ts` (also used by `api/_lib/checkout.ts`): 50 lines per order, 100 per line,
+  200,000 design characters per line and 700,000 per order. Lines are added until a limit is reached; the screen says
+  how many did not fit so the buyer can check out and add the rest.
+- **Production:** the order detail in the production console has "All lines (zip)" for DXF, SVG or PDF
+  (`downloadOrderZip` in `src/lib/orders/camDownload.ts`, `zipStore.ts`): one numbered file per order line. The zip is
+  written in-house (STORE method, about 100 lines) instead of adding a dependency.
+
+Not handled: text is never auto-shrunk (a too-long row is flagged so every plate keeps the same letter size);
+the bound text must be a text object, not a traced image.
+
 ### Not built yet
 
-CSV batch UI (the API has `applyTemplateBatch`; the cart has no bulk-variant line yet, so batches should go to `/trade`
-as JSON), path node editing, draggable ruler guides, multiple artboards, PDF-vector import, the Hindi string dictionary.
+Path node editing, draggable ruler guides, multiple artboards, PDF-vector import, the Hindi string dictionary.

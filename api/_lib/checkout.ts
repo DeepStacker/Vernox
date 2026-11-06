@@ -16,6 +16,7 @@
  */
 import crypto from 'crypto';
 import { z } from 'zod';
+import { ORDER_LIMITS } from '../../src/lib/pricing/orderLimits';
 import { assertCodOrderAllowed, codRejection, countOpenCodOrders } from './cod';
 import {
   couponFromDoc,
@@ -57,8 +58,8 @@ import type { ShippingProvider } from './shipping/types';
 import { increment, type DocStore } from './store';
 import type { StoreConfig } from './storeConfig';
 
-const MAX_DESIGN_REF_CHARS = 200_000;
-const MAX_TOTAL_DESIGN_REF_CHARS = 700_000; // keeps the order document under Firestore's 1 MiB limit
+const MAX_DESIGN_REF_CHARS = ORDER_LIMITS.maxDesignRefChars;
+const MAX_TOTAL_DESIGN_REF_CHARS = ORDER_LIMITS.maxTotalDesignRefChars;
 const MIN_PAYABLE_PAISE = 100; // Razorpay minimum order amount (₹1)
 const IDEMPOTENCY_TTL_MS = 24 * 3600_000;
 
@@ -68,7 +69,7 @@ const itemSchema = z.object({
   widthMm: z.number().int().positive().max(10_000).optional(),
   heightMm: z.number().int().positive().max(10_000).optional(),
   finish: z.string().trim().min(1).max(64),
-  quantity: z.number().int().min(1).max(100),
+  quantity: z.number().int().min(1).max(ORDER_LIMITS.maxQuantityPerLine),
   customDesignRef: z.string().min(1).max(MAX_DESIGN_REF_CHARS).optional(),
 });
 
@@ -93,7 +94,7 @@ const customerSchema = z
 
 const checkoutRequestObject = z
   .object({
-    items: z.array(itemSchema).min(1).max(50),
+    items: z.array(itemSchema).min(1).max(ORDER_LIMITS.maxLines),
     couponCode: z.string().trim().max(40).optional().transform(v => (v ? v : undefined)),
     idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/, 'must be 8-128 characters of [A-Za-z0-9_-]'),
     customer: customerSchema,
