@@ -263,7 +263,7 @@ const buildProduct = (s: Seed, index: number): Product => {
     customizable: s.tags?.includes('customizable') || undefined,
     isSample: true,
     leadTimeDays: s.lead ?? 7,
-    hsnCode: '7326',
+    hsnCode: '830629', // other ornaments of base metal (5%); see ROADMAP "Business and tax decisions"
     rooms: s.rooms,
     themes: s.themes,
     material: isOutdoor ? `${thickness} mm weather-grade steel` : `${thickness} mm mild steel sheet`,
