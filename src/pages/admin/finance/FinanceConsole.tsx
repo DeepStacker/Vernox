@@ -14,6 +14,7 @@ import type { Order } from '@/types/store';
 import { Badge, StatusBadge, type BadgeTone } from '../shared/badges';
 import { ExportPanel } from './ExportPanel';
 import { OrderFinancePanel } from './OrderFinancePanel';
+import { RemittancePanel } from './RemittancePanel';
 import { SettlementPanel } from './SettlementPanel';
 
 type View = 'payments' | 'refunds' | 'reconciliation' | 'export';
@@ -104,6 +105,7 @@ export function FinanceConsole() {
             <OrderList orders={recon.codNotCollected} selectedId={selectedId} onSelect={setSelectedId} empty="All delivered COD orders have cash recorded" />
           </AdminSection>
           <SettlementPanel orders={feed.orders} onSelect={setSelectedId} />
+          <RemittancePanel orders={feed.orders} onSelect={setSelectedId} />
         </div>
       );
     }
