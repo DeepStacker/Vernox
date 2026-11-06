@@ -56,6 +56,6 @@ export async function fetchReviewEligibility(productId: string): Promise<ReviewE
   return body as unknown as ReviewEligibility;
 }
 
-export async function submitReview(input: { productId: string; rating: number; comment: string }): Promise<void> {
+export async function submitReview(input: { productId: string; rating: number; comment: string; photoPaths?: string[] }): Promise<void> {
   await post('SUBMIT_REVIEW', input, true);
 }

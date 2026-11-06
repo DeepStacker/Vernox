@@ -19,7 +19,7 @@ function Privacy() {
       <Section title="What we collect">
         <ul>
           <li>Name, email, phone and delivery address, to make and deliver your order.</li>
-          <li>Designs, photos and wall measurements you upload, used only for your order or consultation.</li>
+          <li>Designs, photos and wall measurements you upload, used only for your order or consultation. A photo you attach to a review stays private until we approve the review, and is then shown publicly with it; we remove it if the review is removed.</li>
           <li>Order and payment status. Card, UPI and bank details stay with our payment partner, Razorpay; we never see or store them.</li>
           <li>Basic usage data (pages viewed, device type) to keep the site working and improve it. No advertising trackers.</li>
         </ul>

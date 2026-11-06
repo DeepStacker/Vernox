@@ -6,7 +6,7 @@
  *   NEWSLETTER_SUBSCRIBE   { email, source?, website }                                     -> subscriber (public)
  *   NEWSLETTER_UNSUBSCRIBE { emailHash, token }                                            -> unsubscribe link (public)
  *   REVIEW_STATUS          { productId }                          -> may this customer review it? (signed in)
- *   SUBMIT_REVIEW          { productId, rating, comment }         -> pending review, needs a Delivered order (signed in)
+ *   SUBMIT_REVIEW          { productId, rating, comment, photoPaths? } -> pending review, needs a Delivered order (signed in)
  * `website` is a honeypot: a non-empty value is answered with success and nothing is stored.
  * See API.md.
  */
@@ -14,7 +14,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { ZodType, ZodTypeDef } from 'zod';
 import { requireUser } from './_lib/auth';
 import { badRequest, sendError } from './_lib/errors';
-import { getAdminAuth, getStore } from './_lib/firebaseAdmin';
+import { getAdminAuth, getPhotoStorage, getStore } from './_lib/firebaseAdmin';
 import { assertMethod, parseBody } from './_lib/http';
 import { subscribe, subscribeRequestSchema, unsubscribe, unsubscribeRequestSchema } from './_lib/newsletter';
 import { enforceRateLimit, RATE_LIMITS, type RateLimitRule } from './_lib/rateLimit';
@@ -80,7 +80,7 @@ const ACTIONS: Record<string, EngageAction<unknown>> = {
     limit: RATE_LIMITS.review,
     async run({ req, store }, input) {
       const user = await requireUser(req, getAdminAuth());
-      await submitReview(store, user, input);
+      await submitReview(store, user, input, getPhotoStorage());
       return { success: true };
     },
   }),

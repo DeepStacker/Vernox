@@ -19,6 +19,12 @@ rules_version = '2';
 // products/{productId}/{file}.webp: catalogue photos. Public read (they are the storefront's images);
 //  created and deleted by catalogue staff (super_admin, admin, catalog_manager; mirrors 'catalog.write'),
 //  WebP only (the admin form resizes in the browser), at most 2 MB. Never overwritten: names are unique.
+// review-uploads/{uid}/{file}.webp: PRIVATE review photos. The signed-in owner (verified email for password
+//  accounts) creates, reads and deletes; staff with reviews.moderate (super_admin, admin, catalog_manager,
+//  support) read them to judge a review. WebP only, at most 2 MB (the storefront resizes to 1600 px).
+//  Names are never overwritten, so what a moderator saw is what gets published.
+// reviews/{reviewId}/{n}.webp: PUBLIC copies the server makes when a moderator publishes a review
+//  (api/_lib/reviewPhotos.ts), removed on unpublish/delete. Public read; never written from clients.
 // Cross-service reads (firestore.get) require the Storage service agent to have
 // Firestore read access — Firebase grants it when these rules are first deployed.
 service firebase.storage {
@@ -61,6 +67,11 @@ service firebase.storage {
         && request.auth.token.get('role', '') in ['super_admin', 'admin', 'catalog_manager'];
     }
 
+    function isReviewModerator() {
+      return request.auth != null && emailTrusted()
+        && request.auth.token.get('role', '') in ['super_admin', 'admin', 'catalog_manager', 'support'];
+    }
+
     function isImageUpTo5Mb() {
       return request.resource.size <= 5 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png|webp)');
@@ -94,6 +105,23 @@ service firebase.storage {
         && request.resource.size <= 2 * 1024 * 1024
         && request.resource.contentType == 'image/webp';
       allow delete: if isCatalogStaff();
+    }
+
+    match /review-uploads/{uid}/{fileName} {
+      allow read: if (request.auth != null && request.auth.uid == uid && emailTrusted()) || isReviewModerator();
+      // `resource == null`: an upload over an existing object is refused (the emulator also routes
+      // overwrites through `create`).
+      allow create: if request.auth != null && request.auth.uid == uid && emailTrusted() && resource == null
+        && fileName.matches('^[A-Za-z0-9_-]{1,60}[.]webp$')
+        && request.resource.size <= 2 * 1024 * 1024
+        && request.resource.contentType == 'image/webp';
+      allow delete: if request.auth != null && request.auth.uid == uid && emailTrusted();
+      allow update: if false;
+    }
+
+    match /reviews/{reviewId}/{fileName} {
+      allow read: if true;
+      allow write: if false;
     }
 
     match /returns/{orderId}/{fileName} {

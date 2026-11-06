@@ -54,6 +54,10 @@ export interface Review {
   status?: 'published' | 'pending' | 'archived';
   conciergeResponse?: string;
   conciergeRespondedAt?: number;
+  /** Public Storage paths (`reviews/{id}/{n}.webp`) of the photos; set by the server on publish only. */
+  photos?: string[];
+  /** Private customer uploads (`review-uploads/{uid}/...`), visible to the owner and moderators only. */
+  photoPaths?: string[];
 }
 
 export interface HeroSlide {

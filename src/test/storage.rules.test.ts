@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * Cloud Storage security rules tests (spaces/ and consultations/ paths). Needs both the Firestore and
+ * Cloud Storage security rules tests (spaces/, consultations/, review-uploads/ and reviews/ paths). Needs both the Firestore and
  * the Storage emulators, because the consultation rules read `consultations/{id}` to find its owner:
  *   npm run test:rules                    (emulators:exec starts both and sets the host variables)
  * or, against emulators that are already running for project <id>:
@@ -25,6 +25,8 @@ const OWNER = 'rulestest-alice';
 const WALL = `consultations/${CONSULTATION}/walls/w1.jpg`;
 const PREVIEW = (name: string) => `consultations/${CONSULTATION}/previews/${name}`;
 const SPACE = (name: string) => `spaces/${OWNER}/s1/${name}`;
+const REVIEW_UPLOAD = (name: string, uid = OWNER) => `review-uploads/${uid}/${name}`;
+const PUBLIC_REVIEW_PHOTO = 'reviews/rulestest-review/1.webp';
 
 describe.skipIf(!firestoreHost || !storageHost)('storage.rules', () => {
   let env: RulesTestEnvironment;
@@ -34,7 +36,8 @@ describe.skipIf(!firestoreHost || !storageHost)('storage.rules', () => {
   const bytes = (size = 10) => new Uint8Array(size);
   const jpeg = { contentType: 'image/jpeg' };
   const png = { contentType: 'image/png' };
-  const created = [WALL, PREVIEW('i1.png'), SPACE('w1.jpg')];
+  const webp = { contentType: 'image/webp' };
+  const created = [WALL, PREVIEW('i1.png'), SPACE('w1.jpg'), REVIEW_UPLOAD('p1.webp'), PUBLIC_REVIEW_PHOTO];
 
   beforeAll(async () => {
     const [fHost, fPort] = firestoreHost!.split(':');
@@ -49,6 +52,8 @@ describe.skipIf(!firestoreHost || !storageHost)('storage.rules', () => {
       await uploadBytes(ref(ctx.storage(), WALL), bytes(), jpeg);
       await uploadBytes(ref(ctx.storage(), PREVIEW('i1.png')), bytes(), png);
       await uploadBytes(ref(ctx.storage(), SPACE('w1.jpg')), bytes(), jpeg);
+      await uploadBytes(ref(ctx.storage(), REVIEW_UPLOAD('p1.webp')), bytes(), webp);
+      await uploadBytes(ref(ctx.storage(), PUBLIC_REVIEW_PHOTO), bytes(), webp);
     });
   });
 
@@ -85,7 +90,6 @@ describe.skipIf(!firestoreHost || !storageHost)('storage.rules', () => {
   });
 
   it('catalogue photos: public read; only catalogue staff upload WebP up to 2 MB', async () => {
-    const webp = { contentType: 'image/webp' };
     const path = 'products/vx-001/abc123.webp';
     created.push(path);
     await assertSucceeds(uploadBytes(ref(storageAs('c', { role: 'catalog_manager' }), path), bytes(), webp));
@@ -122,6 +126,41 @@ describe.skipIf(!firestoreHost || !storageHost)('storage.rules', () => {
     for (const other of [storageAs(OWNER), storageAs('sup', { role: 'support' }), guest()]) {
       await assertFails(uploadBytes(ref(other, PREVIEW('i5.png')), bytes(), png));
       await assertFails(deleteObject(ref(other, PREVIEW('i1.png'))));
+    }
+  });
+  it('review uploads: the owner creates, reads and deletes WebP up to 2 MB with a safe name', async () => {
+    const owner = storageAs(OWNER);
+    await assertSucceeds(getBytes(ref(owner, REVIEW_UPLOAD('p1.webp'))));
+    await assertSucceeds(uploadBytes(ref(owner, REVIEW_UPLOAD('p2.webp')), bytes(), webp));
+    await assertSucceeds(deleteObject(ref(owner, REVIEW_UPLOAD('p2.webp'))));
+    await assertFails(uploadBytes(ref(owner, REVIEW_UPLOAD('p3.webp')), bytes(), jpeg));
+    await assertFails(uploadBytes(ref(owner, REVIEW_UPLOAD('p3.webp')), bytes(2 * 1024 * 1024 + 1), webp));
+    await assertFails(uploadBytes(ref(owner, REVIEW_UPLOAD('p3.jpg')), bytes(), webp));
+    await assertFails(uploadBytes(ref(owner, REVIEW_UPLOAD('..bad.webp')), bytes(), webp));
+    await assertFails(uploadBytes(ref(owner, REVIEW_UPLOAD('p1.webp')), bytes(), webp)); // never overwritten
+    const unverified = env.authenticatedContext(OWNER, { email_verified: false, firebase: { sign_in_provider: 'password' } }).storage();
+    await assertFails(uploadBytes(ref(unverified, REVIEW_UPLOAD('p4.webp')), bytes(), webp));
+    await assertFails(getBytes(ref(unverified, REVIEW_UPLOAD('p1.webp'))));
+  });
+
+  it('review uploads: review moderators read; everyone else is denied, and nobody writes into another folder', async () => {
+    for (const role of ['super_admin', 'admin', 'catalog_manager', 'support']) {
+      await assertSucceeds(getBytes(ref(storageAs(`m-${role}`, { role }), REVIEW_UPLOAD('p1.webp'))));
+    }
+    for (const denied of [storageAs('mallory'), guest(), storageAs('d', { role: 'designer' }), storageAs('f', { role: 'finance' })]) {
+      await assertFails(getBytes(ref(denied, REVIEW_UPLOAD('p1.webp'))));
+    }
+    for (const other of [storageAs('mallory'), guest(), storageAs('sup', { role: 'support' })]) {
+      await assertFails(uploadBytes(ref(other, REVIEW_UPLOAD('p5.webp')), bytes(), webp));
+      await assertFails(deleteObject(ref(other, REVIEW_UPLOAD('p1.webp'))));
+    }
+  });
+
+  it('published review photos: public read, never written from a client', async () => {
+    await assertSucceeds(getBytes(ref(guest(), PUBLIC_REVIEW_PHOTO)));
+    for (const writer of [storageAs(OWNER), guest(), storageAs('a', { role: 'super_admin' }), storageAs('sup', { role: 'support' })]) {
+      await assertFails(uploadBytes(ref(writer, 'reviews/rulestest-review/2.webp'), bytes(), webp));
+      await assertFails(deleteObject(ref(writer, PUBLIC_REVIEW_PHOTO)));
     }
   });
 });

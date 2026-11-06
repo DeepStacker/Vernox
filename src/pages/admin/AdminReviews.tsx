@@ -9,6 +9,7 @@ import { useState, useMemo } from 'react';
 import { useCatalog } from '@/lib/catalogContext';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { useAllReviews, useReviewMutations } from '@/lib/data/reviews';
+import { ReviewPhotoStrip } from '@/components/shop/ReviewPhotoStrip';
 import type { Review } from '@/types/store';
 import { 
   Star, Search, Trash2, Edit2, ShieldCheck, 
@@ -511,6 +512,8 @@ export function AdminReviews() {
                         <div className="text-xs text-foreground/90 leading-relaxed font-sans">
                           "{r.comment}"
                         </div>
+                        {/* The customer's private uploads, so the photos can be judged before publishing. */}
+                        <ReviewPhotoStrip paths={r.photoPaths} size="h-14 w-14" />
 
                         {/* Official Concierge Reply Display */}
                         {r.conciergeResponse ? (

@@ -27,6 +27,7 @@ import { applyStatusChange, planStatusChange } from './_lib/orderTransitions';
 import { asOrder, orderPath } from './_lib/orders';
 import { createRazorpayRefundGateway } from './_lib/razorpay';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
+import { deleteReviewAndPhotos, syncPublicReviewPhotos } from './_lib/reviewPhotos';
 import { claimConsultation, proposalDraftSchema, saveProposalDraft, sendProposal } from './_lib/proposals';
 import { createRefund, refundCeilingPaise } from './_lib/refunds';
 import { decideReturn, markReturnReceived, returnPath } from './_lib/returns';
@@ -617,9 +618,11 @@ const ACTIONS: Record<string, ActionDefinition> = {
     async run(ctx) {
       const r = parse(reviewSchema, (ctx.params as { review?: unknown }).review);
       const now = Date.now();
+      // Photos are server-owned: the schema drops any client-sent `photos`/`photoPaths`.
+      const photos = await syncPublicReviewPhotos(getPhotoStorage(), r.id, await ctx.store.get(`reviews/${r.id}`), r.status);
       await ctx.store.set(
         `reviews/${r.id}`,
-        { ...r, ...(r.conciergeResponse ? { conciergeRespondedAt: now } : {}), moderatedBy: ctx.actor.uid, updatedAt: now },
+        { ...r, photos, ...(r.conciergeResponse ? { conciergeRespondedAt: now } : {}), moderatedBy: ctx.actor.uid, updatedAt: now },
         { merge: true },
       );
       await recordAudit(ctx.store, audit(ctx, 'REVIEW_SAVED', 'review', r.id, { productId: r.productId, status: r.status, rating: r.rating }));
@@ -632,7 +635,7 @@ const ACTIONS: Record<string, ActionDefinition> = {
     permission: 'reviews.moderate',
     async run(ctx) {
       const { reviewId } = parse(idSchema('reviewId'), ctx.params) as { reviewId: string };
-      await ctx.store.delete(`reviews/${reviewId}`);
+      await deleteReviewAndPhotos(ctx.store, getPhotoStorage(), reviewId);
       await recordAudit(ctx.store, audit(ctx, 'REVIEW_DELETED', 'review', reviewId));
       return {};
     },
