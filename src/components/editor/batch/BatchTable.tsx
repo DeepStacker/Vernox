@@ -1,7 +1,7 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Loader2 } from 'lucide-react';
 import type { VariantEval } from '@/lib/studio/batch/evaluate';
-import type { BatchProblem, RowCheck } from '@/lib/studio/batch/plan';
+import { qtyColumn, type BatchProblem, type RowCheck } from '@/lib/studio/batch/plan';
 import { t } from '@/lib/studio/i18n';
 import { finishPreset } from '@/lib/studio/materials';
 import { cn } from '@/lib/utils';
@@ -37,6 +37,8 @@ function Thumb({ result, fill }: { result: VariantEval | undefined; fill: string
 interface RowProps {
   check: RowCheck;
   cells: readonly string[];
+  /** Sheet columns to show, by index (the quantity column has its own cell). */
+  columns: readonly number[];
   result: VariantEval | undefined;
   inCart: boolean;
   fill: string;
@@ -44,7 +46,7 @@ interface RowProps {
   top: number;
 }
 
-const Row = memo(function Row({ check, cells, result, inCart, fill, template, top }: RowProps) {
+const Row = memo(function Row({ check, cells, columns, result, inCart, fill, template, top }: RowProps) {
   const problems = check.state === 'valid' ? result?.problems ?? [] : check.problems;
   const flagged = check.state !== 'valid' ? true : result?.state === 'error';
   return (
@@ -56,7 +58,7 @@ const Row = memo(function Row({ check, cells, result, inCart, fill, template, to
     >
       <span className="text-xs tabular-nums text-muted-foreground">{check.index + 1}</span>
       {check.state === 'empty' ? <div className="h-11 w-14 rounded bg-muted" /> : <Thumb result={result} fill={fill} />}
-      {cells.map((c, i) => <span key={i} className="truncate" title={c}>{c}</span>)}
+      {columns.map(i => <span key={i} className="truncate" title={cells[i] ?? ''}>{cells[i] ?? ''}</span>)}
       <span className="text-right tabular-nums">{check.state === 'valid' ? check.quantity : ''}</span>
       <span className="text-right tabular-nums">
         {result?.unitPricePaise !== undefined && check.state === 'valid' ? rupees(result.unitPricePaise * check.quantity) : ''}
@@ -113,15 +115,19 @@ export function BatchTable({ headers, rows, checks, results, added, finish, onVi
   }, [first, last, checks, onVisible]);
 
   const fill = finishPreset(finish).swatch[0];
-  const template = `2rem 3.5rem ${headers.map(() => 'minmax(7rem,1fr)').join(' ')} 3rem 5rem minmax(10rem,1.4fr)`;
-  const minWidth = `${2 + 3.5 + headers.length * 7 + 3 + 5 + 10 + 2}rem`;
+  const columns = useMemo(() => {
+    const qty = qtyColumn(headers);
+    return headers.map((_, i) => i).filter(i => i !== qty);
+  }, [headers]);
+  const template = `2rem 3.5rem ${columns.map(() => 'minmax(7rem,1fr)').join(' ')} 3rem 5rem minmax(10rem,1.4fr)`;
+  const minWidth = `${2 + 3.5 + columns.length * 7 + 3 + 5 + 10 + 2}rem`;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-x-auto" role="table" aria-label="Batch rows" aria-rowcount={rows.length}>
       <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth }}>
         <div role="row" className="grid shrink-0 items-center gap-x-3 border-b border-border bg-muted/50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground" style={{ gridTemplateColumns: template }}>
           <span>#</span><span />
-          {headers.map((h, i) => <span key={i} className="truncate">{h || '—'}</span>)}
+          {columns.map(i => <span key={i} className="truncate">{headers[i] || '—'}</span>)}
           <span className="text-right">{t('batch.col.qty')}</span>
           <span className="text-right">{t('batch.col.price')}</span>
           <span />
@@ -133,6 +139,7 @@ export function BatchTable({ headers, rows, checks, results, added, finish, onVi
                 key={check.index}
                 check={check}
                 cells={rows[check.index]}
+                columns={columns}
                 result={check.state === 'valid' ? results.get(check.key) : undefined}
                 inCart={added.has(check.key)}
                 fill={fill}
