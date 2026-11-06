@@ -143,7 +143,7 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 
 | ID | Case | Preconditions | Steps | Expected result | Result |
 |---|---|---|---|---|---|
-| CM-01 | Create product with variants and images | Catalog role | Admin > Catalog > New product: name, slug, category, description, 3 sizes (label, width, height, price difference), 3 finishes, MRP, lead time, HSN, 2 image URLs, stock | Saved; appears in the admin list with price and stock; live preview shows unit price, MRP and discount per size; image previews render | |
+| CM-01 | Create product with variants and images | Catalog role | Admin > Catalog > New product: name, slug, category, description, 3 sizes (label, width, height, price difference), 3 finishes, MRP, lead time, HSN, upload a main and a lifestyle photo (or paste URLs), stock | Saved; photos stored under `products/{id}/` as WebP of at most 2000 px; appears in the admin list with price and stock; live preview shows unit price, MRP and discount per size; image previews render | |
 | CM-02 | Slug uniqueness | Existing slug | Create product with the same slug | Rejected with clear error | |
 | CM-03 | Validation | None | Save with empty name, price 0, MRP below price, no finishes, no sizes, bad HSN, `javascript:` image URL | Field-level errors; nothing saved | |
 | CM-04 | Publish to storefront | Draft product | Publish | Appears in `/shop`, correct category, PDP loads, in sitemap after next build | |

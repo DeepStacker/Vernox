@@ -84,6 +84,21 @@ describe.skipIf(!firestoreHost || !storageHost)('storage.rules', () => {
     await assertFails(uploadBytes(ref(owner, SPACE('w5.exe')), bytes(), jpeg));
   });
 
+  it('catalogue photos: public read; only catalogue staff upload WebP up to 2 MB', async () => {
+    const webp = { contentType: 'image/webp' };
+    const path = 'products/vx-001/abc123.webp';
+    created.push(path);
+    await assertSucceeds(uploadBytes(ref(storageAs('c', { role: 'catalog_manager' }), path), bytes(), webp));
+    await assertSucceeds(getBytes(ref(guest(), path)));
+    for (const denied of [storageAs(OWNER), guest(), storageAs('sup', { role: 'support' }), storageAs('d', { role: 'designer' })]) {
+      await assertFails(uploadBytes(ref(denied, 'products/vx-001/x1.webp'), bytes(), webp));
+      await assertFails(deleteObject(ref(denied, path)));
+    }
+    const admin = storageAs('a', { role: 'admin' });
+    await assertFails(uploadBytes(ref(admin, 'products/vx-001/x2.jpg'), bytes(), jpeg));
+    await assertFails(uploadBytes(ref(admin, 'products/vx-001/x3.webp'), bytes(2 * 1024 * 1024 + 1), webp));
+  });
+
   it('consultation photos: the customer and consultation staff read; no client writes a wall snapshot', async () => {
     for (const reader of [storageAs(OWNER), storageAs('d', { role: 'designer' }), storageAs('a', { role: 'admin' }), storageAs('s', { role: 'super_admin' })]) {
       await assertSucceeds(getBytes(ref(reader, WALL)));

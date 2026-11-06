@@ -136,6 +136,9 @@ Phase 2 (India commerce):
   refund|replacement|null, decisionNote, replacementOrderId, requestedAt, decidedAt, decidedBy, receivedAt }`. `photoPaths` are Storage
   paths `returns/{orderId}/{file}`; staff with `orders.read` may read them (storage.rules) and the Returns console loads them with
   `getDownloadURL`.
+- Storage `products/{productId}/{file}.webp` — catalogue photos uploaded from the admin product form (resized in the browser to
+  2000 px WebP, ≤ 2 MB). Public read; created and deleted by catalogue staff (storage.rules). The product's `imageUrl` /
+  `lifestyleImage` stores the download URL.
 - `notifications_outbox/{orderId}_{event}[_{refundId}]` — `{ event, payload (customer name/email/phone, amounts, tracking),
   channels{ email, sms: pending|sent|skipped }, status: pending|sending|sent|dead, attempts, nextAttemptAt, leaseUntil, lastError,
   sentAt }`. The id makes one notification per order + event.

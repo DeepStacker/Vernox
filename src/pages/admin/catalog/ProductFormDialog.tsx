@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { categories, finishName, ROOMS, THEMES, type Product } from '@/lib/catalog';
+import { uploadProductImage } from '@/lib/data/productImages';
 import { shapeDefinitions } from '@/lib/shapes';
 import { ChipSelect } from './ChipSelect';
 import {
@@ -37,14 +38,36 @@ function Field({ label, error, children, hint }: { label: string; error?: string
   );
 }
 
-function ImageField({ label, value, error, onChange }: { label: string; value: string; error?: string; onChange: (v: string) => void }) {
+function ImageField({ label, value, error, folder, onChange }: { label: string; value: string; error?: string; folder: string; onChange: (v: string) => void }) {
   const [broken, setBroken] = useState(false);
+  const [uploading, setUploading] = useState(false);
   useEffect(() => setBroken(false), [value]);
+  const upload = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      onChange(await uploadProductImage(folder, file));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'The photo could not be uploaded.');
+    } finally {
+      setUploading(false);
+    }
+  };
   return (
     <div className="space-y-1">
-      <Field label={label} error={error} hint="Paste an image URL. Uploading files is planned (see ROADMAP.md).">
-        <input value={value} onChange={e => onChange(e.target.value)} placeholder="https://…" className={field} />
-      </Field>
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <Field label={label} error={error} hint="Upload a photo (resized to 2000 px WebP) or paste an image URL.">
+            <input value={value} onChange={e => onChange(e.target.value)} placeholder="https://…" className={field} />
+          </Field>
+        </div>
+        {/* Sibling of Field, not inside it: Field is itself a <label>. */}
+        <label className={`btn-secondary mt-5 shrink-0 cursor-pointer ${uploading ? 'pointer-events-none opacity-60' : ''}`}>
+          <Upload className="h-4 w-4" aria-hidden />{uploading ? 'Uploading…' : 'Upload'}
+          <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploading}
+            aria-label={`Upload ${label.toLowerCase()}`} onChange={e => { void upload(e.target.files?.[0]); e.target.value = ''; }} />
+        </label>
+      </div>
       {value.trim() && !error && (
         broken
           ? <p className="text-xs text-destructive">This image could not be loaded.</p>
@@ -59,13 +82,16 @@ export function ProductFormDialog({ open, product, template, currency, gstRatePe
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [slugTouched, setSlugTouched] = useState(false);
   const [saving, setSaving] = useState(false);
+  // A new product's id is fixed when the dialog opens, so photos uploaded before saving land in its folder.
+  const [newProductId, setNewProductId] = useState(newId);
 
   useEffect(() => {
     if (!open) return;
+    if (!product) setNewProductId(newId());
     setDraft(product ? draftFromProduct(product) : template ? { ...draftFromProduct(template), name: `${template.name} copy`, slug: `${template.slug}-copy` } : emptyDraft());
     setErrors({});
     setSlugTouched(Boolean(product));
-  }, [open, product, template]);
+  }, [open, product, template, newId]);
 
   const set = <K extends keyof ProductDraft>(key: K, value: ProductDraft[K]) => setDraft(prev => ({ ...prev, [key]: value }));
 
@@ -79,7 +105,7 @@ export function ProductFormDialog({ open, product, template, currency, gstRatePe
     }
     setErrors({});
     setSaving(true);
-    const saved = await onSave(buildProduct(result.fields, product ?? { id: newId() }, Date.now()));
+    const saved = await onSave(buildProduct(result.fields, product ?? { id: newProductId }, Date.now()));
     setSaving(false);
     if (saved) onClose();
   };
@@ -150,8 +176,8 @@ export function ProductFormDialog({ open, product, template, currency, gstRatePe
           </fieldset>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <ImageField label="Main image URL" value={draft.imageUrl} error={errors.imageUrl} onChange={v => set('imageUrl', v)} />
-            <ImageField label="Lifestyle image URL" value={draft.lifestyleImage} error={errors.lifestyleImage} onChange={v => set('lifestyleImage', v)} />
+            <ImageField label="Main image" folder={product?.id ?? newProductId} value={draft.imageUrl} error={errors.imageUrl} onChange={v => set('imageUrl', v)} />
+            <ImageField label="Lifestyle image" folder={product?.id ?? newProductId} value={draft.lifestyleImage} error={errors.lifestyleImage} onChange={v => set('lifestyleImage', v)} />
           </div>
 
           <fieldset className="space-y-3">

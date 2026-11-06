@@ -3,16 +3,7 @@
  * so the SDK is not part of the storefront's first load. Paths and access rules: storage.rules.
  */
 import { backdropFromFile, type Backdrop } from '@/components/wall-preview/render/backdrop';
-import { app } from '@/lib/firebase';
-
-async function storage() {
-  const { getStorage, connectStorageEmulator } = await import('firebase/storage');
-  const instance = getStorage(app);
-  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
-    try { connectStorageEmulator(instance, import.meta.env.VITE_FIREBASE_EMULATOR_HOST || '127.0.0.1', 9199); } catch { /* already connected */ }
-  }
-  return instance;
-}
+import { appStorage as storage } from '@/lib/appStorage';
 
 export interface PreparedPhoto {
   blob: Blob;

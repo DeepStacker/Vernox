@@ -38,12 +38,12 @@ export async function backdropFromUrl(src: string): Promise<Backdrop> {
  * Decodes a customer's photo entirely in the browser and downsizes it. `createImageBitmap` honours EXIF
  * orientation and decodes off the main thread; the fallback uses an object URL that is revoked immediately.
  */
-export async function backdropFromFile(file: File): Promise<Backdrop> {
+export async function backdropFromFile(file: File, maxEdge = MAX_PHOTO_EDGE): Promise<Backdrop> {
   if (typeof createImageBitmap === 'function') {
     try {
       const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
       try {
-        return toBackdrop(bitmap, bitmap.width, bitmap.height, MAX_PHOTO_EDGE);
+        return toBackdrop(bitmap, bitmap.width, bitmap.height, maxEdge);
       } finally {
         bitmap.close();
       }
@@ -54,7 +54,7 @@ export async function backdropFromFile(file: File): Promise<Backdrop> {
   const url = URL.createObjectURL(file);
   try {
     const img = await loadImage(url);
-    return toBackdrop(img, img.naturalWidth, img.naturalHeight, MAX_PHOTO_EDGE);
+    return toBackdrop(img, img.naturalWidth, img.naturalHeight, maxEdge);
   } finally {
     URL.revokeObjectURL(url);
   }

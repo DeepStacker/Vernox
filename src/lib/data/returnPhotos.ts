@@ -4,15 +4,11 @@
  * them with a normal download URL. Storage is imported lazily: only the Returns console needs it.
  */
 import { useQueries } from '@tanstack/react-query';
-import { app } from '@/lib/firebase';
+import { appStorage } from '@/lib/appStorage';
 
 async function downloadUrl(path: string): Promise<string> {
-  const { getStorage, ref, getDownloadURL, connectStorageEmulator } = await import('firebase/storage');
-  const storage = getStorage(app);
-  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
-    try { connectStorageEmulator(storage, import.meta.env.VITE_FIREBASE_EMULATOR_HOST || '127.0.0.1', 9199); } catch { /* already connected */ }
-  }
-  return getDownloadURL(ref(storage, path));
+  const { ref, getDownloadURL } = await import('firebase/storage');
+  return getDownloadURL(ref(await appStorage(), path));
 }
 
 export interface ReturnPhoto { path: string; url?: string; error?: string; loading: boolean }

@@ -3,7 +3,8 @@
  * Access mirrors the server: a signed-in owner sends a bearer token; guests identify the order by its email.
  */
 import { fetchPublicOrderStatus } from '@/lib/data/orders';
-import { auth, app } from '@/lib/firebase';
+import { appStorage } from '@/lib/appStorage';
+import { auth } from '@/lib/firebase';
 
 export interface OrderActionState {
   paymentMethod?: 'prepaid' | 'cod' | 'replacement';
@@ -63,11 +64,8 @@ export async function cancelOrder(orderId: string, email: string | undefined, re
 export async function uploadReturnPhotos(orderId: string, files: File[]): Promise<string[]> {
   if (files.length === 0) return [];
   if (!auth.currentUser) throw new Error('Please sign in with the email used for this order to add photos.');
-  const { getStorage, ref, uploadBytes, connectStorageEmulator } = await import('firebase/storage');
-  const storage = getStorage(app);
-  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
-    try { connectStorageEmulator(storage, import.meta.env.VITE_FIREBASE_EMULATOR_HOST || '127.0.0.1', 9199); } catch { /* already connected */ }
-  }
+  const { ref, uploadBytes } = await import('firebase/storage');
+  const storage = await appStorage();
   return Promise.all(files.map(async (file, i) => {
     const safe = file.name.replace(/[^\w.-]+/g, '_').slice(-60);
     const path = `returns/${orderId}/${Date.now()}-${i}-${safe}`;

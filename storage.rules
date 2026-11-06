@@ -16,6 +16,9 @@ rules_version = '2';
 //  - Read: the consultation's customer, or staff who can read consultations (designer, admin, super_admin;
 //    mirrors canReadConsultations() in firestore.rules / STAFF_ROLE_PERMISSIONS 'consultations.read').
 //  - Previews: written and deleted by the same staff, images up to 5 MB. Walls: never from clients.
+// products/{productId}/{file}.webp: catalogue photos. Public read (they are the storefront's images);
+//  created and deleted by catalogue staff (super_admin, admin, catalog_manager; mirrors 'catalog.write'),
+//  WebP only (the admin form resizes in the browser), at most 2 MB. Never overwritten: names are unique.
 // Cross-service reads (firestore.get) require the Storage service agent to have
 // Firestore read access — Firebase grants it when these rules are first deployed.
 service firebase.storage {
@@ -53,6 +56,11 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/consultations/$(consultationId)).data.userId == request.auth.uid;
     }
 
+    function isCatalogStaff() {
+      return request.auth != null && emailTrusted()
+        && request.auth.token.get('role', '') in ['super_admin', 'admin', 'catalog_manager'];
+    }
+
     function isImageUpTo5Mb() {
       return request.resource.size <= 5 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png|webp)');
@@ -76,6 +84,16 @@ service firebase.storage {
         && fileName.matches('^[A-Za-z0-9_-]{1,40}[.]png$')
         && isImageUpTo5Mb();
       allow delete: if isConsultationStaff();
+    }
+
+    match /products/{productId}/{fileName} {
+      allow read: if true;
+      allow create: if isCatalogStaff()
+        && productId.matches('^[A-Za-z0-9_-]{1,64}$')
+        && fileName.matches('^[A-Za-z0-9_-]{1,60}[.]webp$')
+        && request.resource.size <= 2 * 1024 * 1024
+        && request.resource.contentType == 'image/webp';
+      allow delete: if isCatalogStaff();
     }
 
     match /returns/{orderId}/{fileName} {
