@@ -62,6 +62,17 @@ describe('ticket actions', () => {
     expect(store.collection('audit_logs').some(a => a.data.action === 'TICKET_MESSAGE_ADDED' && a.data.targetId === ticketId)).toBe(true);
   });
 
+  it('emails each reply to the customer once, and never emails a note', async () => {
+    await call('support', { action: 'ADD_TICKET_MESSAGE', ticketId, direction: 'reply', text: 'Shipping tomorrow' });
+    await call('support', { action: 'ADD_TICKET_MESSAGE', ticketId, direction: 'note', text: 'Checked with workshop' });
+    await call('support', { action: 'ADD_TICKET_MESSAGE', ticketId, direction: 'reply', text: 'Shipped today' });
+    const replies = store.collection('notifications_outbox').filter(n => n.data.event === 'ticket_reply');
+    expect(replies.map(n => (n.data.payload as { note: string }).note)).toEqual(['Shipping tomorrow', 'Shipped today']);
+    const t = store.read(`tickets/${ticketId}`)!;
+    expect(replies.every(n => (n.data.payload as { email: string }).email === t.customerEmail)).toBe(true);
+    expect(replies.every(n => (n.data.channels as { sms: string }).sms === 'skipped')).toBe(true);
+  });
+
   it('an internal note keeps the status and does not steal the assignment', async () => {
     await call('support', { action: 'ADD_TICKET_MESSAGE', ticketId, direction: 'note', text: 'Check with workshop' });
     await call('order_manager', { action: 'ADD_TICKET_MESSAGE', ticketId, direction: 'note', text: 'Done' });

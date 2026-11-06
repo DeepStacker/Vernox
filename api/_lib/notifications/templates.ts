@@ -78,6 +78,13 @@ function copyFor(event: NotificationEvent, p: NotificationPayload, base: string)
         smsValue: 'new ticket',
         link: { label: 'Open the admin', url: `${base}/admin` },
       };
+    case 'ticket_reply':
+      return {
+        subject: `Re: your message to Vernox (${p.orderNumber})`,
+        lines: [...(p.note ?? '').split(/\n+/).filter(Boolean), 'Reply to this email or use the contact page if you need anything else.'],
+        smsValue: 'reply sent',
+        link: { label: 'Contact us', url: `${base}/contact` },
+      };
     case 'in_production':
       return {
         subject: `Order ${p.orderNumber} is in production`,
@@ -170,7 +177,7 @@ export function renderNotification(event: NotificationEvent, payload: Notificati
   const firstName = payload.customerName.trim().split(/\s+/)[0] || 'there';
   const internal = event === 'support_ticket';
   const greeting = internal ? 'Hello team,' : `Hello ${firstName},`;
-  const reference = `${internal ? 'Ticket' : 'Order'} ${payload.orderNumber}`;
+  const reference = `${internal || event === 'ticket_reply' ? 'Ticket' : 'Order'} ${payload.orderNumber}`;
   const sign = 'Vernox, made in India';
   const text = [greeting, '', ...copy.lines, ...(copy.link ? ['', `${copy.link.label}: ${copy.link.url}`] : []), '', reference, sign].join('\n');
   const html = [

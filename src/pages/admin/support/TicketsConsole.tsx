@@ -1,13 +1,13 @@
 /**
- * Support tickets from the contact form: list, filter by status, read the thread, log a reply or an
- * internal note and change the status. A logged reply records what staff sent to the customer from
- * their own mailbox or WhatsApp; the system does not email customers.
+ * Support tickets from the contact form: list, filter by status, read the thread, send a reply (emailed
+ * to the customer through the notifications outbox) or add an internal note, and change the status.
+ * Answers given on WhatsApp or phone are recorded as notes.
  */
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { TICKET_STATUSES, TICKET_STATUS_LABELS, useTicketMutations, useTickets, type Ticket, type TicketStatus } from '@/lib/data/tickets';
 
-const DIRECTION_LABEL = { inbound: 'Customer', reply: 'Reply sent', note: 'Internal note' } as const;
+const DIRECTION_LABEL = { inbound: 'Customer', reply: 'Reply emailed', note: 'Internal note' } as const;
 const when = (ms: number) => (ms ? new Date(ms).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '');
 
 function TicketThread({ ticket, canWrite }: { ticket: Ticket; canWrite: boolean }) {
@@ -50,7 +50,7 @@ function TicketThread({ ticket, canWrite }: { ticket: Ticket; canWrite: boolean 
             <textarea rows={3} maxLength={2000} value={text} onChange={e => setText(e.target.value)} className="field mt-1 font-normal" />
           </label>
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={saving || !text.trim()} onClick={() => void add('reply')} className="btn-primary">Log reply</button>
+            <button type="button" disabled={saving || !text.trim()} onClick={() => void add('reply')} className="btn-primary">Send reply</button>
             <button type="button" disabled={saving || !text.trim()} onClick={() => void add('note')} className="btn-secondary">Add note</button>
           </div>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Set status">

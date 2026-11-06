@@ -15,7 +15,7 @@ import type { DocStore } from './store';
 export const TICKET_TOPICS = ['Order help', 'Custom or bulk order', 'Product question', 'Something else'] as const;
 export const TICKET_STATUSES = ['open', 'waiting', 'resolved'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
-/** inbound = from the customer; reply = answer sent to the customer outside the system; note = internal. */
+/** inbound = from the customer; reply = staff answer, emailed to the customer; note = internal. */
 export type TicketDirection = 'inbound' | 'reply' | 'note';
 
 export const MAX_TICKET_MESSAGES = 100;
@@ -114,22 +114,45 @@ async function mutateTicket(store: DocStore, id: string, change: (ticket: Ticket
   });
 }
 
-/** Adds a staff reply or internal note. Logging a reply moves an open ticket to "waiting" (on the customer). */
+/**
+ * Adds a staff reply or internal note. A reply is emailed to the customer through the outbox in the same
+ * transaction (one outbox entry per message index, so a retried request never sends twice) and moves an
+ * open ticket to "waiting" (on the customer). Notes stay internal.
+ */
 export async function addTicketMessage(
   store: DocStore,
   params: { id: string; by: string; direction: 'reply' | 'note'; text: string },
   now = Date.now(),
 ): Promise<TicketDoc> {
-  return mutateTicket(store, params.id, ticket => {
+  return store.runTransaction(async tx => {
+    const ticket = (await tx.get(`tickets/${params.id}`)) as unknown as TicketDoc | null;
+    if (!ticket) throw new ApiError(404, 'NOT_FOUND', 'Ticket not found.');
     if (ticket.messages.length >= MAX_TICKET_MESSAGES) {
       throw new ApiError(409, 'CONFLICT', 'This ticket has too many messages. Resolve it and ask the customer to write again.');
     }
-    return {
+    const index = ticket.messages.length;
+    const plan = params.direction === 'reply' ? await planNotification(tx, params.id, 'ticket_reply', String(index)) : null;
+    const next: TicketDoc = {
+      ...ticket,
       messages: [...ticket.messages, { at: now, by: params.by, direction: params.direction, text: params.text }],
       status: params.direction === 'reply' && ticket.status === 'open' ? 'waiting' : ticket.status,
       assignedTo: ticket.assignedTo ?? params.by,
       updatedAt: now,
     };
+    tx.update(`tickets/${params.id}`, next as unknown as Record<string, unknown>);
+    if (plan) {
+      enqueueNotification(tx, plan, {
+        orderId: params.id,
+        orderNumber: ticket.ref,
+        customerName: ticket.customerName,
+        email: ticket.customerEmail,
+        phone: '', // replies go by email only; SMS templates need DLT approval per message type
+        paymentMethod: 'prepaid',
+        totalPaise: 0,
+        note: params.text,
+      }, now);
+    }
+    return next;
   });
 }
 

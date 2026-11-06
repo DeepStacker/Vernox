@@ -165,8 +165,9 @@ Earlier collections:
   (`super_admin`, `admin`, `order_manager`, `support`), **never written by clients**. `{ ref ("T-ABC123"), channel: 'contact_form', topic,
   subject, orderNumber?, customerName, customerEmail, customerPhone?, status: open | waiting | resolved, assignedTo (first staff to act),
   messages[{ at, by, direction: inbound | reply | note, text }] (max 100), createdAt, updatedAt }`. Staff change them through the admin
-  actions `ADD_TICKET_MESSAGE` / `SET_TICKET_STATUS` (`tickets.write`, audited). A `reply` is a record of what staff sent from their own
-  mailbox or WhatsApp; the system does not email customers. Creating a ticket also writes a `notifications_outbox/{ticketId}_support_ticket`
+  actions `ADD_TICKET_MESSAGE` / `SET_TICKET_STATUS` (`tickets.write`, audited). A `reply` is emailed to the customer (outbox event
+  `ticket_reply`, id `{ticketId}_ticket_reply_{messageIndex}`, email only) in the same transaction; a `note` is internal (answers given on
+  WhatsApp or phone are recorded as notes). Creating a ticket also writes a `notifications_outbox/{ticketId}_support_ticket`
   alert to `settings/store.supportEmail` in the same transaction (skipped when that address is empty; the ticket is still saved).
 - `newsletter_subscribers/{sha256(email)}` — server-only (closed to clients; holds emails and tokens). `{ email, status: subscribed |
   unsubscribed, source, consentAt, unsubscribedAt, unsubscribeToken, updatedAt }`. Signing up again is idempotent (a current subscriber is
