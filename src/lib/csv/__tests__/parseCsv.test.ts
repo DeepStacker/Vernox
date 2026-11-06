@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_BATCH_ROWS, parseCsv } from '../csv';
+import { MAX_BATCH_ROWS, parseCsv } from '../parseCsv';
 
 describe('parseCsv', () => {
   it('parses headers and rows, strips a BOM and handles CRLF', () => {

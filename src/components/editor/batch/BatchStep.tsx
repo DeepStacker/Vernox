@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import { MAX_BATCH_ROWS } from '@/lib/studio/batch/csv';
+import { MAX_BATCH_ROWS } from '@/lib/csv/parseCsv';
 import { templateFields } from '@/lib/studio/batch/variables';
 import { t } from '@/lib/studio/i18n';
 import { ORDER_LIMITS } from '@/lib/pricing/orderLimits';

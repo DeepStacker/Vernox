@@ -1,17 +1,19 @@
 /**
- * Small, dependency-free CSV parser for batch orders (RFC 4180 plus the quirks of
+ * Small, dependency-free CSV parser for uploaded sheets — studio batch orders and finance's
+ * settlement reports (RFC 4180 plus the quirks of
  * spreadsheet exports): UTF-8 BOM, CRLF/LF/CR line ends, quoted fields with embedded
  * commas, newlines and doubled quotes, and comma / semicolon / tab delimiters (a range
  * pasted from Excel or Sheets is tab-separated). The first record is the header row.
  */
 
+/** Default row cap (the studio batch limit); callers with larger sheets pass `maxRows`. */
 export const MAX_BATCH_ROWS = 500;
-/** Input guard: a 500-row sheet is a few tens of KB; this only stops accidental huge pastes. */
-export const MAX_CSV_CHARS = 2_000_000;
+/** Input guard against accidental huge pastes (a month of settlement rows is a few MB). */
+export const MAX_CSV_CHARS = 8_000_000;
 
 export interface ParsedCsv {
   headers: string[];
-  /** Data records, each exactly `headers.length` cells (padded or trimmed), capped at MAX_BATCH_ROWS. */
+  /** Data records, each exactly `headers.length` cells (padded or trimmed), capped at `maxRows`. */
   rows: string[][];
   /** Data records found in the input, before the cap. */
   totalRows: number;
@@ -74,7 +76,7 @@ function splitRecords(text: string, delimiter: string): { records: string[][]; u
   return { records, unterminatedQuote };
 }
 
-export function parseCsv(input: string): ParsedCsv {
+export function parseCsv(input: string, { maxRows = MAX_BATCH_ROWS }: { maxRows?: number } = {}): ParsedCsv {
   const inputTruncated = input.length > MAX_CSV_CHARS;
   const text = (inputTruncated ? input.slice(0, MAX_CSV_CHARS) : input).replace(/^\uFEFF/, '');
   const delimiter = detectDelimiter(text);
@@ -97,9 +99,9 @@ export function parseCsv(input: string): ParsedCsv {
   });
   return {
     headers,
-    rows: normalised.slice(0, MAX_BATCH_ROWS),
+    rows: normalised.slice(0, maxRows),
     totalRows: normalised.length,
-    truncated: normalised.length > MAX_BATCH_ROWS,
+    truncated: normalised.length > maxRows,
     delimiter,
     unterminatedQuote,
     inputTruncated,

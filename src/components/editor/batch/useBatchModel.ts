@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BatchEvaluator, type VariantEval } from '@/lib/studio/batch/evaluate';
-import { parseCsv } from '@/lib/studio/batch/csv';
+import { parseCsv } from '@/lib/csv/parseCsv';
 import { batchTotals, checkRows, groupVariants } from '@/lib/studio/batch/plan';
 import { activeBindings, missingColumns, type Bindings } from '@/lib/studio/batch/variables';
 import { useStudio } from '@/lib/studio/store';

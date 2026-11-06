@@ -118,8 +118,8 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
      details and photos; approve as refund or replacement, reject with reason, mark received), business settings form (seller/GSTIN, contact, COD,
      lead times, return window), `ADD_ORDER_NOTE` so support can add notes, one admin shell and shared UI components, COD orders in the production
      queue, and the customer order summary reading the same API shape on every path.
-   - **Not built (3b):** courier rate list and ETA at booking; bulk label or manifest printing (the API is per order); importing Razorpay settlement
-     or courier remittance files (reconciliation compares loaded orders only); (hold and material shortage are done, below).
+   - **Not built (3b):** courier rate list and ETA at booking; bulk label or manifest printing (the API is per order); importing courier COD remittance files. Done since: Razorpay
+     settlement CSV import in Finance → Reconciliation (`src/lib/orders/settlement.ts`, read-only, matched by payment id); (hold and material shortage are done, below).
 4. **Storefront redesign:** simpler navigation, shop by room/theme, filters, PDP with MRP,
    delivery estimate, room view and trust, SEO and performance.
 5. **UAT:** scripted end-to-end scenarios per role (see `UAT.md` once written) on a staging project.
