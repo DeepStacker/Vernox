@@ -41,7 +41,8 @@ npm is the only supported package manager (`package-lock.json` is the single loc
 Copy `.env.example` to `.env`. `VITE_SITE_URL` is the canonical public origin (default `https://vernox.in`); it feeds canonical and Open Graph URLs, `index.html` and the sitemap. Also update the `Sitemap:` line in `public/robots.txt` when the domain changes.
 
 ### Building for Production
-1. Run `npm run build`. The `prebuild` step runs `npm run sitemap` (`scripts/generate-sitemap.ts`), which regenerates `public/sitemap.xml` from static routes and product slugs in `src/lib/catalog.ts`.
+1. Run `npm run build` (needs the `VITE_FIREBASE_*` variables, see `.env.example`). `/sitemap.xml` and the link-preview head of
+   `/product/:slug` are served live by `api/seo.ts` from the products in Firestore, so new products need no rebuild.
 2. The production-ready files will be in the `dist` directory.
 
 ### Images

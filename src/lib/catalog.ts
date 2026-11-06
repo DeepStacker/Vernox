@@ -2,8 +2,7 @@
  * Catalogue types, taxonomy and the SAMPLE seed catalogue.
  *
  * The storefront reads products from Firestore (src/lib/data/products.ts). The `products`
- * array below is SEED DATA only: scripts/seed-firestore.ts writes it and
- * scripts/generate-sitemap.ts reads its slugs. Every item is flagged `isSample: true` until
+ * array below is SEED DATA only: scripts/seed-firestore.ts writes it. Every item is flagged `isSample: true` until
  * the owner replaces it with real products, prices and photography.
  *
  * Pricing contract with the server (api/_lib/pricing.ts): the unit price is

@@ -1,8 +1,8 @@
 /**
  * Single source of truth for site-level SEO identity.
  * `VITE_SITE_URL` is the canonical public origin (no trailing slash). The
- * default is a placeholder until the production domain is final; sitemap
- * generation (scripts/generate-sitemap.ts) reads the same variable.
+ * default is a placeholder until the production domain is final; the live
+ * sitemap and product link previews (api/seo.ts) read the same variable.
  */
 import { DEFAULT_SITE_URL } from "./defaultSiteUrl";
 

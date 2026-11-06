@@ -16,6 +16,14 @@
   ],
   "rewrites": [
     {
+      "source": "/product/:slug",
+      "destination": "/api/seo?kind=product&slug=:slug"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/seo?kind=sitemap"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

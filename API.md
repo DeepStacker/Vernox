@@ -313,3 +313,13 @@ One function for the storefront's engagement writes (the deployment is near its 
 - `website` is a honeypot: a non-empty value is answered with `200` and nothing is stored.
 - Tickets are worked through `/api/admin` actions `ADD_TICKET_MESSAGE { ticketId, direction: reply \| note, text }` and
   `SET_TICKET_STATUS { ticketId, status: open \| waiting \| resolved }` (permission `tickets.write`, audited).
+
+## Link previews and sitemap
+
+### `GET /api/seo?kind=product&slug=...` and `GET /api/seo?kind=sitemap`
+
+Public, no auth; CDN-cached (`s-maxage` 10 minutes for pages, 1 hour for the sitemap). `vercel.json` rewrites
+`/product/:slug` and `/sitemap.xml` here. `kind=product` returns the deployed `index.html` with the product's title,
+description, image, URL and canonical link in the head, so WhatsApp and social previews show the product; the app then
+renders as usual. Unknown slugs get the plain page; if the lookup fails, the cached plain page is served. `kind=sitemap`
+returns `/sitemap.xml` built from the static routes (`src/lib/seo/sitemap.ts`) and every product slug in Firestore.
