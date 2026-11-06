@@ -1,6 +1,7 @@
 import { Star } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { finishName, formatSizeCm, formatSizeInches, type Product, type ProductFaq, type ProductSize } from '@/lib/catalog';
+import { ReviewPhotoStrip } from '@/components/shop/ReviewPhotoStrip';
 import type { Review } from '@/types/store';
 
 const INDOOR_OUTDOOR = { indoor: 'Indoor use', outdoor: 'Outdoor use', both: 'Indoor and covered outdoor use' } as const;
@@ -80,6 +81,7 @@ export function ProductReviews({ reviews }: { reviews: Review[] }) {
               ))}
             </div>
             <p className="mt-2 text-sm">{r.comment}</p>
+            <ReviewPhotoStrip paths={r.photos} />
             <p className="mt-2 text-xs text-muted-foreground">
               {r.customerName}{r.location ? `, ${r.location}` : ''}
               {r.verified ? ' · Verified buyer' : ''}

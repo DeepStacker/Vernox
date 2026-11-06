@@ -16,6 +16,7 @@ import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import type { PhotoStorage } from './consultations';
+import type { ReviewPhotoStorage } from './reviewPhotos';
 import { configError } from './errors';
 import { createFirestoreStore, type DocStore } from './store';
 
@@ -94,13 +95,23 @@ export function getStore(): DocStore {
  * Bucket: FIREBASE_STORAGE_BUCKET, else `<project id>.firebasestorage.app`. In the emulator set
  * FIREBASE_STORAGE_EMULATOR_HOST so the SDK talks to it.
  */
-export function getPhotoStorage(): PhotoStorage {
+export function getPhotoStorage(): PhotoStorage & ReviewPhotoStorage {
+  const bucket = () => {
+    const app = getAdminApp();
+    const bucketName = process.env.FIREBASE_STORAGE_BUCKET?.trim() || `${app.options.projectId ?? projectIdFromEnv() ?? ''}.firebasestorage.app`;
+    return getStorage(app).bucket(bucketName);
+  };
   return {
     async copy(fromPath, toPath) {
-      const app = getAdminApp();
-      const bucketName = process.env.FIREBASE_STORAGE_BUCKET?.trim() || `${app.options.projectId ?? projectIdFromEnv() ?? ''}.firebasestorage.app`;
-      const bucket = getStorage(app).bucket(bucketName);
-      await bucket.file(fromPath).copy(bucket.file(toPath));
+      const b = bucket();
+      await b.file(fromPath).copy(b.file(toPath));
+    },
+    async exists(path) {
+      const [found] = await bucket().file(path).exists();
+      return found;
+    },
+    async delete(path) {
+      await bucket().file(path).delete({ ignoreNotFound: true });
     },
   };
 }

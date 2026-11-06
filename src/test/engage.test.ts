@@ -8,11 +8,12 @@ import { PLACEHOLDER_CONTACT } from '../types/settings';
 import { renderNotification } from '../../api/_lib/notifications/templates';
 import type { OutboxDoc } from '../../api/_lib/notifications/types';
 import type { MemoryStore } from './support/memoryStore';
+import { FakeBucket } from './support/fakeBucket';
 import { seededStore } from './support/serverFixtures';
 
 let store: MemoryStore;
 let limited = false;
-vi.mock('../../api/_lib/firebaseAdmin', () => ({ getStore: () => store, getAdminAuth: () => ({}) }));
+vi.mock('../../api/_lib/firebaseAdmin', () => ({ getStore: () => store, getAdminAuth: () => ({}), getPhotoStorage: () => new FakeBucket() }));
 vi.mock('../../api/_lib/rateLimit', async orig => {
   const real = await orig<typeof import('../../api/_lib/rateLimit')>();
   return {

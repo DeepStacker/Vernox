@@ -225,13 +225,13 @@ previews are the flat metal shape, not the wall preview.
 - Light theme only (the old `.dark` block duplicated the light values). Legacy colour tokens remain as aliases for account, checkout and admin screens.
 - Built after this pass: contact form to support tickets, newsletter signup (list kept in Firestore, no ESP), and review submission by verified buyers (all through `POST /api/engage`).
   Product cards crossfade to `lifestyleImage` on hover when a product has one; the cart drawer settles with a soft spring (`--ease-spring-soft`); shop filter changes already re-run the staggered reveal.
-- Not built: EMI messaging, save-for-later, review photos (needs a `storage.rules` path for reviews), a welcome or double opt-in newsletter email and campaign sending (needs an ESP), tickets for WhatsApp/phone/email channels (only `contact_form` is created).
+- Not built: EMI messaging, save-for-later, a welcome or double opt-in newsletter email and campaign sending (needs an ESP), tickets for WhatsApp/phone/email channels (only `contact_form` is created).
 
 ## Phase 3a follow-ups (status after 3b)
 
 - Done: catalogue photo upload in the product form (`src/lib/data/productImages.ts`): resized in the browser to 2000 px WebP, stored at
   `products/{productId}/` (public read, catalogue staff write, storage.rules). Still open: QC "photo taken" is a tick (store the photo
-  in Storage and keep its URL in the `qc` block); review photos (need a private upload path and a copy to public on approval).
+  in Storage and keep its URL in the `qc` block).
 - Done: `tickets/{id}` with `tickets.read` / `tickets.write` (support, order manager, admins) in `src/types/admin.ts`, mirrored in `firestore.rules`.
   The contact form creates tickets through `POST /api/engage`; the Support console has a Tickets view (status filter, thread, reply log, internal note,
   status change). Support notes on orders still go through `ADD_ORDER_NOTE` (3b), which keeps the `#vernox:v1` block.

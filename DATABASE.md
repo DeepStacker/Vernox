@@ -116,6 +116,8 @@ Consultation credits add `boundEmail` (only that checkout email may redeem), `co
 - Storage (`storage.rules`): `spaces/{uid}/...` owner only (verified email); `consultations/{id}/walls/*` server-written, read by
   the customer and consultation staff; `consultations/{id}/previews/*` written by consultation staff, read by both. Browsers load
   these through `getBlob`, so the bucket needs a CORS entry for the site's origin (DEPLOYMENT.md).
+- Storage, review photos: `review-uploads/{uid}/{file}.webp` is PRIVATE (the owner creates, reads and deletes; WebP, at most 2 MB, never
+  overwritten; `reviews.moderate` staff read). `reviews/{reviewId}/{n}.webp` is public read and written only by the server on publish.
 
 ### Server-only collections (no client access)
 Phase 2 (India commerce):
@@ -164,8 +166,11 @@ Earlier collections:
   `POST /api/engage` `SUBMIT_REVIEW`, which needs a Delivered order containing the product (matched by `userId`, or by the verified account
   email for guest checkouts) and writes `{ id: rv_<hash(uid:productId)>, productId, userId, orderId, customerName ("Asha R."), location?,
   rating, comment, verified: true, status: 'pending', placedAt, createdAt, updatedAt }`. One review per customer and product (the id is
-  derived, a repeat is a 409). Text only: `storage.rules` has no path for review photos. Moderation by `reviews.moderate` roles through
-  `SAVE_REVIEW`. List queries from the storefront must filter `status == 'published'`.
+  derived, a repeat is a 409). `SUBMIT_REVIEW` accepts up to 3 `photoPaths` (each `review-uploads/{callerUid}/{file}.webp`, checked to exist) kept on the pending
+  review. When `SAVE_REVIEW` publishes it the server copies each to `reviews/{id}/{n}.webp` (Storage, public) and stores them in `photos`;
+  unpublishing or archiving deletes the public copies and sets `photos: []`, `DELETE_REVIEW` also deletes the private uploads. Clients
+  never write `photos`/`photoPaths` (the SAVE_REVIEW schema drops them). Moderation by `reviews.moderate` roles through `SAVE_REVIEW`
+  (`api/_lib/reviewPhotos.ts`). List queries from the storefront must filter `status == 'published'`.
 - `tickets/{id}` — support tickets from the contact form (`POST /api/engage` `CONTACT`); read by `tickets.read` roles
   (`super_admin`, `admin`, `order_manager`, `support`), **never written by clients**. `{ ref ("T-ABC123"), channel: 'contact_form', topic,
   subject, orderNumber?, customerName, customerEmail, customerPhone?, status: open | waiting | resolved, assignedTo (first staff to act),
