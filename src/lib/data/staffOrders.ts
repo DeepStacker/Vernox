@@ -28,6 +28,7 @@ export interface NewStaffOrder {
   customer: { name: string; phone: string; email?: string; address?: string; city?: string; state?: string; pincode?: string };
   payment: StaffOrderPayment;
   handover: boolean;
+  whatsappOptIn: boolean;
   idempotencyKey: string;
   note?: string;
   tradeEnquiryId?: string;

@@ -8,7 +8,8 @@ import { OUTBOX_COLLECTION } from '../../api/_lib/notifications/outbox';
 import { createStaffTicket, type TicketDoc } from '../../api/_lib/tickets';
 import { toE164India, whatsappConfig } from '../../api/_lib/whatsapp';
 import { MEDIA_NOTE, processWhatsAppWebhook, sendTicketWhatsApp } from '../../api/_lib/whatsappInbound';
-import { NOW, paidOrder, scriptedFetch, seededStore } from './support/serverFixtures';
+import { createCheckoutIntent } from '../../api/_lib/checkout';
+import { checkoutRequest, deps, NOW, paidOrder, scriptedFetch, seededStore } from './support/serverFixtures';
 import type { MemoryStore } from './support/memoryStore';
 
 let store: MemoryStore;
@@ -129,7 +130,8 @@ describe('WhatsApp order updates', () => {
 
   it('sends a template message with body parameters and marks the channel sent', async () => {
     await paidOrder(store);
-    const fetch = scriptedFetch([
+    store.seed('whatsapp_contacts/9876543210', { whatsappOptIn: true });
+        const fetch = scriptedFetch([
       { match: /resend/, body: {} }, { match: /graph\.facebook\.com/, body: { messages: [{ id: 'wamid.x' }] } },
     ]);
     const channels = createChannels({ ...ENV, RESEND_API_KEY: 'r', NOTIFY_FROM_EMAIL: 'a@b.in' }, fetch.impl, store);
@@ -154,11 +156,24 @@ describe('WhatsApp order updates', () => {
 
     store = seededStore();
     await paidOrder(store);
-    store.seed('whatsapp_contacts/9876543210', { whatsappOptOut: true });
+    store.seed('whatsapp_contacts/9876543210', { whatsappOptIn: true, whatsappOptOut: true });
     const optOut = scriptedFetch([{ match: /./, body: {} }]);
     await deliverPendingNotifications(store, createChannels(ENV, optOut.impl, store), NOW);
     expect(optOut.calls).toHaveLength(0);
     expect(outbox()[0].data).toMatchObject({ channels: { whatsapp: 'skipped' } });
+  });
+
+  it('sends nothing to a customer who never agreed, and records consent from checkout', async () => {
+    await paidOrder(store);
+    const f = scriptedFetch([{ match: /./, body: {} }]);
+    await deliverPendingNotifications(store, createChannels(ENV, f.impl, store), NOW);
+    expect(f.calls).toHaveLength(0);
+    expect(outbox()[0].data).toMatchObject({ channels: { whatsapp: 'skipped' } });
+
+    store = seededStore();
+    store.seed('whatsapp_contacts/9876543210', { whatsappOptOut: true });
+    await createCheckoutIntent(deps(store), checkoutRequest({ whatsappOptIn: true, paymentMethod: 'cod' }), null);
+    expect(store.read('whatsapp_contacts/9876543210')).toMatchObject({ whatsappOptIn: true, whatsappOptOut: false, optInSource: 'checkout' });
   });
 
   it('does nothing for WhatsApp when unconfigured, and retries a transient failure', async () => {
@@ -168,6 +183,7 @@ describe('WhatsApp order updates', () => {
 
     store = seededStore();
     await paidOrder(store);
+    store.seed('whatsapp_contacts/9876543210', { whatsappOptIn: true });
     const down = scriptedFetch([{ match: /graph/, status: 503, body: { error: { code: 2, message: 'Service unavailable' } } }]);
     await deliverPendingNotifications(store, createChannels(ENV, down.impl, store), NOW);
     expect(outbox()[0].data).toMatchObject({ status: 'pending', channels: { whatsapp: 'pending' } });
@@ -175,7 +191,8 @@ describe('WhatsApp order updates', () => {
 
   it('treats a permanent rejection (number not on WhatsApp) as skipped', async () => {
     await paidOrder(store);
-    const f = scriptedFetch([{ match: /graph/, status: 400, body: { error: { code: 131026, message: 'Undeliverable' } } }]);
+    store.seed('whatsapp_contacts/9876543210', { whatsappOptIn: true });
+        const f = scriptedFetch([{ match: /graph/, status: 400, body: { error: { code: 131026, message: 'Undeliverable' } } }]);
     await deliverPendingNotifications(store, createChannels(ENV, f.impl, store), NOW);
     expect(outbox()[0].data).toMatchObject({ channels: { whatsapp: 'skipped' } });
   });

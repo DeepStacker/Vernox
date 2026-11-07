@@ -148,6 +148,7 @@ export function NewOrderConsole() {
   const [mode, setMode] = useState<OfflinePaymentMode>('cash');
   const [reference, setReference] = useState('');
   const [handover, setHandover] = useState(true);
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [note, setNote] = useState('');
   const [tradeEnquiryId, setTradeEnquiryId] = useState('');
@@ -205,7 +206,7 @@ export function NewOrderConsole() {
   }, [phoneDigits]);
 
   const reset = () => {
-    setItems([]); setCustomer(EMPTY_CUSTOMER); setCouponCode(''); setNote(''); setReference(''); setTradeEnquiryId('');
+    setItems([]); setCustomer(EMPTY_CUSTOMER); setWhatsappOptIn(false); setCouponCode(''); setNote(''); setReference(''); setTradeEnquiryId('');
     setCreated(null); setError(null); setReturning(null); setIdempotencyKey(newKey());
   };
 
@@ -221,6 +222,7 @@ export function NewOrderConsole() {
         customer: trimmed as { name: string; phone: string },
         payment: paymentMethod === 'offline' ? { method: 'offline', mode, reference: reference.trim() } : { method: paymentMethod },
         handover: handingOver,
+        whatsappOptIn,
         idempotencyKey,
         note: note.trim() || undefined,
         tradeEnquiryId: channel === 'trade' && tradeEnquiryId ? tradeEnquiryId : undefined,
@@ -333,6 +335,10 @@ export function NewOrderConsole() {
             {input('name', 'Name *', { maxLength: 120, autoComplete: 'off' })}
             {input('email', 'Email (for the receipt and coupons)', { type: 'email', maxLength: 254 })}
           </div>
+          <label className="flex min-h-11 items-center gap-2 text-sm">
+            <input type="checkbox" checked={whatsappOptIn} onChange={e => setWhatsappOptIn(e.target.checked)} className="h-5 w-5" />
+            Customer agrees to order updates on WhatsApp (ask them first)
+          </label>
           {!handingOver && (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">{input('address', 'Delivery address *', { maxLength: 500 })}</div>

@@ -165,8 +165,11 @@ Earlier collections:
 - `idempotency/{key}` — `{ orderId, requestHash, createdAt, expiresAt }`.
 - `webhook_events/{eventId}` (Razorpay events; WhatsApp messages use `wa_<sha256(message id)>` with `{ event: 'whatsapp.message', outcome, receivedAt, expiresAt }`) — `{ event, outcome, orderId, razorpayOrderId, razorpayPaymentId, razorpayRefundId, amountPaise,
   receivedAt, expiresAt }`; outcome `unmatched` = needs reconciliation.
-- `whatsapp_contacts/{phoneKey}` — server-only. `{ phoneKey, whatsappOptOut, optOutChangedAt, updatedAt }`, written by the WhatsApp
-  webhook on STOP / START; read by the WhatsApp notification channel and staff replies, which skip opted-out phones.
+- `whatsapp_contacts/{phoneKey}` — server-only consent record. `{ phoneKey, whatsappOptIn, optInAt, optInSource: checkout | staff |
+  inbound | start, whatsappOptOut, optOutChangedAt, updatedAt }`. Opt-in is written by checkout (`whatsappOptIn` tick-box), a staff order
+  (customer agreed), a START reply, or the customer's first inbound message; STOP sets `whatsappOptOut`, which only an explicit opt-in
+  (checkout, staff, START) clears. Order-update templates go only to `whatsappOptIn && !whatsappOptOut` (Meta requires opt-in); staff
+  replies skip opted-out phones.
 - `rate_limits/{scope_hash_window}` — `{ count, scope, windowStart, expiresAt }`. Scopes include `contact` (5/h per IP), `newsletter` (10/h), `review` (30/min) and the COD OTP limits `cod_otp_phone` (5/h), `cod_otp_ip` (15/h) and `cod_otp_verify_ip` (30/h).
 - `audit_logs/{id}` — `AuditLog` (`src/types/admin.ts`); readable by `super_admin`.
 - `staff/{uid}` — `StaffMember` mirror of the role claim; readable by the member and `staff.read` roles.

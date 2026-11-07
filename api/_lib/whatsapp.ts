@@ -6,14 +6,17 @@
  * must be approved templates; a free-form text may only be sent while the customer's 24-hour service window is
  * open, i.e. within WHATSAPP_SERVICE_WINDOW_MS of their last inbound message. Inbound handling is whatsappInbound.ts.
  *
- * The opt-out lives in `whatsapp_contacts/{phoneKey}` (server-only), keyed by the 10-digit mobile because most
- * customers are guests without an account.
+ * Consent lives in `whatsapp_contacts/{phoneKey}` (server-only), keyed by the 10-digit mobile because most
+ * customers are guests without an account. Meta requires opt-in before business-initiated messages, so order
+ * updates go only to a phone with `whatsappOptIn` (ticked at checkout, recorded by staff with the customer's
+ * agreement, a START reply, or the customer messaging us first) and without `whatsappOptOut` (a STOP reply,
+ * which wins until the customer opts in again explicitly).
  */
 import crypto from 'crypto';
 import type { FetchLike } from './notifications/channels';
 import type { NotificationEvent } from './notifications/types';
 import { safeEqualHex } from './razorpay';
-import type { DocStore } from './store';
+import type { DocStore, StoreTransaction } from './store';
 
 export const WHATSAPP_CONTACTS_COLLECTION = 'whatsapp_contacts';
 export const WHATSAPP_SERVICE_WINDOW_MS = 24 * 3600_000;
@@ -128,6 +131,27 @@ export function sendWhatsAppText(config: WhatsAppConfig, fetchImpl: FetchLike, p
 
 export async function isWhatsAppOptedOut(store: DocStore, phone10: string): Promise<boolean> {
   return (await store.get(`${WHATSAPP_CONTACTS_COLLECTION}/${phone10}`))?.whatsappOptOut === true;
+}
+
+/** Business-initiated (template) messages need recorded consent and no STOP. */
+export async function canMessageOnWhatsApp(store: DocStore, phone10: string): Promise<boolean> {
+  const contact = await store.get(`${WHATSAPP_CONTACTS_COLLECTION}/${phone10}`);
+  return contact?.whatsappOptIn === true && contact.whatsappOptOut !== true;
+}
+
+export type WhatsAppOptInSource = 'checkout' | 'staff' | 'inbound' | 'start';
+
+/**
+ * Records consent. An explicit choice (checkout tick-box, staff with the customer's agreement, START) also clears
+ * an earlier STOP; a customer simply messaging us does not override their STOP.
+ */
+export function recordWhatsAppOptIn(tx: StoreTransaction, phone10: string, source: WhatsAppOptInSource, now: number) {
+  const explicit = source !== 'inbound';
+  tx.set(
+    `${WHATSAPP_CONTACTS_COLLECTION}/${phone10}`,
+    { phoneKey: phone10, whatsappOptIn: true, optInAt: now, optInSource: source, ...(explicit ? { whatsappOptOut: false } : {}), updatedAt: now },
+    { merge: true },
+  );
 }
 
 /** Meta signs the raw body with the app secret: `X-Hub-Signature-256: sha256=<hex hmac>`. */

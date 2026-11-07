@@ -37,6 +37,7 @@ import {
 import type { ConsultationPurchase } from './consultations';
 import { ApiError } from './errors';
 import { applyInvoice, planInvoice } from './gst/invoice';
+import { recordWhatsAppOptIn } from './whatsapp';
 import { enqueueNotification, payloadFromOrder, planNotification } from './notifications/outbox';
 import {
   buildOrderDoc,
@@ -110,6 +111,8 @@ const checkoutRequestObject = z
     idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/, 'must be 8-128 characters of [A-Za-z0-9_-]'),
     customer: customerSchema,
     paymentMethod: z.enum(['prepaid', 'cod']).default('prepaid'),
+    /** The customer ticked "Send me order updates on WhatsApp" (Meta requires opt-in). */
+    whatsappOptIn: z.boolean().optional(),
     /** From COD_OTP_VERIFY; required for COD when SMS confirmation is enabled (see codOtp.ts). */
     codVerificationToken: verificationTokenSchema.optional(),
   })
@@ -129,6 +132,7 @@ export interface CheckoutRequest {
   idempotencyKey: string;
   customer: CustomerDetails;
   paymentMethod: Exclude<PaymentMethod, 'replacement'>;
+  whatsappOptIn?: boolean;
   codVerificationToken?: string;
 }
 
@@ -413,6 +417,7 @@ export async function createCheckoutIntent(
     for (const r of reserved) tx.update(`products/${r.productId}`, { stock: increment(-r.quantity), updatedAt: now });
     if (invoicePlan) order = { ...order, ...applyInvoice(tx, invoicePlan, order, config.seller, now) };
     tx.create(orderPath(orderId), order as unknown as Record<string, unknown>);
+    if (req.whatsappOptIn) recordWhatsAppOptIn(tx, order.phoneKey, staff ? 'staff' : 'checkout', now);
     tx.create(idempotencyPath, { orderId, requestHash: hash, createdAt: now, expiresAt: new Date(now + IDEMPOTENCY_TTL_MS) });
     if (confirmedAtCreation) {
       if (coupon) {

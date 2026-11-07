@@ -18,7 +18,7 @@ import { phoneKey } from './orders';
 import type { DocStore } from './store';
 import { MAX_TICKET_MESSAGES, supportInbox, ticketRef, type TicketDoc } from './tickets';
 import {
-  isWhatsAppOptedOut, sendWhatsAppText, toE164India, WhatsAppError, WHATSAPP_CONTACTS_COLLECTION, WHATSAPP_SERVICE_WINDOW_MS,
+  isWhatsAppOptedOut, recordWhatsAppOptIn, sendWhatsAppText, toE164India, WhatsAppError, WHATSAPP_CONTACTS_COLLECTION, WHATSAPP_SERVICE_WINDOW_MS,
   WINDOW_CLOSED_ERROR, type WhatsAppConfig,
 } from './whatsapp';
 
@@ -74,7 +74,8 @@ async function processMessage(
     const optOut = isStop(message.text ?? '');
     return store.runTransaction(async tx => {
       if (await tx.get(eventPath)) return 'duplicate' as const;
-      tx.set(`${WHATSAPP_CONTACTS_COLLECTION}/${key}`, { phoneKey: key, whatsappOptOut: optOut, optOutChangedAt: now, updatedAt: now }, { merge: true });
+      if (optOut) tx.set(`${WHATSAPP_CONTACTS_COLLECTION}/${key}`, { phoneKey: key, whatsappOptOut: true, optOutChangedAt: now, updatedAt: now }, { merge: true });
+      else recordWhatsAppOptIn(tx, key, 'start', now);
       const outcome = optOut ? ('opted_out' as const) : ('opted_in' as const);
       tx.create(eventPath, record(outcome));
       return outcome;
@@ -98,7 +99,9 @@ async function processMessage(
     const current = existing ? ((await tx.get(`tickets/${existing.id}`)) as unknown as TicketDoc | null) : null;
     const entry = { at: now, by: key, direction: 'inbound' as const, text: body };
 
+    // Writing to us first is consent to updates on this conversation's order (a STOP still wins). Writes follow all reads.
     if (current && existing) {
+      recordWhatsAppOptIn(tx, key, 'inbound', now);
       tx.update(`tickets/${existing.id}`, {
         messages: [...current.messages, entry],
         status: current.status === 'waiting' ? 'open' : current.status,
@@ -109,6 +112,7 @@ async function processMessage(
     }
 
     const plan = await planNotification(tx, newId, 'support_ticket');
+    recordWhatsAppOptIn(tx, key, 'inbound', now);
     const ref = ticketRef(newId);
     const name = profileName || `+${message.from}`;
     const ticket: TicketDoc = {

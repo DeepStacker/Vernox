@@ -18,7 +18,7 @@
  * after MAX_ATTEMPTS (deliver.ts), recording the provider's message.
  */
 import {
-  isWhatsAppOptedOut, PERMANENT_WHATSAPP_ERRORS, sendWhatsAppTemplate, toE164India, whatsappConfig, WhatsAppError, type WhatsAppConfig,
+  canMessageOnWhatsApp, PERMANENT_WHATSAPP_ERRORS, sendWhatsAppTemplate, toE164India, whatsappConfig, WhatsAppError, type WhatsAppConfig,
 } from '../whatsapp';
 import type { DocStore } from '../store';
 import type { ChannelName, NotificationChannel, NotificationEvent, OutboxDoc, RenderedMessage } from './types';
@@ -96,7 +96,7 @@ export function createWhatsAppChannel(config: WhatsAppConfig, store: DocStore, f
       const template = config.templates[outbox.event];
       const to = toE164India(outbox.payload.phone);
       if (!template || !to) return 'skipped';
-      if (await isWhatsAppOptedOut(store, outbox.payload.phone)) return 'skipped';
+      if (!(await canMessageOnWhatsApp(store, outbox.payload.phone))) return 'skipped';
       try {
         await sendWhatsAppTemplate(config, fetchImpl, { to, template, bodyParams: message.smsVars });
       } catch (err) {

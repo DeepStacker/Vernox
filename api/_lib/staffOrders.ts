@@ -53,6 +53,8 @@ export const staffOrderSchema = z
     customer: staffCustomerSchema,
     payment: paymentSchema,
     handover: z.boolean().default(false),
+    /** The customer agreed to order updates on WhatsApp. */
+    whatsappOptIn: z.boolean().default(false),
     idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/, 'must be 8-128 characters of [A-Za-z0-9_-]'),
     note: optionalText(1000),
     /** The trade enquiry this order came from; it is marked won. */
@@ -165,6 +167,7 @@ export async function createStaffOrder(deps: CheckoutDeps, input: StaffOrderInpu
       idempotencyKey: input.idempotencyKey,
       customer,
       paymentMethod: payment.method === 'cod' ? 'cod' : 'prepaid',
+      whatsappOptIn: input.whatsappOptIn,
     },
     null,
     {

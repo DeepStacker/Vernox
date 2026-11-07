@@ -18,6 +18,8 @@ Shared server code lives in `api/_lib/` (the underscore keeps Vercel from deploy
 
 ## `POST /api/checkout-intent`
 
+
+`whatsappOptIn?: boolean` (also on `CREATE_STAFF_ORDER`): the customer agreed to order updates on WhatsApp; recorded in `whatsapp_contacts` (DATABASE.md). WhatsApp templates are sent only to phones with consent.
 Prices the cart from Firestore, reserves stock and creates the order and its Razorpay order.
 If a valid bearer token is sent, the order's `userId` is that user; otherwise it is a guest order (`userId: null`).
 An invalid/expired token returns 401 (it is not silently treated as a guest).
@@ -111,7 +113,8 @@ WhatsApp Cloud API (Meta) -> server; body parser disabled. `GET`: handshake with
 `WHATSAPP_VERIFY_TOKEN` (constant-time) and `hub.challenge`; answers `200` with the challenge as plain text, otherwise `403`.
 `POST`: `X-Hub-Signature-256: sha256=<HMAC_SHA256(raw body, WHATSAPP_APP_SECRET)>` is checked in constant time (invalid or missing: `400`
 `SIGNATURE_INVALID`, nothing stored). Each `messages` entry is processed once, keyed by `webhook_events/wa_<sha256(message id)>`:
-`STOP` / `START` set / clear `whatsapp_contacts/{phoneKey}.whatsappOptOut`; any other text or a media message opens a `whatsapp` ticket
+`STOP` sets `whatsapp_contacts/{phoneKey}.whatsappOptOut`, `START` records an explicit opt-in; any other text (which also records an
+`inbound` opt-in, never overriding a STOP) or a media message opens a `whatsapp` ticket
 (linked to the phone's latest order, `support_ticket` alert queued) or is appended as an `inbound` message to that phone's most recent
 open or waiting ticket (`waiting` reopens to `open`); media is stored as "[photo/document received — open WhatsApp]" and never
 downloaded. Other types (reactions, buttons) are acknowledged. `200`: `{ "received": true, "messages": <count> }`. Missing
