@@ -296,9 +296,11 @@ export default function Account() {
 
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Email or User ID</label>
+                    <label htmlFor="login-email" className="text-xs font-medium text-muted-foreground">Email or User ID</label>
                     <input 
+                      id="login-email"
                       type="text" 
+                      autoComplete="username"
                       placeholder="name@example.com"
                       value={loginForm.emailOrPhone}
                       onChange={e => setLoginForm({ ...loginForm, emailOrPhone: e.target.value })}
@@ -308,10 +310,12 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Password</label>
+                    <label htmlFor="login-password" className="text-xs font-medium text-muted-foreground">Password</label>
                     <div className="relative">
                       <input 
+                        id="login-password"
                         type={showPassword ? 'text' : 'password'} 
+                        autoComplete="current-password"
                         placeholder="••••••••"
                         value={loginForm.password}
                         onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
@@ -321,6 +325,7 @@ export default function Account() {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
