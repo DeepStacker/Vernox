@@ -294,6 +294,19 @@ Results (same harness, interleaved runs; done 2026-11-07):
 - Done (2026-11-07): staff log email, WhatsApp and phone requests as tickets (`CREATE_TICKET`), linked to the order when the number
   matches; replies are emailed only when the ticket has an email. Done (2026-11-07): WhatsApp end to end by configuration only (Meta Cloud API): order updates as a third outbox channel with approved templates, inbound messages as tickets via `/api/whatsapp-webhook` (STOP / START opt-out), and "Send on WhatsApp" replies in the Support console within the 24-hour window. Setup: DEPLOYMENT.md 4d. Not verified against live Meta (needs keys and approved templates).
 
+## Production packaging (2026-11-07)
+
+One image (`Dockerfile`) serves the SPA, the API, `/runtime-config.js` and the two crons in-process; `docker-compose.yml` adds Caddy for
+automatic HTTPS; `./install.sh` brings a VM up with one command (asks only domain, admin email, Firebase service account and web config;
+generates SECRETS_ENCRYPTION_KEY and CRON_SECRET); `./update.sh` upgrades. Third-party keys are entered in Admin > Settings > Integrations
+(encrypted, super admin only) and apply without a restart. Verified locally: image build and a read-only, cap-dropped container against
+the emulators (static caching, SPA fallback, product link previews, sitemap, CORS, `/healthz`, `/readyz`, crons, SIGTERM); the production
+server with runtime Firebase config; Integrations in the browser (super admin only, format errors, ••••last4, no plaintext in the page or
+the database, audit with names only, Check reaches Razorpay and reports a rejected key, the browser receives the key id at runtime,
+Launch setup turns Razorpay "set · test mode"). Not verified here: a full `./install.sh` on a fresh VM with a real domain and Firebase
+project (Let's Encrypt, rules deployment with the service account's roles), and `update.sh` against a running stack. Follow-up: a
+server-only dependency set would shrink the 1 GB image.
+
 ## End-to-end check (2026-11-07, local emulators, headless Chromium at 390 px and 1280 px)
 
 Verified in the browser or against the running API: guest product page (EMI widget hidden without a key), add to cart, save for
