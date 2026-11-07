@@ -289,7 +289,8 @@ Results (same harness, interleaved runs; done 2026-11-07):
 - Done: `tickets/{id}` with `tickets.read` / `tickets.write` (support, order manager, admins) in `src/types/admin.ts`, mirrored in `firestore.rules`.
   The contact form creates tickets through `POST /api/engage`; the Support console has a Tickets view (status filter, thread, reply log, internal note,
   status change). Support notes on orders still go through `ADD_ORDER_NOTE` (3b), which keeps the `#vernox:v1` block.
-  `TODO(support-tickets)`: only the `contact_form` channel exists; `orderId` is not linked (the customer's order number is stored as free text). Replies are emailed to the customer through the outbox.
+  Replies are emailed to the customer through the outbox. Done (2026-11-07): staff log email, WhatsApp and phone requests as tickets
+  (`CREATE_TICKET`), linked to the order by its number; contact-form tickets still store the order number as free text.
 - Done in 3b: `defaultLeadTimeDays` and `customLeadTimeDays` are in the settings form and the `StoreConfig` type.
 - Workshop queues load up to 200 orders per status group; move to counters or a dedicated `workshop` index if volume exceeds that.
 - Done: hold and material shortage (UAT OM-06, PR-06) as an `OrderHold` flag beside the status, not new statuses: the order keeps its stage
