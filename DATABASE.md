@@ -153,7 +153,7 @@ Phase 2 (India commerce):
 - Storage `products/{productId}/{file}.webp` — catalogue photos uploaded from the admin product form (resized in the browser to
   2000 px WebP, ≤ 2 MB). Public read; created and deleted by catalogue staff (storage.rules). The product's `imageUrl` /
   `lifestyleImage` stores the download URL.
-- `notifications_outbox/{orderId}_{event}[_{refundId}]` — `{ event, payload (customer name/email/phone, amounts, tracking),
+- `notifications_outbox/{orderId}_{event}[_{refundId}]` (`channels` has `email`, `sms` and `whatsapp`; older documents lack `whatsapp`, which counts as skipped) — `{ event, payload (customer name/email/phone, amounts, tracking),
   channels{ email, sms: pending|sent|skipped }, status: pending|sending|sent|dead, attempts, nextAttemptAt, leaseUntil, lastError,
   sentAt }`. The id makes one notification per order + event.
 - `courier_events/{sha256(awb|status|timestamp)}` — courier webhook log `{ awb, status, statusId, eventAt, orderId, target, outcome }`.
@@ -163,8 +163,10 @@ Phase 2 (India commerce):
 Earlier collections:
 - `coupon_usages/{orderId}` — redemption record written when the order is paid.
 - `idempotency/{key}` — `{ orderId, requestHash, createdAt, expiresAt }`.
-- `webhook_events/{eventId}` — `{ event, outcome, orderId, razorpayOrderId, razorpayPaymentId, razorpayRefundId, amountPaise,
+- `webhook_events/{eventId}` (Razorpay events; WhatsApp messages use `wa_<sha256(message id)>` with `{ event: 'whatsapp.message', outcome, receivedAt, expiresAt }`) — `{ event, outcome, orderId, razorpayOrderId, razorpayPaymentId, razorpayRefundId, amountPaise,
   receivedAt, expiresAt }`; outcome `unmatched` = needs reconciliation.
+- `whatsapp_contacts/{phoneKey}` — server-only. `{ phoneKey, whatsappOptOut, optOutChangedAt, updatedAt }`, written by the WhatsApp
+  webhook on STOP / START; read by the WhatsApp notification channel and staff replies, which skip opted-out phones.
 - `rate_limits/{scope_hash_window}` — `{ count, scope, windowStart, expiresAt }`. Scopes include `contact` (5/h per IP), `newsletter` (10/h), `review` (30/min) and the COD OTP limits `cod_otp_phone` (5/h), `cod_otp_ip` (15/h) and `cod_otp_verify_ip` (30/h).
 - `audit_logs/{id}` — `AuditLog` (`src/types/admin.ts`); readable by `super_admin`.
 - `staff/{uid}` — `StaffMember` mirror of the role claim; readable by the member and `staff.read` roles.
@@ -189,7 +191,7 @@ Earlier collections:
   alert; `customerEmail` is `''` when only a phone is known, and a `reply` is then refused with 409); read by `tickets.read` roles
   (`super_admin`, `admin`, `order_manager`, `support`), **never written by clients**. `{ ref ("T-ABC123"), channel: contact_form | email | whatsapp | phone, topic,
   subject, orderNumber?, customerName, customerEmail, customerPhone?, status: open | waiting | resolved, assignedTo (first staff to act),
-  messages[{ at, by, direction: inbound | reply | note, text }] (max 100), createdAt, updatedAt }`. Staff change them through the admin
+  messages[{ at, by, direction: inbound | reply | note, text }] (max 100), phoneKey? (10-digit mobile; set on WhatsApp tickets and staff tickets with a phone), createdAt, updatedAt }`. Inbound WhatsApp messages create `whatsapp` tickets or append to the phone's open one (`api/_lib/whatsappInbound.ts`); a `reply` on a WhatsApp ticket was sent on WhatsApp, not emailed. Staff change them through the admin
   actions `ADD_TICKET_MESSAGE` / `SET_TICKET_STATUS` (`tickets.write`, audited). A `reply` is emailed to the customer (outbox event
   `ticket_reply`, id `{ticketId}_ticket_reply_{messageIndex}`, email only) in the same transaction; a `note` is internal (answers given on
   WhatsApp or phone are recorded as notes). Creating a ticket also writes a `notifications_outbox/{ticketId}_support_ticket`

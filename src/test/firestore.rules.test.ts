@@ -173,6 +173,16 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     }
   });
 
+  it('WhatsApp opt-out contacts hold customer phones: closed to every client', async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'whatsapp_contacts/9876543210'), { phoneKey: '9876543210', whatsappOptOut: true });
+    });
+    for (const ctx of [guest(), as('alice'), as('boss', { role: 'super_admin' })]) {
+      await assertFails(getDoc(doc(ctx, 'whatsapp_contacts/9876543210')));
+      await assertFails(setDoc(doc(ctx, 'whatsapp_contacts/9123456780'), { whatsappOptOut: false }));
+    }
+  });
+
   it('newsletter subscribers hold emails and tokens: closed to every client', async () => {
     await env.withSecurityRulesDisabled(async ctx => {
       await setDoc(doc(ctx.firestore(), 'newsletter_subscribers/h1'), { email: 'a@b.in', unsubscribeToken: 't' });

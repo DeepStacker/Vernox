@@ -63,7 +63,7 @@ export function enqueueNotification(tx: StoreTransaction, plan: NotificationPlan
     orderId: plan.orderId,
     event: plan.event,
     payload,
-    channels: { email: payload.email ? 'pending' : 'skipped', sms: payload.phone ? 'pending' : 'skipped' },
+    channels: { email: payload.email ? 'pending' : 'skipped', sms: payload.phone ? 'pending' : 'skipped', whatsapp: payload.phone ? 'pending' : 'skipped' },
     status: 'pending',
     attempts: 0,
     nextAttemptAt: now,

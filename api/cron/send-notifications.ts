@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['GET', 'POST']);
     requireCron(req);
-    const result = await deliverPendingNotifications(getStore(), createChannels());
+    const result = await deliverPendingNotifications(getStore(), createChannels(process.env, undefined, getStore()));
     return res.status(200).json({ success: true, ...result });
   } catch (err) {
     return sendError(res, err, 'cron/send-notifications');

@@ -35,6 +35,15 @@ function msg91TemplatesSet(raw: string | undefined): boolean {
   }
 }
 
+function whatsappTemplatesSet(raw: string | undefined): boolean {
+  try {
+    const parsed = JSON.parse(raw ?? '') as Record<string, { name?: unknown }>;
+    return Boolean(parsed) && typeof parsed === 'object' && Object.values(parsed).some(t => typeof t?.name === 'string' && t.name.trim());
+  } catch {
+    return false;
+  }
+}
+
 export function environmentItems(env: NodeJS.ProcessEnv = process.env): LaunchItem[] {
   const keyId = env.RAZORPAY_KEY_ID?.trim() ?? '';
   const site = env.VITE_SITE_URL?.trim() ?? '';
@@ -76,6 +85,18 @@ export function environmentItems(env: NodeJS.ProcessEnv = process.env): LaunchIt
       label: 'Order SMS (MSG91)',
       ready: set(env, 'MSG91_AUTH_KEY') && msg91TemplatesSet(env.MSG91_TEMPLATES),
       help: `SMS updates. Indian SMS needs DLT-registered templates: register them, create MSG91 Flows, then set MSG91_AUTH_KEY and MSG91_TEMPLATES (JSON of event to template id, see .env.example) in ${vercel}.`,
+    },
+    {
+      id: 'whatsapp', group: 'messages', required: false,
+      label: 'WhatsApp order messages (Meta Cloud API)',
+      ready: set(env, 'WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID') && whatsappTemplatesSet(env.WHATSAPP_TEMPLATES),
+      help: `WhatsApp updates for confirmed, shipped, out for delivery and delivered orders, and free-form replies from the Support console. Needs a Meta WhatsApp Business app, a phone number, approved message templates and a permanent system-user token: set WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TEMPLATES (JSON of event to template name and language, see DEPLOYMENT.md) in ${vercel}.`,
+    },
+    {
+      id: 'whatsapp-inbound', group: 'messages', required: false,
+      label: 'WhatsApp inbound messages (webhook)',
+      ready: set(env, 'WHATSAPP_APP_SECRET', 'WHATSAPP_VERIFY_TOKEN'),
+      help: `Turns customer WhatsApp messages into Support tickets and honours STOP / START. Meta app > WhatsApp > Configuration: callback URL https://<your domain>/api/whatsapp-webhook, verify token of your choice, subscribe to messages; put the token in WHATSAPP_VERIFY_TOKEN and the app secret in WHATSAPP_APP_SECRET in ${vercel}.`,
     },
     {
       id: 'cod-otp', group: 'messages', required: false,

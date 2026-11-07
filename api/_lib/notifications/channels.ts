@@ -6,6 +6,10 @@
  *    not send a second email.
  *  - SMS: MSG91 Flow API (MSG91_AUTH_KEY, MSG91_TEMPLATES = JSON map of
  *    event -> DLT-approved flow template id). Events without a template are skipped.
+ *  - WhatsApp: Cloud API template messages (WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_TEMPLATES =
+ *    JSON map event -> { name, language }; see api/_lib/whatsapp.ts). Only events with an approved template are
+ *    sent, to customers who have not opted out; template variables are the SMS variables ({{1}} first name,
+ *    {{2}} order number, {{3}} event value). Permanent provider rejections are 'skipped', not retried.
  *  - A channel whose configuration is missing is replaced by a logger that
  *    reports 'skipped', so unconfigured environments never fail or block.
  *
@@ -13,6 +17,10 @@
  * permanent provider rejections alike; the outbox applies backoff and gives up
  * after MAX_ATTEMPTS (deliver.ts), recording the provider's message.
  */
+import {
+  isWhatsAppOptedOut, PERMANENT_WHATSAPP_ERRORS, sendWhatsAppTemplate, toE164India, whatsappConfig, WhatsAppError, type WhatsAppConfig,
+} from '../whatsapp';
+import type { DocStore } from '../store';
 import type { ChannelName, NotificationChannel, NotificationEvent, OutboxDoc, RenderedMessage } from './types';
 
 export type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<{
@@ -81,6 +89,28 @@ export function createMsg91Channel(
   };
 }
 
+export function createWhatsAppChannel(config: WhatsAppConfig, store: DocStore, fetchImpl: FetchLike): NotificationChannel {
+  return {
+    name: 'whatsapp',
+    async send(message: RenderedMessage, outbox: OutboxDoc) {
+      const template = config.templates[outbox.event];
+      const to = toE164India(outbox.payload.phone);
+      if (!template || !to) return 'skipped';
+      if (await isWhatsAppOptedOut(store, outbox.payload.phone)) return 'skipped';
+      try {
+        await sendWhatsAppTemplate(config, fetchImpl, { to, template, bodyParams: message.smsVars });
+      } catch (err) {
+        if (err instanceof WhatsAppError && err.code !== null && PERMANENT_WHATSAPP_ERRORS.has(err.code)) {
+          console.warn(`[notifications] whatsapp rejected ${outbox.event} for order ${outbox.orderId} permanently (code ${err.code}); skipped`);
+          return 'skipped';
+        }
+        throw new ChannelError('whatsapp', err instanceof Error ? err.message : String(err));
+      }
+      return 'sent';
+    },
+  };
+}
+
 export function createLoggingChannel(name: ChannelName): NotificationChannel {
   return {
     name,
@@ -107,13 +137,22 @@ function parseTemplates(raw: string | undefined): Partial<Record<NotificationEve
   }
 }
 
-export function createChannels(env: NodeJS.ProcessEnv = process.env, fetchImpl: FetchLike = fetch as unknown as FetchLike): NotificationChannel[] {
+/** `store` is needed by the WhatsApp channel (opt-out lookup); without it WhatsApp stays off. */
+export function createChannels(
+  env: NodeJS.ProcessEnv = process.env,
+  fetchImpl: FetchLike = fetch as unknown as FetchLike,
+  store?: DocStore,
+): NotificationChannel[] {
   const resendKey = env.RESEND_API_KEY?.trim();
   const from = env.NOTIFY_FROM_EMAIL?.trim();
   const msg91Key = env.MSG91_AUTH_KEY?.trim();
   const templates = parseTemplates(env.MSG91_TEMPLATES);
+  const whatsapp = whatsappConfig(env);
   return [
     resendKey && from ? createResendChannel(resendKey, from, fetchImpl) : createLoggingChannel('email'),
     msg91Key && Object.keys(templates).length > 0 ? createMsg91Channel(msg91Key, templates, fetchImpl) : createLoggingChannel('sms'),
+    whatsapp && store && Object.keys(whatsapp.templates).length > 0
+      ? createWhatsAppChannel(whatsapp, store, fetchImpl)
+      : createLoggingChannel('whatsapp'),
   ];
 }

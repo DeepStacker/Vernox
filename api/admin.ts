@@ -32,6 +32,9 @@ import { deleteReviewAndPhotos, syncPublicReviewPhotos } from './_lib/reviewPhot
 import { claimConsultation, proposalDraftSchema, saveProposalDraft, sendProposal } from './_lib/proposals';
 import { createRefund, refundCeilingPaise } from './_lib/refunds';
 import { decideReturn, markReturnReceived, returnPath } from './_lib/returns';
+import type { FetchLike } from './_lib/notifications/channels';
+import { sendTicketWhatsApp } from './_lib/whatsappInbound';
+import { whatsappConfig } from './_lib/whatsapp';
 import { addTicketMessage, createStaffTicket, setTicketStatus, staffTicketSchema, ticketIdSchema, TICKET_STATUSES } from './_lib/tickets';
 import { createShippingProvider } from './_lib/shipping';
 import { applyCourierStatus, bulkShipmentDocuments, cancelShipment, courierRatesFor, createShipment, getLabel, type ManualShipmentDetails } from './_lib/shipping/shipments';
@@ -414,6 +417,22 @@ const ACTIONS: Record<string, ActionDefinition> = {
       );
       const ticket = await addTicketMessage(ctx.store, { id: p.ticketId, by: ctx.actor.email ?? ctx.actor.uid, direction: p.direction, text: p.text });
       await recordAudit(ctx.store, audit(ctx, 'TICKET_MESSAGE_ADDED', 'ticket', p.ticketId, { direction: p.direction }));
+      return { ticketId: p.ticketId, status: ticket.status };
+    },
+  },
+
+  SEND_TICKET_WHATSAPP: {
+    method: 'POST',
+    permission: 'tickets.write',
+    async run(ctx) {
+      const p = parse(z.object({ ticketId: ticketIdSchema, text: z.string().trim().min(1).max(1000) }), ctx.params);
+      const ticket = await sendTicketWhatsApp(
+        ctx.store,
+        whatsappConfig(),
+        fetch as unknown as FetchLike,
+        { id: p.ticketId, by: ctx.actor.email ?? ctx.actor.uid, text: p.text },
+      );
+      await recordAudit(ctx.store, audit(ctx, 'TICKET_WHATSAPP_SENT', 'ticket', p.ticketId, {}));
       return { ticketId: p.ticketId, status: ticket.status };
     },
   },

@@ -105,6 +105,18 @@ re-processing. Events for unknown orders are stored with outcome `unmatched` and
 disable the webhook for events this store can never match); transient errors return 500 so Razorpay retries.
 `200`: `{ "received": true, "outcome": "<outcome>" }`.
 
+## `GET|POST /api/whatsapp-webhook`
+
+WhatsApp Cloud API (Meta) -> server; body parser disabled. `GET`: handshake with `hub.mode=subscribe`, `hub.verify_token` equal to
+`WHATSAPP_VERIFY_TOKEN` (constant-time) and `hub.challenge`; answers `200` with the challenge as plain text, otherwise `403`.
+`POST`: `X-Hub-Signature-256: sha256=<HMAC_SHA256(raw body, WHATSAPP_APP_SECRET)>` is checked in constant time (invalid or missing: `400`
+`SIGNATURE_INVALID`, nothing stored). Each `messages` entry is processed once, keyed by `webhook_events/wa_<sha256(message id)>`:
+`STOP` / `START` set / clear `whatsapp_contacts/{phoneKey}.whatsappOptOut`; any other text or a media message opens a `whatsapp` ticket
+(linked to the phone's latest order, `support_ticket` alert queued) or is appended as an `inbound` message to that phone's most recent
+open or waiting ticket (`waiting` reopens to `open`); media is stored as "[photo/document received — open WhatsApp]" and never
+downloaded. Other types (reactions, buttons) are acknowledged. `200`: `{ "received": true, "messages": <count> }`. Missing
+`WHATSAPP_VERIFY_TOKEN` / `WHATSAPP_APP_SECRET`: 500 CONFIG_ERROR.
+
 ## `GET /api/cron/release-reservations`
 
 Vercel Cron, every 5 minutes (`vercel.json`). Requires `Authorization: Bearer $CRON_SECRET`. Expires up to 200 overdue
@@ -376,6 +388,12 @@ One function for the storefront's engagement writes (the deployment is near its 
 - Tickets are worked through `/api/admin` actions `ADD_TICKET_MESSAGE { ticketId, direction: reply \| note, text }` and
   `SET_TICKET_STATUS { ticketId, status: open \| waiting \| resolved }` (permission `tickets.write`, audited). A `reply` on a ticket
   without an email returns 409 (answer on the customer's channel and log a `note`).
+- `SEND_TICKET_WHATSAPP { ticketId, text (max 1000) }` (`tickets.write`, audited `TICKET_WHATSAPP_SENT`): sends free-form WhatsApp text
+  to a `whatsapp` ticket's phone and records it as a `reply` (open -> waiting). 409 when WhatsApp is not configured, the customer's last
+  inbound message is 24 hours old or more (only templates may be sent then), the customer replied STOP, or the ticket has no WhatsApp
+  number; 502 `MESSAGING_PROVIDER_ERROR` when Meta rejects it.
+- Order updates also go out on WhatsApp as a third outbox channel (`channels.whatsapp`, template per event from `WHATSAPP_TEMPLATES`);
+  see DEPLOYMENT.md 4d.
 
 ## Public catalogue
 

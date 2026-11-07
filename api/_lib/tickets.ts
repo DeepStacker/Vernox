@@ -12,6 +12,7 @@ import { isPlaceholderValue } from '../../src/types/settings';
 import { STAFF_TICKET_CHANNELS, TICKET_STATUSES, TICKET_TOPICS, type TicketChannel, type TicketStatus } from '../../src/types/tickets';
 import { z } from 'zod';
 import { ApiError } from './errors';
+import { phoneKey } from './orders';
 import { enqueueNotification, planNotification } from './notifications/outbox';
 import type { DocStore } from './store';
 
@@ -40,6 +41,8 @@ export interface TicketDoc {
   /** '' when the customer reached us by WhatsApp or phone and gave no email; replies then cannot be emailed. */
   customerEmail: string;
   customerPhone: string | null;
+  /** 10-digit mobile key (phoneKey) when a phone is known; links WhatsApp messages and orders to the ticket. */
+  phoneKey?: string;
   status: TicketStatus;
   assignedTo: string | null;
   messages: TicketMessage[];
@@ -162,6 +165,7 @@ export async function createStaffTicket(store: DocStore, input: StaffTicketInput
     customerName: name || email || phone,
     customerEmail: email,
     customerPhone: phone || null,
+    ...(phone ? { phoneKey: phoneKey(phone) } : {}),
     status: 'open',
     assignedTo: by,
     messages: [{ at: now, by: email || phone, direction: 'inbound', text: input.message }],

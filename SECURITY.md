@@ -8,6 +8,7 @@
 | Staff browser | Firebase client SDK + `/api/admin` with an ID token | What its `role` claim permits (below) |
 | Serverless API (`api/`) | Firebase **Admin SDK** (bypasses rules) | The only writer of orders, stock reservations, coupon usage, idempotency keys, webhook events, rate limits, audit logs, staff roles |
 | Razorpay | `/api/razorpay-webhook` (HMAC over raw body) | Payment, failure and refund events |
+| WhatsApp (Meta) | `/api/whatsapp-webhook` (`X-Hub-Signature-256` = HMAC-SHA256 of the raw body with `WHATSAPP_APP_SECRET`, constant-time; GET handshake checks `WHATSAPP_VERIFY_TOKEN`) | Inbound customer messages -> support tickets, STOP / START |
 | Shiprocket | `/api/courier-webhook` (`x-api-key` = `SHIPROCKET_WEBHOOK_TOKEN`, constant-time) | Shipment tracking events |
 | Vercel Cron | `/api/cron/release-reservations`, `/api/cron/send-notifications` (`CRON_SECRET`) | Expire unpaid orders; deliver notifications |
 | Customer (guest or signed in) | `/api/order-status`, `/api/invoice`, `/api/order-cancel`, `/api/return-request` | Own order only: bearer token of the owner or the order's email (constant-time compare; unknown order and wrong email look identical) |
@@ -84,7 +85,7 @@ write it; only `super_admin` can read it. `LOG_AUDIT` entries reported by staff 
 ## Secrets
 
 All secrets are environment variables (see `.env.example`): Firebase service account, `RAZORPAY_KEY_SECRET`,
-`RAZORPAY_WEBHOOK_SECRET`, `CRON_SECRET`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_WEBHOOK_TOKEN`, `RESEND_API_KEY`, `MSG91_AUTH_KEY`.
+`RAZORPAY_WEBHOOK_SECRET`, `CRON_SECRET`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_WEBHOOK_TOKEN`, `RESEND_API_KEY`, `MSG91_AUTH_KEY`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`. Inbound WhatsApp text is stored as plain text and rendered by React (no HTML); the opt-out collection is server-only.
 `settings/store` is world-readable and must never hold secrets (seller GSTIN and contact details are public business data).
 The Shiprocket API token is cached server-only in `integrations/shiprocket`. Notification payloads (customer PII) live only in
 the server-only `notifications_outbox`; logs record event and order id, never addresses or phone numbers. Only `RAZORPAY_KEY_ID` (returned as `keyId`) and the Firebase web config are public.

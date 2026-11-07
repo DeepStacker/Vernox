@@ -24,6 +24,7 @@ import consultationHandler from '../api/consultation';
 import engageHandler from '../api/engage';
 import seoHandler from '../api/seo';
 import catalogHandler from '../api/catalog';
+import whatsappWebhookHandler from '../api/whatsapp-webhook';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -46,6 +47,7 @@ const ROUTES: Record<string, Handler> = {
   '/api/engage': engageHandler,
   '/api/seo': seoHandler,
   '/api/catalog': catalogHandler,
+  '/api/whatsapp-webhook': whatsappWebhookHandler,
 };
 
 function setSecurityAndCorsHeaders(req: http.IncomingMessage, res: http.ServerResponse) {

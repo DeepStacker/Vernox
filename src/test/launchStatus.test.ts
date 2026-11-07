@@ -7,7 +7,9 @@ const FULL = {
   RAZORPAY_KEY_ID: 'rzp_live_abc', RAZORPAY_KEY_SECRET: 'secret-value-1', VITE_RAZORPAY_KEY_ID: 'rzp_live_abc', RAZORPAY_WEBHOOK_SECRET: 'whsec-2',
   SHIPROCKET_EMAIL: 'api@x.in', SHIPROCKET_PASSWORD: 'pw-3', SHIPROCKET_PICKUP_LOCATION: 'Primary', SHIPROCKET_WEBHOOK_TOKEN: 'tok-4',
   RESEND_API_KEY: 're_5', NOTIFY_FROM_EMAIL: 'Vernox <o@x.in>', MSG91_AUTH_KEY: 'msg-6', MSG91_TEMPLATES: '{"shipped":"t1"}', MSG91_OTP_TEMPLATE_ID: 'otp-8',
-  CRON_SECRET: 'cron-7', VITE_SITE_URL: 'https://vernox.in', FIREBASE_SERVICE_ACCOUNT_BASE64: 'e30=',
+  CRON_SECRET: 'cron-7',
+  WHATSAPP_ACCESS_TOKEN: 'wa-tok-9', WHATSAPP_PHONE_NUMBER_ID: '1055', WHATSAPP_TEMPLATES: '{"shipped":{"name":"tpl-secret-name","language":"en"}}',
+  WHATSAPP_APP_SECRET: 'wa-app-10', WHATSAPP_VERIFY_TOKEN: 'wa-verify-11', VITE_SITE_URL: 'https://vernox.in', FIREBASE_SERVICE_ACCOUNT_BASE64: 'e30=',
 } as NodeJS.ProcessEnv;
 
 describe('launch status', () => {
@@ -15,8 +17,18 @@ describe('launch status', () => {
     const items = environmentItems(FULL);
     expect(items.every(i => i.ready)).toBe(true);
     const json = JSON.stringify(items);
-    for (const secret of ['secret-value-1', 'whsec-2', 'pw-3', 'tok-4', 're_5', 'msg-6', 'cron-7', 'e30=', 'otp-8']) expect(json).not.toContain(secret);
+    for (const secret of ['secret-value-1', 'whsec-2', 'pw-3', 'tok-4', 're_5', 'msg-6', 'cron-7', 'e30=', 'otp-8', 'wa-tok-9', 'wa-app-10', 'wa-verify-11', '1055', 'tpl-secret-name']) expect(json).not.toContain(secret);
     expect(items.find(i => i.id === 'razorpay')?.detail).toBe('live mode');
+  });
+
+  it('reports WhatsApp as optional and ready only with the right keys', () => {
+    const byId = (env: NodeJS.ProcessEnv) => Object.fromEntries(environmentItems(env).map(i => [i.id, i]));
+    expect(byId(FULL)['whatsapp']).toMatchObject({ ready: true, required: false, group: 'messages' });
+    expect(byId(FULL)['whatsapp-inbound']).toMatchObject({ ready: true, required: false });
+    const none = byId({} as NodeJS.ProcessEnv);
+    expect(none['whatsapp'].ready).toBe(false);
+    expect(none['whatsapp-inbound'].ready).toBe(false);
+    expect(byId({ WHATSAPP_ACCESS_TOKEN: 't', WHATSAPP_PHONE_NUMBER_ID: '1', WHATSAPP_TEMPLATES: '{}' } as NodeJS.ProcessEnv)['whatsapp'].ready).toBe(false);
   });
 
   it('flags missing required keys and treats bad values as unset', () => {

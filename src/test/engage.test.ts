@@ -75,7 +75,7 @@ describe('TRADE_ENQUIRY', () => {
 
     const outbox = store.collection(OUTBOX_COLLECTION)[0].data as unknown as OutboxDoc;
     expect(outbox.event).toBe('trade_enquiry');
-    expect(outbox.channels).toEqual({ email: 'pending', sms: 'skipped' });
+    expect(outbox.channels).toEqual({ email: 'pending', sms: 'skipped', whatsapp: 'skipped' });
     const mail = renderNotification(outbox.event, outbox.payload);
     expect(mail.subject).toBe(`New trade enquiry ${res.body.ref}`);
     expect(mail.text).toContain('Ravi Menon (Studio M) <ravi@studio.in>');
@@ -117,7 +117,7 @@ describe('CONTACT', () => {
     const outbox = alert.data as unknown as OutboxDoc;
     expect(outbox.event).toBe('support_ticket');
     expect(outbox.payload.email).toBe('help@vernox.in');
-    expect(outbox.channels).toEqual({ email: 'pending', sms: 'skipped' });
+    expect(outbox.channels).toEqual({ email: 'pending', sms: 'skipped', whatsapp: 'skipped' });
     const mail = renderNotification(outbox.event, outbox.payload);
     expect(mail.subject).toMatch(/^New support ticket T-/);
     expect(mail.text).toContain('Asha Rao <asha@example.com>');

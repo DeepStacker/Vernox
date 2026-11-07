@@ -32,9 +32,31 @@ Required at build time (browser): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_D
    `payment_link.paid` (staff orders paid by payment link; enable Payment Links on the account).
 4. Vercel Cron runs `/api/cron/release-reservations` every 5 minutes and `/api/cron/send-notifications` every 2 minutes
    (`vercel.json`). **Vercel plan: Pro (decided 2026-11-06).** Hobby is for non-commercial use only, sub-daily crons need Pro, and the API is
-   17 serverless functions (Hobby allows 12; `api/engage.ts` serves contact, newsletter and reviews; `api/seo.ts` link previews and the sitemap;
-   `api/catalog.ts` the CDN-cached storefront data). The Docker image
+   18 serverless functions (Hobby allows 12; `api/engage.ts` serves contact, newsletter and reviews; `api/seo.ts` link previews and the sitemap;
+   `api/catalog.ts` the CDN-cached storefront data; `api/whatsapp-webhook.ts` the WhatsApp inbound webhook). The Docker image
    (`server/index.ts` routes every endpoint) is the fallback host.
+4d. **WhatsApp (optional, configuration only; every part is skipped until its variables are set):**
+   1. developers.facebook.com > My Apps > Create app (type Business), add the **WhatsApp** product, and attach/verify your business
+      in Meta Business Settings. Add and verify the business phone number (WhatsApp > API Setup); note its **Phone number ID**.
+   2. Business Settings > Users > System users: create a system user, assign the app and the WhatsApp account with full control,
+      and generate a **permanent token** with `whatsapp_business_messaging` and `whatsapp_business_management`. Set
+      `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID` (optionally `WHATSAPP_GRAPH_VERSION`, default `v27.0`).
+   3. WhatsApp > Configuration > Webhook: callback URL `https://<domain>/api/whatsapp-webhook`, verify token = a long random value you
+      also set as `WHATSAPP_VERIFY_TOKEN`; subscribe to the **messages** field. Set `WHATSAPP_APP_SECRET` to the app secret
+      (App settings > Basic); it signs every webhook (`X-Hub-Signature-256`).
+   4. WhatsApp Manager > Message templates: create category **Utility**, language English, with these bodies (variables are
+      always {{1}} first name, {{2}} order number, {{3}} event value) and wait for approval:
+      - `order_confirmed`: "Hi {{1}}, your Vernox order {{2}} is confirmed. Amount: {{3}}. Each piece is made to order; we will tell you when it ships."
+      - `shipped`: "Hi {{1}}, your Vernox order {{2}} has shipped. Tracking number (AWB): {{3}}."
+      - `out_for_delivery`: "Hi {{1}}, your Vernox order {{2}} is out for delivery today. Tracking number (AWB): {{3}}."
+      - `delivered`: "Hi {{1}}, your Vernox order {{2}} has been delivered. Review your purchase: {{3}}"
+      Then set `WHATSAPP_TEMPLATES`, for example
+      `{"order_confirmed":{"name":"order_confirmed","language":"en"},"shipped":{"name":"shipped","language":"en"},"out_for_delivery":{"name":"out_for_delivery","language":"en"},"delivered":{"name":"delivered","language":"en"}}`
+      (`language` is the template's language code, e.g. `en` or `en_US`). Events not in the map are not sent on WhatsApp.
+   Behaviour: order updates are business-initiated, so only approved templates are sent; free-form text is possible only from the
+   Support console within 24 hours of the customer's last message. A customer who replies STOP is not messaged again (START
+   re-enables). Meta requires the customer's opt-in to WhatsApp messaging: collect it at checkout (the privacy policy and order
+   confirmation should say so) before enabling templates. Check Launch setup in the admin for the two optional items.
 4c. **Support alerts:** set `supportEmail` in Settings so new contact-form tickets alert that inbox (needs the Resend email channel); without it, or while it is the seeded placeholder, tickets are still saved and visible in Support > Tickets. The newsletter list is exported with `npm run export:newsletter` (see DATABASE.md).
 4a. **Shiprocket:** create an API user (Settings → API → Configure) and set `SHIPROCKET_EMAIL` / `SHIPROCKET_PASSWORD`; set
    `SHIPROCKET_PICKUP_LOCATION` to the pickup nickname and `SHIPROCKET_PICKUP_PINCODE`. Tracking webhook (Settings → API →
@@ -44,8 +66,7 @@ Required at build time (browser): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_D
 4b. **Notifications:** Resend — verify the sending domain, set `RESEND_API_KEY` and `NOTIFY_FROM_EMAIL`. MSG91 SMS — register
    the sender ID and every template on the DLT portal (TRAI requirement in India; unregistered SMS are blocked), create matching
    MSG91 Flow templates with variables `##var1##` (first name), `##var2##` (order number), `##var3##` (amount / AWB / status, ≤ 30
-   characters), then set `MSG91_AUTH_KEY` and `MSG91_TEMPLATES` (JSON event → template id). WhatsApp is not wired yet (the
-   `NotificationChannel` interface in `api/_lib/notifications/types.ts` is the extension point).
+   characters), then set `MSG91_AUTH_KEY` and `MSG91_TEMPLATES` (JSON event → template id). WhatsApp: see 4d.
    **COD confirmation code (optional):** in MSG91 > OTP create an OTP template and get it DLT-approved (OTP templates need DLT
    registration like any Indian SMS; body must contain the `##OTP##` variable), then set `MSG91_AUTH_KEY` and `MSG91_OTP_TEMPLATE_ID`.
    The checkout then asks for a 6-digit code before a COD order (Settings > Cash on delivery > "Confirm COD orders with an SMS

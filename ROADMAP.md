@@ -279,7 +279,7 @@ Results (same harness, interleaved runs; done 2026-11-07):
 - Not built: EMI messaging, save-for-later, a welcome newsletter email and campaign sending (needs an ESP).
 - Done (2026-11-07): COD order confirmation. MSG91 OTP code at checkout when `MSG91_OTP_TEMPLATE_ID` is set (`api/_lib/codOtp.ts`, engage actions `COD_OTP_*`), automatic fallback otherwise: orders flagged `COD_UNVERIFIED` with a "Confirm by phone" prompt (Orders, Production) and the audited `CONFIRM_COD_ORDER`. Newsletter double opt-in: sign-ups are `pending` until the emailed link (`/newsletter/confirm`) is opened; export is confirmed-only; confirmation emails wait in the outbox while Resend is unset. Owner inputs: a DLT-approved MSG91 OTP template (`MSG91_OTP_TEMPLATE_ID`); live MSG91/Resend not yet exercised with real keys.
 - Done (2026-11-07): staff log email, WhatsApp and phone requests as tickets (`CREATE_TICKET`), linked to the order when the number
-  matches; replies are emailed only when the ticket has an email. Automatic WhatsApp intake needs a WhatsApp Business API provider.
+  matches; replies are emailed only when the ticket has an email. Done (2026-11-07): WhatsApp end to end by configuration only (Meta Cloud API): order updates as a third outbox channel with approved templates, inbound messages as tickets via `/api/whatsapp-webhook` (STOP / START opt-out), and "Send on WhatsApp" replies in the Support console within the 24-hour window. Setup: DEPLOYMENT.md 4d. Not verified against live Meta (needs keys and approved templates).
 
 ## Phase 3a follow-ups (status after 3b)
 

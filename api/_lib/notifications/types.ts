@@ -70,7 +70,7 @@ export interface NotificationPayload {
   newsletter?: { emailHash: string; token: string };
 }
 
-export type ChannelName = 'email' | 'sms';
+export type ChannelName = 'email' | 'sms' | 'whatsapp';
 
 export type ChannelState = 'pending' | 'sent' | 'skipped';
 

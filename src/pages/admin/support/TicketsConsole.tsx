@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import {
-  TICKET_CHANNEL_LABELS, TICKET_STATUSES, TICKET_STATUS_LABELS, useTicketMutations, useTickets, type Ticket, type TicketStatus,
+  TICKET_CHANNEL_LABELS, TICKET_STATUSES, TICKET_STATUS_LABELS, useTicketMutations, useTickets, whatsappWindowOpen, type Ticket, type TicketStatus,
 } from '@/lib/data/tickets';
 import { NewTicketDialog } from './NewTicketDialog';
 
@@ -21,7 +21,7 @@ const whatsappLink = (phone: string) => {
 const when = (ms: number) => (ms ? new Date(ms).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '');
 
 function TicketThread({ ticket, canWrite }: { ticket: Ticket; canWrite: boolean }) {
-  const { setTicketStatus, addTicketMessage } = useTicketMutations();
+  const { setTicketStatus, addTicketMessage, sendTicketWhatsApp } = useTicketMutations();
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -31,6 +31,15 @@ function TicketThread({ ticket, canWrite }: { ticket: Ticket; canWrite: boolean 
     if (await addTicketMessage({ id: ticket.id, direction, text: text.trim() })) setText('');
     setSaving(false);
   };
+
+  const sendWhatsApp = async () => {
+    if (!text.trim()) return;
+    setSaving(true);
+    if (await sendTicketWhatsApp({ id: ticket.id, text: text.trim() })) setText('');
+    setSaving(false);
+  };
+  const isWhatsApp = ticket.channel === 'whatsapp';
+  const windowOpen = whatsappWindowOpen(ticket);
 
   return (
     <article className="space-y-4 rounded-xl border border-border/70 bg-card p-4">
@@ -52,7 +61,7 @@ function TicketThread({ ticket, canWrite }: { ticket: Ticket; canWrite: boolean 
         {ticket.messages.map((m, i) => (
           <li key={`${m.at}-${i}`} className={`rounded-lg p-3 text-sm ${m.direction === 'inbound' ? 'bg-muted/40' : m.direction === 'reply' ? 'bg-oxblood/5' : 'border border-dashed border-border'}`}>
             <p className="whitespace-pre-wrap">{m.text}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{DIRECTION_LABEL[m.direction]} · {m.direction === 'inbound' ? ticket.customerName : m.by} · {when(m.at)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{m.direction === 'reply' && isWhatsApp ? 'Reply sent on WhatsApp' : DIRECTION_LABEL[m.direction]} · {m.direction === 'inbound' ? ticket.customerName : m.by} · {when(m.at)}</p>
           </li>
         ))}
       </ol>
@@ -66,9 +75,17 @@ function TicketThread({ ticket, canWrite }: { ticket: Ticket; canWrite: boolean 
             {ticket.customerEmail && (
               <button type="button" disabled={saving || !text.trim()} onClick={() => void add('reply')} className="btn-primary">Send reply</button>
             )}
+            {windowOpen && (
+              <button type="button" disabled={saving || !text.trim()} onClick={() => void sendWhatsApp()} className="btn-primary">Send on WhatsApp</button>
+            )}
             <button type="button" disabled={saving || !text.trim()} onClick={() => void add('note')} className="btn-secondary">Add note</button>
           </div>
-          {!ticket.customerEmail && (
+          {isWhatsApp && !windowOpen && (
+            <p className="text-xs text-muted-foreground">
+              The customer's last WhatsApp message is more than 24 hours old, so WhatsApp only allows an approved template now. Use the WhatsApp link above to continue in your own app.
+            </p>
+          )}
+          {!ticket.customerEmail && !windowOpen && (
             <p className="text-xs text-muted-foreground">No email on this ticket. Answer on WhatsApp or phone, then add what you said as a note.</p>
           )}
           <div className="flex flex-wrap gap-2" role="group" aria-label="Set status">

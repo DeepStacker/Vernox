@@ -40,6 +40,14 @@ export interface Ticket {
   updatedAt: number;
 }
 
+/** Meta only allows free-form WhatsApp text within 24 hours of the customer's last message. */
+export const WHATSAPP_WINDOW_MS = 24 * 3600_000;
+export function whatsappWindowOpen(ticket: Pick<Ticket, 'channel' | 'messages'>, now = Date.now()): boolean {
+  if (ticket.channel !== 'whatsapp') return false;
+  const last = ticket.messages.reduce((l, m) => (m.direction === 'inbound' && m.at > l ? m.at : l), 0);
+  return last > 0 && now - last < WHATSAPP_WINDOW_MS;
+}
+
 export const TICKETS_KEY = ['admin', 'tickets'] as const;
 const MAX_TICKETS = 300;
 
@@ -108,5 +116,11 @@ export function useTicketMutations() {
     failureMessage: 'Could not save the message',
     successMessage: 'Saved',
   });
-  return { setTicketStatus: setStatus.run, addTicketMessage: addMessage.run };
+  const sendWhatsApp = useOptimisticMutation<Ticket[], { id: string; text: string }>({
+    queryKey: TICKETS_KEY,
+    mutationFn: ({ id, text }) => adminAction('SEND_TICKET_WHATSAPP', { ticketId: id, text }),
+    failureMessage: 'Could not send on WhatsApp',
+    successMessage: 'Sent on WhatsApp',
+  });
+  return { setTicketStatus: setStatus.run, addTicketMessage: addMessage.run, sendTicketWhatsApp: sendWhatsApp.run };
 }
