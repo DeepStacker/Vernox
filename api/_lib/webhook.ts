@@ -12,6 +12,11 @@
  * order cannot be found is stored in `webhook_events` with outcome `unmatched`
  * for reconciliation, logged as an error, and acknowledged with 200.
  * Transient failures (Firestore errors) still return 500 so Razorpay retries.
+ *
+ * Payment links (staff orders, api/_lib/checkout.ts): `payment_link.paid` carries the link, whose notes hold
+ * our order id; it is accepted only when that order records the same link id. Its `payment.captured` twin
+ * then resolves by payment id (duplicate) or, when the link's order id was known at creation, by order id.
+ * Docs: https://razorpay.com/docs/webhooks/payment-links/
  */
 import { ApiError } from './errors';
 import {
@@ -34,12 +39,18 @@ interface RazorpayEntity {
   error_reason?: string;
 }
 
+interface RazorpayPaymentLinkEntity {
+  id?: string;
+  notes?: Record<string, string> | unknown[];
+}
+
 export interface RazorpayWebhookEvent {
   event?: string;
   payload?: {
     payment?: { entity?: RazorpayEntity };
     order?: { entity?: RazorpayEntity };
     refund?: { entity?: RazorpayEntity };
+    payment_link?: { entity?: RazorpayPaymentLinkEntity };
   };
 }
 
@@ -56,12 +67,22 @@ export type WebhookOutcome =
   | 'ignored_event'
   | 'duplicate_event';
 
-const HANDLED_EVENTS = new Set(['payment.captured', 'order.paid', 'payment.failed', 'refund.processed']);
+const HANDLED_EVENTS = new Set(['payment.captured', 'order.paid', 'payment.failed', 'refund.processed', 'payment_link.paid']);
+
+async function orderIdForPaymentLink(store: DocStore, link: RazorpayPaymentLinkEntity | undefined): Promise<string | null> {
+  const notes = link?.notes && !Array.isArray(link.notes) ? link.notes : {};
+  const orderId = typeof notes.orderId === 'string' && /^[A-Za-z0-9]{10,40}$/.test(notes.orderId) ? notes.orderId : null;
+  if (!orderId || !link?.id) return null;
+  const order = await store.get(`orders/${orderId}`);
+  const recorded = (order?.paymentLink as { id?: unknown } | null | undefined)?.id;
+  return recorded === link.id ? orderId : null;
+}
 
 async function resolveOrderId(store: DocStore, event: RazorpayWebhookEvent): Promise<string | null> {
   const payment = event.payload?.payment?.entity;
   const order = event.payload?.order?.entity;
   const refund = event.payload?.refund?.entity;
+  if (event.event === 'payment_link.paid') return orderIdForPaymentLink(store, event.payload?.payment_link?.entity);
   const razorpayOrderId = payment?.order_id || order?.id;
   if (razorpayOrderId) {
     const found = await findOrderIdByRazorpayOrderId(store, razorpayOrderId);
@@ -122,7 +143,8 @@ async function applyEvent(
   const payment = event.payload?.payment?.entity;
   switch (type) {
     case 'payment.captured':
-    case 'order.paid': {
+    case 'order.paid':
+    case 'payment_link.paid': {
       if (!payment?.id || typeof payment.amount !== 'number' || !payment.currency) {
         throw new ApiError(400, 'VALIDATION_ERROR', 'Webhook payment entity is incomplete.');
       }

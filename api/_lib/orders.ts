@@ -8,6 +8,7 @@
  * them back for money logic.
  */
 import type { OrderHold } from '../../src/types/orderStatus';
+import type { OfflinePaymentMode, StaffOrderChannel } from '../../src/types/staffOrders';
 import crypto from 'crypto';
 import { paiseToRupees } from './money';
 import { CUSTOMER_CANCELLABLE_STATUSES, type OrderStatus, type StatusHistoryEntry } from './orderLifecycle';
@@ -53,6 +54,28 @@ export interface OrderItemSnapshot {
 }
 
 export type PaymentMethod = 'prepaid' | 'cod' | 'replacement';
+
+/** Money taken in person for a staff-entered order (api/_lib/staffOrders.ts); the order is `prepaid` with no Razorpay payment. */
+export interface OfflinePayment {
+  mode: OfflinePaymentMode;
+  /** UPI / card / bank reference, or '' for cash. */
+  reference: string;
+  receivedBy: string;
+  at: number;
+}
+
+/** Razorpay payment link sent for a staff-entered prepaid order. */
+export interface PaymentLinkRecord {
+  id: string;
+  url: string;
+  expiresAt: number;
+}
+
+/** Who entered an order that did not come through the storefront checkout. */
+export interface OrderSource {
+  channel: StaffOrderChannel;
+  by: string;
+}
 
 export type ReservationStatus = 'held' | 'released' | 'committed' | 'none';
 
@@ -149,6 +172,10 @@ export interface OrderDoc {
   shippingCountry: string;
   phone: string;
   tracking?: { carrier?: string; trackingNumber?: string; url?: string } | null;
+  /** Set on staff-entered orders (counter, phone, WhatsApp, email, trade); absent for storefront checkouts. */
+  source?: OrderSource;
+  offlinePayment?: OfflinePayment | null;
+  paymentLink?: PaymentLinkRecord | null;
   /** Staff notes: free text plus the structured `#vernox:v1` block (src/lib/orders/orderNotes.ts). Staff-written only. */
   notes?: string;
 }
@@ -211,19 +238,33 @@ export function buildOrderDoc(params: {
   leadTimeDays?: number;
   parentOrderId?: string | null;
   consultation?: ConsultationPurchase;
+  /** Staff-entered order: who entered it, and the in-person payment if it was already taken. */
+  source?: OrderSource;
+  offlinePayment?: OfflinePayment;
 }): OrderDoc {
   const { customer, totals, now } = params;
   const paymentMethod = params.paymentMethod ?? 'prepaid';
-  // Prepaid orders hold stock until paid; COD and replacement orders commit it immediately.
-  const status: OrderStatus = paymentMethod === 'prepaid' ? 'Pending_Payment' : paymentMethod === 'cod' ? 'Confirmed_COD' : 'Paid';
+  // Prepaid orders hold stock until paid; COD, replacement and already-paid (offline) orders commit it immediately.
+  const awaitingPayment = paymentMethod === 'prepaid' && !params.offlinePayment;
+  const status: OrderStatus = awaitingPayment ? 'Pending_Payment' : paymentMethod === 'cod' ? 'Confirmed_COD' : 'Paid';
   const reservationStatus: ReservationStatus =
-    params.reservedItems.length === 0 ? 'none' : paymentMethod === 'prepaid' ? 'held' : 'committed';
+    params.reservedItems.length === 0 ? 'none' : awaitingPayment ? 'held' : 'committed';
+  const by = paymentMethod === 'replacement' ? 'system' : params.source?.by ?? 'customer';
   return {
     id: params.id,
     orderNumber: params.orderNumber,
     status,
     statusHistory: [
-      { status, at: now, by: paymentMethod === 'replacement' ? 'system' : 'customer', ...(paymentMethod === 'replacement' ? { note: `replacement for ${params.parentOrderId}` } : {}) },
+      {
+        status,
+        at: now,
+        by,
+        ...(paymentMethod === 'replacement'
+          ? { note: `replacement for ${params.parentOrderId}` }
+          : params.offlinePayment
+            ? { note: `paid by ${params.offlinePayment.mode}${params.offlinePayment.reference ? ` (${params.offlinePayment.reference})` : ''}` }
+            : {}),
+      },
     ],
     userId: params.userId,
     email: customer.email,
@@ -234,7 +275,7 @@ export function buildOrderDoc(params: {
     coupon: params.coupon,
     couponCode: params.coupon?.code ?? null,
     stockReservation: { status: reservationStatus, items: params.reservedItems },
-    reservationExpiresAt: paymentMethod === 'prepaid' ? now + params.reservationTtlMs : 0,
+    reservationExpiresAt: awaitingPayment ? now + params.reservationTtlMs : 0,
     idempotencyKey: params.idempotencyKey,
     razorpayOrderId: null,
     razorpayPaymentId: null,
@@ -250,6 +291,7 @@ export function buildOrderDoc(params: {
     deliveredAt: null,
     parentOrderId: params.parentOrderId ?? null,
     ...(params.consultation ? { kind: 'service' as const, consultation: params.consultation } : {}),
+    ...(params.source ? { source: params.source, offlinePayment: params.offlinePayment ?? null, paymentLink: null } : {}),
     flags: [],
     placedAt: now,
     createdAt: now,

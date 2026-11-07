@@ -13,6 +13,12 @@
  * mobile), the COD fee is added as its own taxable line, and the order is created
  * as `Confirmed_COD` with stock committed and the coupon redeemed in the same
  * transaction. No Razorpay order is created.
+ *
+ * Staff-entered orders (`options.staff`, api/_lib/staffOrders.ts) use the same path, so pricing, GST, stock and
+ * coupons cannot drift from the storefront: an `offlinePayment` order is created already `Paid` (stock
+ * committed, coupon redeemed, customer notified), and with `handover` it is also `Delivered` with its GST
+ * invoice issued in the same transaction (a counter sale). A prepaid staff order without an offline payment
+ * gets a Razorpay payment link instead of a checkout order, and holds stock for as long as the link lives.
  */
 import crypto from 'crypto';
 import { z } from 'zod';
@@ -29,6 +35,7 @@ import {
 } from './coupons';
 import type { ConsultationPurchase } from './consultations';
 import { ApiError } from './errors';
+import { applyInvoice, planInvoice } from './gst/invoice';
 import { enqueueNotification, payloadFromOrder, planNotification } from './notifications/outbox';
 import {
   buildOrderDoc,
@@ -38,7 +45,9 @@ import {
   phoneKey,
   pricingPayload,
   type CustomerDetails,
+  type OfflinePayment,
   type OrderDoc,
+  type OrderSource,
   type PaymentMethod,
 } from './orders';
 import { cancelUnstartedCheckout } from './payments';
@@ -52,7 +61,8 @@ import {
   type CheckoutItemInput,
   type ProductRecord,
 } from './pricing';
-import type { PaymentGateway } from './razorpay';
+import type { PaymentGateway, PaymentLinkGateway } from './razorpay';
+import { PAYMENT_LINK_TTL_HOURS } from '../../src/types/staffOrders';
 import { itemLeadTimeDays, serviceabilityFor } from './shipping';
 import type { ShippingProvider } from './shipping/types';
 import { increment, type DocStore } from './store';
@@ -63,7 +73,7 @@ const MAX_TOTAL_DESIGN_REF_CHARS = ORDER_LIMITS.maxTotalDesignRefChars;
 const MIN_PAYABLE_PAISE = 100; // Razorpay minimum order amount (₹1)
 const IDEMPOTENCY_TTL_MS = 24 * 3600_000;
 
-const itemSchema = z.object({
+export const itemSchema = z.object({
   productId: z.string().trim().min(1).max(128),
   sizeLabel: z.string().trim().min(1).max(120).optional(),
   widthMm: z.number().int().positive().max(10_000).optional(),
@@ -75,7 +85,7 @@ const itemSchema = z.object({
 
 const INDIA = new Set(['in', 'india', 'bharat']);
 
-const customerSchema = z
+export const customerSchema = z
   .object({
     email: z.string().trim().toLowerCase().email().max(254),
     name: z.string().trim().min(1).max(120),
@@ -141,7 +151,20 @@ export interface CodCheckoutResponse {
   pricing: ReturnType<typeof pricingPayload>;
 }
 
-export type CheckoutResponse = PrepaidCheckoutResponse | CodCheckoutResponse;
+/** Every staff-entered order answers with this shape, whatever the payment. */
+export interface StaffCheckoutResponse {
+  success: true;
+  staff: true;
+  orderId: string;
+  orderNumber: string;
+  status: OrderDoc['status'];
+  paymentMethod: PaymentMethod;
+  paymentLink: { id: string; url: string; expiresAt: number } | null;
+  invoiceNumber: string | null;
+  pricing: ReturnType<typeof pricingPayload>;
+}
+
+export type CheckoutResponse = PrepaidCheckoutResponse | CodCheckoutResponse | StaffCheckoutResponse;
 
 export interface CheckoutDeps {
   store: DocStore;
@@ -151,10 +174,12 @@ export interface CheckoutDeps {
   config: StoreConfig;
   /** Needed for COD PIN eligibility. */
   shipping?: ShippingProvider;
+  /** Needed for staff orders paid by payment link. */
+  paymentLinks?: PaymentLinkGateway;
   now?: () => number;
 }
 
-function requestHash(req: CheckoutRequest, consultation: ConsultationPurchase | null): string {
+function requestHash(req: CheckoutRequest, consultation: ConsultationPurchase | null, staff: StaffCheckout | null): string {
   const canonical = JSON.stringify({
     ...(consultation ? { consultationSpace: consultation.spaceId } : {}),
     items: req.items.map(i => [i.productId, i.sizeLabel ?? null, i.widthMm ?? null, i.heightMm ?? null, i.finish, i.quantity, i.customDesignRef ?? null]),
@@ -162,6 +187,7 @@ function requestHash(req: CheckoutRequest, consultation: ConsultationPurchase | 
     email: req.customer.email,
     // Only COD changes the hash, so prepaid hashes are unchanged from Phase 1.
     ...(req.paymentMethod === 'cod' ? { paymentMethod: 'cod' } : {}),
+    ...(staff ? { staff: [staff.source.channel, req.customer.phone, staff.offlinePayment?.mode ?? null, staff.offlinePayment?.reference ?? null, Boolean(staff.handover)] } : {}),
   });
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
@@ -186,8 +212,26 @@ const toCodResponse = (order: OrderDoc): CodCheckoutResponse => ({
   pricing: pricingPayload(order),
 });
 
+const toStaffResponse = (order: OrderDoc): StaffCheckoutResponse => ({
+  success: true,
+  staff: true,
+  orderId: order.id,
+  orderNumber: order.orderNumber,
+  status: order.status,
+  paymentMethod: order.paymentMethod,
+  paymentLink: order.paymentLink ?? null,
+  invoiceNumber: order.invoiceNumber ?? null,
+  pricing: pricingPayload(order),
+});
+
 async function resolveDuplicate(deps: CheckoutDeps, orderId: string): Promise<CheckoutResponse> {
   const order = asOrder(await deps.store.get(orderPath(orderId)));
+  if (order?.source) {
+    if (order.status === 'Pending_Payment' && order.paymentMethod === 'prepaid' && !order.paymentLink) {
+      throw new ApiError(409, 'VALIDATION_ERROR', 'This order is still being prepared. Please retry in a few seconds.');
+    }
+    return toStaffResponse(order);
+  }
   if (order?.paymentMethod === 'cod') return toCodResponse(order);
   if (order?.status === 'Pending_Payment' && order.razorpayOrderId) return toResponse(order, deps.razorpayKeyId);
   if (order?.status === 'Pending_Payment') {
@@ -202,6 +246,18 @@ export interface CheckoutOptions {
    * line priced from settings, no stock, no shipping, no coupon. Only api/consultation.ts passes it.
    */
   consultation?: ConsultationPurchase;
+  /** A staff-entered order (api/_lib/staffOrders.ts); `userId` is then null. */
+  staff?: StaffCheckout;
+}
+
+export interface StaffCheckout {
+  source: OrderSource;
+  /** Money already taken in person: the order is created `Paid`. Without it a prepaid order gets a payment link. */
+  offlinePayment?: OfflinePayment;
+  /** Counter sale: the customer takes the pieces now, so the order is `Delivered` and invoiced at once. */
+  handover?: boolean;
+  /** Staff note saved as the order's first note. */
+  note?: string;
 }
 
 export async function createCheckoutIntent(
@@ -212,10 +268,21 @@ export async function createCheckoutIntent(
 ): Promise<CheckoutResponse> {
   const { store, config } = deps;
   const consultation = options.consultation ?? null;
+  const staff = options.staff ?? null;
   const now = (deps.now ?? Date.now)();
-  const hash = requestHash(req, consultation);
+  const hash = requestHash(req, consultation, staff);
   const idempotencyPath = `idempotency/${req.idempotencyKey}`;
   const cod = req.paymentMethod === 'cod';
+  const paidOffline = Boolean(staff?.offlinePayment) && !cod;
+  const viaPaymentLink = Boolean(staff) && !cod && !paidOffline;
+  /** Confirmed when created: redeem the coupon and notify now (a prepaid order does both when paid). */
+  const confirmedAtCreation = cod || paidOffline;
+  if (staff?.handover && !paidOffline) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'A counter handover needs the payment taken first.');
+  }
+  if (viaPaymentLink && !deps.paymentLinks) {
+    throw new ApiError(500, 'CONFIG_ERROR', 'Payment links are not configured.', 'checkout deps.paymentLinks missing');
+  }
   if (consultation && (cod || req.items.length > 0 || req.couponCode)) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'A design consultation is prepaid and cannot be combined with items or a coupon.');
   }
@@ -277,7 +344,7 @@ export async function createCheckoutIntent(
     const leadTimeDays = consultation
       ? undefined
       : Math.max(...lines.map(l => itemLeadTimeDays(l.isCustom, l.isCustom ? null : products.get(l.productId)?.leadTimeDays ?? null, config)));
-    const notification = cod ? await planNotification(tx, orderId, 'order_confirmed') : null;
+    const notification = confirmedAtCreation ? await planNotification(tx, orderId, 'order_confirmed') : null;
 
     // ---- stock ----
     const reserved: Array<{ productId: string; quantity: number }> = [];
@@ -296,9 +363,10 @@ export async function createCheckoutIntent(
       reserved.push({ productId, quantity });
     }
 
-    // ---- writes ----
-    for (const r of reserved) tx.update(`products/${r.productId}`, { stock: increment(-r.quantity), updatedAt: now });
-    const order = buildOrderDoc({
+    if (staff?.handover && lines.some(l => l.isCustom)) {
+      throw new ApiError(400, 'VALIDATION_ERROR', 'Custom pieces are made to order, so they cannot be handed over at the counter.');
+    }
+    let order = buildOrderDoc({
       id: orderId,
       orderNumber,
       userId,
@@ -308,16 +376,32 @@ export async function createCheckoutIntent(
       coupon,
       reservedItems: reserved,
       idempotencyKey: req.idempotencyKey,
-      reservationTtlMs: config.reservationTtlMs,
       now,
       paymentMethod: req.paymentMethod,
       leadTimeDays,
       consultation: consultation ?? undefined,
+      source: staff?.source,
+      offlinePayment: paidOffline ? staff!.offlinePayment : undefined,
+      reservationTtlMs: viaPaymentLink ? PAYMENT_LINK_TTL_HOURS * 3600_000 : config.reservationTtlMs,
     });
+    if (staff?.note) order = { ...order, notes: staff.note };
+    if (staff?.handover) {
+      order = {
+        ...order,
+        status: 'Delivered',
+        statusHistory: [...order.statusHistory, { status: 'Delivered', at: now, by: staff.source.by, note: 'handed over at the counter' }],
+        deliveredAt: now,
+      };
+    }
+    // Time of supply for a counter sale is the handover, so the invoice is issued now (read phase here).
+    const invoicePlan = staff?.handover ? await planInvoice(tx, order, config.seller, now) : null;
+
+    // ---- writes ----
+    for (const r of reserved) tx.update(`products/${r.productId}`, { stock: increment(-r.quantity), updatedAt: now });
+    if (invoicePlan) order = { ...order, ...applyInvoice(tx, invoicePlan, order, config.seller, now) };
     tx.create(orderPath(orderId), order as unknown as Record<string, unknown>);
     tx.create(idempotencyPath, { orderId, requestHash: hash, createdAt: now, expiresAt: new Date(now + IDEMPOTENCY_TTL_MS) });
-    if (cod) {
-      // A COD order is confirmed at creation: redeem the coupon and notify now (prepaid does both when paid).
+    if (confirmedAtCreation) {
       if (coupon) {
         writeCouponRedemption(tx, {
           couponId: coupon.id,
@@ -343,7 +427,9 @@ export async function createCheckoutIntent(
   }
 
   const { order } = result;
+  if (staff && !viaPaymentLink) return toStaffResponse(order);
   if (cod) return toCodResponse(order);
+  if (viaPaymentLink) return attachPaymentLink(deps, order, now);
   let razorpayOrderId: string;
   try {
     const rzp = await deps.gateway.createOrder({
@@ -369,6 +455,36 @@ export async function createCheckoutIntent(
   return toResponse({ ...order, razorpayOrderId }, deps.razorpayKeyId);
 }
 
+async function attachPaymentLink(deps: CheckoutDeps, order: OrderDoc, now: number): Promise<StaffCheckoutResponse> {
+  const expiresAt = order.reservationExpiresAt;
+  let link: Awaited<ReturnType<PaymentLinkGateway['createPaymentLink']>>;
+  try {
+    link = await deps.paymentLinks!.createPaymentLink({
+      amountPaise: order.amounts.totalPaise,
+      referenceId: order.orderNumber,
+      description: `Vernox order ${order.orderNumber}`,
+      customer: { name: order.customer.name, email: order.email || undefined, contact: order.customer.phone || undefined },
+      expireBy: Math.floor(expiresAt / 1000),
+      notes: { orderId: order.id, orderNumber: order.orderNumber },
+    });
+  } catch (err) {
+    try {
+      await cancelUnstartedCheckout(deps.store, order.id, now);
+    } catch (compensationErr) {
+      console.error(`[checkout] could not cancel staff order ${order.id} after payment-link failure`, compensationErr);
+    }
+    throw err;
+  }
+  const paymentLink = { id: link.id, url: link.url, expiresAt };
+  // The link's Razorpay order id (when known) lets payment.captured find this order like a checkout payment.
+  await deps.store.update(orderPath(order.id), {
+    paymentLink,
+    ...(link.razorpayOrderId ? { razorpayOrderId: link.razorpayOrderId } : {}),
+    updatedAt: (deps.now ?? Date.now)(),
+  });
+  return toStaffResponse({ ...order, paymentLink, razorpayOrderId: link.razorpayOrderId ?? order.razorpayOrderId });
+}
+
 export interface CouponPreviewRequest {
   code: string;
   items: CheckoutItemInput[];
@@ -386,20 +502,38 @@ export const couponPreviewSchema = z.object({
  * checkout, read-only. The result is advisory; checkout re-evaluates it.
  */
 export async function previewCoupon(store: DocStore, config: StoreConfig, req: CouponPreviewRequest, now = Date.now()) {
-  const catalogIds = [...new Set(req.items.filter(i => i.productId !== CUSTOM_PRODUCT_ID).map(i => i.productId))];
+  const { evaluation, totals } = await quoteItems(store, config, req.items, { couponCode: req.code, customerEmail: req.customerEmail, now });
+  return { evaluation: evaluation!, totals };
+}
+
+/**
+ * Read-only price of a basket with the checkout engine: lines, optional coupon and the COD fee. Used by the
+ * coupon preview and the staff New order screen; checkout re-prices everything in its transaction.
+ */
+export async function quoteItems(
+  store: DocStore,
+  config: StoreConfig,
+  items: CheckoutItemInput[],
+  opts: { couponCode?: string; customerEmail?: string; cod?: boolean; now?: number } = {},
+) {
+  const catalogIds = [...new Set(items.filter(i => i.productId !== CUSTOM_PRODUCT_ID).map(i => i.productId))];
   const [coupon, productDocs] = await Promise.all([
-    findCouponByCode(store, req.code),
+    opts.couponCode ? findCouponByCode(store, opts.couponCode) : Promise.resolve(null),
     Promise.all(catalogIds.map(id => store.get(`products/${id}`))),
   ]);
   const products = new Map<string, ProductRecord | null>(catalogIds.map((id, idx) => [id, productFromDoc(id, productDocs[idx])]));
-  const lines = priceLines(req.items, products, config);
+  const lines = priceLines(items, products, config);
 
-  let customerUsageCount: number | null = null;
-  if (coupon && req.customerEmail) {
-    const usage = await store.get(customerUsagePath(coupon.id, req.customerEmail));
-    customerUsageCount = typeof usage?.count === 'number' ? usage.count : 0;
+  let evaluation: ReturnType<typeof evaluateCoupon> | null = null;
+  if (opts.couponCode) {
+    let customerUsageCount: number | null = null;
+    if (coupon && opts.customerEmail) {
+      const usage = await store.get(customerUsagePath(coupon.id, opts.customerEmail));
+      customerUsageCount = typeof usage?.count === 'number' ? usage.count : 0;
+    }
+    evaluation = evaluateCoupon(coupon, lines, { now: opts.now ?? Date.now(), customerUsageCount, customerEmail: opts.customerEmail });
   }
-  const evaluation = evaluateCoupon(coupon, lines, { now, customerUsageCount, customerEmail: req.customerEmail });
-  const totals = computeTotals(lines, 'discountPaise' in evaluation ? evaluation.discountPaise : 0, config);
-  return { evaluation, totals };
+  const discountPaise = evaluation && 'discountPaise' in evaluation ? evaluation.discountPaise : 0;
+  const totals = computeTotals(lines, discountPaise, config, opts.cod ? { cod: true } : undefined);
+  return { evaluation, totals, lines };
 }

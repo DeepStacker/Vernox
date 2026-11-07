@@ -279,7 +279,8 @@ export async function cancelUnstartedCheckout(store: DocStore, orderId: string, 
 export function collectedPaise(order: OrderDoc): number {
   if (order.paymentMethod === 'cod') return order.codCollectedPaise ?? 0;
   if (order.paymentMethod === 'replacement') return 0;
-  return order.razorpayPaymentId ? order.amounts.totalPaise : 0;
+  // Staff orders paid in person (cash, UPI, card, bank transfer) are refunded manually, like COD.
+  return order.razorpayPaymentId || order.offlinePayment ? order.amounts.totalPaise : 0;
 }
 
 export type RecordRefundOutcome = 'recorded' | 'duplicate';

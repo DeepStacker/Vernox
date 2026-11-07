@@ -71,6 +71,56 @@ export function createRazorpayRefundGateway(): RefundGateway {
   };
 }
 
+/**
+ * Razorpay Payment Links (POST /v1/payment_links), for staff-entered prepaid orders: Razorpay sends the link to
+ * the customer by SMS / email and the payment arrives as `payment_link.paid` (api/_lib/webhook.ts).
+ * Docs: https://razorpay.com/docs/api/payments/payment-links/create-standard/ and
+ * https://razorpay.com/docs/webhooks/payment-links/
+ */
+export interface PaymentLinkGateway {
+  createPaymentLink(params: {
+    amountPaise: number;
+    /** Our order number; Razorpay requires it unique per link (max 40 chars). */
+    referenceId: string;
+    description: string;
+    customer: { name: string; email?: string; contact?: string };
+    /** Unix seconds; at least 15 minutes ahead. */
+    expireBy: number;
+    notes: Record<string, string>;
+  }): Promise<{ id: string; url: string; razorpayOrderId: string | null }>;
+}
+
+export function createRazorpayPaymentLinkGateway(): PaymentLinkGateway {
+  return {
+    async createPaymentLink({ amountPaise, referenceId, description, customer, expireBy, notes }) {
+      const { keyId, keySecret } = getRazorpayCredentials();
+      const client = new Razorpay({ key_id: keyId, key_secret: keySecret });
+      try {
+        const link = await client.paymentLink.create({
+          amount: amountPaise,
+          currency: 'INR',
+          reference_id: referenceId,
+          description,
+          customer: {
+            name: customer.name,
+            ...(customer.email ? { email: customer.email } : {}),
+            ...(customer.contact ? { contact: customer.contact } : {}),
+          },
+          notify: { sms: Boolean(customer.contact), email: Boolean(customer.email) },
+          reminder_enable: true,
+          expire_by: expireBy,
+          notes,
+        });
+        // Not in the SDK typings; present when Razorpay creates the link's order up front.
+        const orderId = (link as unknown as { order_id?: unknown }).order_id;
+        return { id: link.id, url: link.short_url, razorpayOrderId: typeof orderId === 'string' && orderId ? orderId : null };
+      } catch (err) {
+        throw new ApiError(502, 'PAYMENT_PROVIDER_ERROR', 'The payment provider could not create the payment link. Please try again.', providerFailure(err));
+      }
+    },
+  };
+}
+
 /** Credentials are read on first use, so flows that never charge (COD) work without Razorpay configured. */
 export function createRazorpayGateway(): PaymentGateway {
   let client: Razorpay | null = null;

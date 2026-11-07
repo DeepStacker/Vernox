@@ -25,7 +25,7 @@ import { STAFF_SETTABLE_STATUSES, type OrderStatus } from './_lib/orderLifecycle
 import { HOLDABLE_STATUSES, HOLD_KINDS, type OrderHold } from '../src/types/orderStatus';
 import { applyStatusChange, planStatusChange } from './_lib/orderTransitions';
 import { asOrder, orderPath } from './_lib/orders';
-import { createRazorpayRefundGateway } from './_lib/razorpay';
+import { createRazorpayGateway, createRazorpayPaymentLinkGateway, createRazorpayRefundGateway } from './_lib/razorpay';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
 import { deleteReviewAndPhotos, syncPublicReviewPhotos } from './_lib/reviewPhotos';
 import { claimConsultation, proposalDraftSchema, saveProposalDraft, sendProposal } from './_lib/proposals';
@@ -36,6 +36,7 @@ import { createShippingProvider } from './_lib/shipping';
 import { applyCourierStatus, cancelShipment, createShipment, getLabel, type ManualShipmentDetails } from './_lib/shipping/shipments';
 import type { PackageDetails } from './_lib/shipping/types';
 import type { DocStore } from './_lib/store';
+import { createStaffOrder, quoteStaffOrder, staffOrderSchema, staffQuoteSchema } from './_lib/staffOrders';
 import { loadStoreConfig } from './_lib/storeConfig';
 
 interface ActionContext {
@@ -284,6 +285,49 @@ const ACTIONS: Record<string, ActionDefinition> = {
         return next;
       });
       return { orderId: p.orderId, notes };
+    },
+  },
+
+  // ---------- staff-entered orders: counter, phone, WhatsApp, email, trade (permission orders.create) ----------
+
+  QUOTE_STAFF_ORDER: {
+    method: 'POST',
+    permission: 'orders.create',
+    async run(ctx) {
+      const p = parse(staffQuoteSchema, ctx.params);
+      return quoteStaffOrder(ctx.store, await loadStoreConfig(ctx.store), p);
+    },
+  },
+
+  CREATE_STAFF_ORDER: {
+    method: 'POST',
+    permission: 'orders.create',
+    async run(ctx) {
+      const p = parse(staffOrderSchema, ctx.params);
+      const config = await loadStoreConfig(ctx.store);
+      const created = await createStaffOrder(
+        {
+          store: ctx.store,
+          config,
+          // Credentials are read on first use, so offline and COD orders work without Razorpay configured.
+          gateway: createRazorpayGateway(),
+          razorpayKeyId: '',
+          shipping: createShippingProvider(ctx.store, config),
+          paymentLinks: createRazorpayPaymentLinkGateway(),
+        },
+        p,
+        ctx.actor.email ?? ctx.actor.uid,
+      );
+      await recordAudit(
+        ctx.store,
+        audit(ctx, 'STAFF_ORDER_CREATED', 'order', created.orderId, {
+          channel: p.channel,
+          payment: p.payment.method === 'offline' ? `offline:${p.payment.mode}` : p.payment.method,
+          handover: p.handover,
+          total: created.pricing.total,
+        }),
+      );
+      return { ...created };
     },
   },
 
