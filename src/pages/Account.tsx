@@ -391,8 +391,8 @@ export default function Account() {
                 {!showOtpInput ? (
                   <form onSubmit={handleSendOtp} className="space-y-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Mobile Phone Number</label>
-                      <input 
+                      <label htmlFor="phone-number" className="text-xs font-medium text-muted-foreground">Mobile Phone Number</label>
+                      <input id="phone-number" autoComplete="tel" 
                         type="tel" 
                         placeholder="+32 470 00 00 00"
                         value={phoneNumber}
@@ -415,8 +415,8 @@ export default function Account() {
                 ) : (
                   <form onSubmit={handleVerifyOtp} className="space-y-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">6-Digit Verification Code</label>
-                      <input 
+                      <label htmlFor="otp-code" className="text-xs font-medium text-muted-foreground">6-Digit Verification Code</label>
+                      <input id="otp-code" autoComplete="one-time-code" 
                         type="text" 
                         maxLength={6}
                         placeholder="123456"
@@ -461,8 +461,8 @@ export default function Account() {
 
                 <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Full Name</label>
-                    <input 
+                    <label htmlFor="register-name" className="text-xs font-medium text-muted-foreground">Full Name</label>
+                    <input id="register-name" autoComplete="name" 
                       type="text" 
                       placeholder="Jane Doe"
                       value={registerForm.name}
@@ -473,8 +473,8 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Email Address</label>
-                    <input 
+                    <label htmlFor="register-email" className="text-xs font-medium text-muted-foreground">Email Address</label>
+                    <input id="register-email" autoComplete="email" 
                       type="email" 
                       placeholder="name@example.com"
                       value={registerForm.email}
@@ -485,8 +485,8 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Phone Number (Optional)</label>
-                    <input 
+                    <label htmlFor="register-phone" className="text-xs font-medium text-muted-foreground">Phone Number (Optional)</label>
+                    <input id="register-phone" autoComplete="tel" 
                       type="text" 
                       placeholder="+32 470 00 00 00"
                       value={registerForm.phone}
@@ -496,8 +496,8 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Create Password</label>
-                    <input 
+                    <label htmlFor="register-password" className="text-xs font-medium text-muted-foreground">Create Password</label>
+                    <input id="register-password" autoComplete="new-password" 
                       type="password" 
                       placeholder="••••••••"
                       value={registerForm.password}
@@ -652,8 +652,8 @@ export default function Account() {
               <form onSubmit={handleUpdateProfile} className="bg-card border border-border/60 rounded p-6 space-y-5 noise-overlay">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Full Name</label>
-                    <input 
+                    <label htmlFor="profile-name" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Full Name</label>
+                    <input id="profile-name" autoComplete="name" 
                       type="text" 
                       value={profileForm.name}
                       onChange={e => setProfileForm({ ...profileForm, name: e.target.value })}
@@ -663,8 +663,8 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Phone Number</label>
-                    <input 
+                    <label htmlFor="profile-phone" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Phone Number</label>
+                    <input id="profile-phone" autoComplete="tel" 
                       type="text" 
                       value={profileForm.phone}
                       onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
@@ -674,8 +674,8 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1 md:col-span-2">
-                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Default Shipping Street Address</label>
-                    <input 
+                    <label htmlFor="profile-address" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Default Shipping Street Address</label>
+                    <input id="profile-address" autoComplete="street-address" 
                       type="text" 
                       value={profileForm.address}
                       onChange={e => setProfileForm({ ...profileForm, address: e.target.value })}
@@ -684,8 +684,8 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">City</label>
-                    <input 
+                    <label htmlFor="profile-city" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">City</label>
+                    <input id="profile-city" autoComplete="address-level2" 
                       type="text" 
                       value={profileForm.city}
                       onChange={e => setProfileForm({ ...profileForm, city: e.target.value })}
@@ -694,8 +694,8 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Pincode</label>
-                    <input 
+                    <label htmlFor="profile-pincode" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Pincode</label>
+                    <input id="profile-pincode" autoComplete="postal-code" 
                       type="text" 
                       inputMode="numeric"
                       maxLength={6}
@@ -706,8 +706,8 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1 md:col-span-2">
-                    <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">State / UT</label>
-                    <select
+                    <label htmlFor="profile-state" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">State / UT</label>
+                    <select id="profile-state" autoComplete="address-level1"
                       value={profileForm.state}
                       onChange={e => setProfileForm({ ...profileForm, state: e.target.value })}
                       className="w-full bg-background border border-border rounded px-3 py-2 text-sm outline-none focus:border-oxblood"
@@ -739,8 +739,8 @@ export default function Account() {
 
               <form onSubmit={handleUpdatePassword} className="bg-card border border-border/60 rounded p-6 space-y-4 noise-overlay">
                 <div className="space-y-1">
-                  <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Current Password</label>
-                  <input 
+                  <label htmlFor="current-password" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Current Password</label>
+                  <input id="current-password" autoComplete="current-password" 
                     type="password" 
                     placeholder="••••••••"
                     value={passwordForm.currentPass}
@@ -751,8 +751,8 @@ export default function Account() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">New Password</label>
-                  <input 
+                  <label htmlFor="new-password" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">New Password</label>
+                  <input id="new-password" autoComplete="new-password" 
                     type="password" 
                     placeholder="••••••••"
                     value={passwordForm.newPass}
@@ -763,8 +763,8 @@ export default function Account() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Confirm New Password</label>
-                  <input 
+                  <label htmlFor="confirm-password" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Confirm New Password</label>
+                  <input id="confirm-password" autoComplete="new-password" 
                     type="password" 
                     placeholder="••••••••"
                     value={passwordForm.confirmPass}

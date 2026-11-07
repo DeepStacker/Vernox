@@ -254,8 +254,8 @@ Results (same harness, interleaved runs; done 2026-11-07):
 - Next levers, by expected value: self-host the three
   Google Fonts families (one less origin before text renders); a smaller hero variant (98 KB at 1200 px); prerendered HTML for Home
   and product pages if LCP must drop below ~2 s.
-- Accessibility follow-up found while testing: `src/pages/Account.tsx` has ~15 more `<label>`s not tied to their inputs (register,
-  profile and address forms; the sign-in pair is fixed). Same fix: `htmlFor`/`id` plus `autoComplete`.
+- Done: every `<label>` on `src/pages/Account.tsx` (sign-in, phone OTP, register, profile, address, password) is tied to its
+  input with `htmlFor`/`id` and carries the matching `autoComplete` token, so screen readers, password managers and autofill work.
 
 
 
