@@ -1,78 +1,46 @@
-# Vernox Containerized Architecture & Deployment
+# Docker
 
-This project includes a multi-service Docker Compose configuration that runs the entire Vernox platform with isolated memory limits, saving gigabytes of host RAM.
+Two separate setups. Do not mix them.
 
----
+| File | Purpose | Database |
+| :--- | :--- | :--- |
+| `Dockerfile`, `docker-compose.yml`, `deploy/Caddyfile` | **Production** on any VM: one app image behind Caddy (automatic HTTPS). Run by `./install.sh` and `./update.sh`; see DEPLOYMENT.md. | Firebase (Firestore), never a container |
+| `docker-compose.dev.yml`, `Dockerfile.backend.dev`, `Dockerfile.frontend.dev` | **Local development** with live reload and a Firestore **emulator**. | Emulator, data is not durable or safe |
 
-## 🏗️ Architecture Overview
+## Production
 
-| Service | Container Name | Port Mapping | Image / Runtime | Memory Limit |
-| :--- | :--- | :--- | :--- | :--- |
-| **Frontend** | `vernox-frontend` | `http://localhost:8080` | `nginx:alpine` (Production SPA + Reverse Proxy) | **128 MB** |
-| **Backend** | `vernox-backend` | `http://localhost:3001` | `node:20-alpine` (Vernox API Server) | **384 MB** |
-| **Database** | `vernox-database` | `http://localhost:8085` | `mtlynch/firestore-emulator` (ACID Firestore) | **384 MB** |
-
-> **Total Memory Footprint**: Less than **~600 MB - 800 MB** combined (compared to ~5,000 MB when running multiple local Node/Vite watchers and browser instances on host Windows).
-
----
-
-## 🚀 Quick Start Commands
-
-### 1. Start all containers in Live Mode (Default)
 ```bash
-docker compose up -d
-```
-> 🔥 **Live Hot Reload Enabled**: Your source files (`src/`, `api/`, `server/`) are mounted directly into the Docker containers. Any file you edit and save in your IDE updates **instantly** in your browser at `http://localhost:8080` without restarting or rebuilding containers!
-
-### 2. First-time switch or dependency updates
-When switching to live mode for the first time or updating `package.json`:
-```bash
-docker compose up -d --build
+./install.sh            # first time: asks for domain, admin email, service account, Firebase web config
+./update.sh             # upgrade
+docker compose --env-file .env.production logs -f app
+docker compose --env-file .env.production ps
 ```
 
-### 3. Production Build (Nginx Static Bundle)
-If you want to run the hardened, static production Nginx build instead of the live development server:
+`--env-file .env.production` is needed on every manual `docker compose` call (it supplies `DOMAIN` and `ADMIN_EMAIL` to the file).
+
+| Service | Image | Ports | Memory limit |
+| :--- | :--- | :--- | :--- |
+| `app` | built from `Dockerfile` (Node 20 alpine, non-root, read-only filesystem) | 3001, internal only | 640 MB (Node heap capped at 384 MB) |
+| `caddy` | `caddy:2-alpine` | 80, 443 (TCP and UDP) | 128 MB |
+
+The `app` process (`server/production.ts`) serves the SPA, the API, `/runtime-config.js`, `/healthz` and `/readyz`, and runs the two
+scheduled jobs. The image holds no project-specific configuration; everything comes from `.env.production` (written by `install.sh`,
+mode 600) and from the keys entered in Admin > Settings > Integrations. Details: DEPLOYMENT.md section 1.
+
+Build the image by hand: `docker build -t vernox-app .`
+
+## Local development with the emulator
+
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.dev.yml up -d          # frontend http://localhost:8080, API http://localhost:3001, emulator :8085
+docker compose -f docker-compose.dev.yml up -d --build  # after changing package.json
+docker compose -f docker-compose.dev.yml logs -f backend
+docker compose -f docker-compose.dev.yml down           # add -v to wipe the emulator data
 ```
 
-### 3. View live service logs
-```bash
-docker compose logs -f
-```
+Source folders (`src/`, `api/`, `server/`) are mounted, so edits show up without rebuilding. The backend needs Razorpay test keys in your
+shell or `.env` (see `.env.example`); with the bundled emulator it needs no Firebase credentials. Without Docker, `npm run emulators`,
+`npm run seed:local` and `npm run dev:local` (README.md) give the same.
 
-To view logs for a specific service:
-```bash
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose logs -f database
-```
-
-### 3. Check container health & resource usage
-```bash
-docker compose ps
-docker stats vernox-frontend vernox-backend vernox-database
-```
-
-### 4. Stop all services
-```bash
-docker compose down
-```
-
-### 5. Stop and wipe persistent database volume (Clean Reset)
-```bash
-docker compose down -v
-```
-
----
-
-## 🌐 Endpoints & Routing
-
-- **Web Application**: [`http://localhost:8080`](http://localhost:8080)
-- **API Health Check**: [`http://localhost:8080/api/health`](http://localhost:8080/api/health) or [`http://localhost:3001/api/health`](http://localhost:3001/api/health)
-- **Checkout Intent**: `POST /api/checkout-intent`
-- **Payment Verification**: `POST /api/verify-payment`
-- **Order Status**: `GET /api/order-status`
-- **Webhook**: `POST /api/razorpay-webhook`
-- Server env vars: see `.env.example` (the backend needs Razorpay test keys; with the bundled emulator it needs no Firebase credentials)
-- **Firestore Emulator**: [`http://localhost:8085`](http://localhost:8085)
+Endpoints: web app `http://localhost:8080`, health `http://localhost:3001/api/health`, checkout `POST /api/checkout-intent`,
+payment verification `POST /api/verify-payment`, order status `GET /api/order-status`, webhook `POST /api/razorpay-webhook`.

@@ -29,6 +29,8 @@
 
   <body>
     <div id="root"></div>
+    <!-- Public runtime config (Firebase web config, site URL, Razorpay key id): one build runs on any domain. Classic script, so it runs before the app module. -->
+    <script src="/runtime-config.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

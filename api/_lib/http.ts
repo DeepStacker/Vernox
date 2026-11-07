@@ -23,7 +23,7 @@ export function getHeader(req: VercelRequest, name: string): string | undefined 
 
 /**
  * Client IP for rate limiting. Only headers set by our own edge are trusted:
- * Vercel sets `x-vercel-forwarded-for`; nginx (nginx.conf) sets `x-real-ip`.
+ * Vercel sets `x-vercel-forwarded-for`; the Caddy proxy (deploy/Caddyfile) overwrites `x-real-ip`.
  * `x-forwarded-for` is deliberately ignored because a client can prepend to it.
  */
 export function clientIp(req: VercelRequest): string {

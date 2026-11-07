@@ -4,7 +4,7 @@ import { environmentItems, launchStatus } from '../../api/_lib/launchStatus';
 import { MemoryStore } from './support/memoryStore';
 
 const FULL = {
-  RAZORPAY_KEY_ID: 'rzp_live_abc', RAZORPAY_KEY_SECRET: 'secret-value-1', VITE_RAZORPAY_KEY_ID: 'rzp_live_abc', RAZORPAY_WEBHOOK_SECRET: 'whsec-2',
+  RAZORPAY_KEY_ID: 'rzp_live_abc', RAZORPAY_KEY_SECRET: 'secret-value-1', RAZORPAY_WEBHOOK_SECRET: 'whsec-2',
   SHIPROCKET_EMAIL: 'api@x.in', SHIPROCKET_PASSWORD: 'pw-3', SHIPROCKET_PICKUP_LOCATION: 'Primary', SHIPROCKET_WEBHOOK_TOKEN: 'tok-4',
   RESEND_API_KEY: 're_5', NOTIFY_FROM_EMAIL: 'Vernox <o@x.in>', MSG91_AUTH_KEY: 'msg-6', MSG91_TEMPLATES: '{"shipped":"t1"}', MSG91_OTP_TEMPLATE_ID: 'otp-8',
   CRON_SECRET: 'cron-7',
@@ -19,6 +19,13 @@ describe('launch status', () => {
     const json = JSON.stringify(items);
     for (const secret of ['secret-value-1', 'whsec-2', 'pw-3', 'tok-4', 're_5', 'msg-6', 'cron-7', 'e30=', 'otp-8', 'wa-tok-9', 'wa-app-10', 'wa-verify-11', '1055', 'tpl-secret-name']) expect(json).not.toContain(secret);
     expect(items.find(i => i.id === 'razorpay')?.detail).toBe('live mode');
+  });
+
+  it('does not require VITE_RAZORPAY_KEY_ID for Razorpay: the browser gets the key id at runtime', () => {
+    const byId = (env: NodeJS.ProcessEnv) => Object.fromEntries(environmentItems(env).map(i => [i.id, i]));
+    expect(byId({ RAZORPAY_KEY_ID: 'rzp_live_a', RAZORPAY_KEY_SECRET: 's' } as NodeJS.ProcessEnv).razorpay.ready).toBe(true);
+    expect(byId({ RAZORPAY_KEY_ID: 'rzp_live_a' } as NodeJS.ProcessEnv).razorpay.ready).toBe(false);
+    expect(byId({ VITE_RAZORPAY_KEY_ID: 'rzp_live_a', RAZORPAY_KEY_SECRET: 's' } as NodeJS.ProcessEnv).razorpay.ready).toBe(false);
   });
 
   it('reports WhatsApp as optional and ready only with the right keys', () => {

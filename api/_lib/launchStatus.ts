@@ -53,7 +53,7 @@ export function environmentItems(env: NodeJS.ProcessEnv = process.env): LaunchIt
     {
       id: 'razorpay', group: 'payments', required: true,
       label: 'Razorpay API keys',
-      ready: set(env, 'RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'VITE_RAZORPAY_KEY_ID'),
+      ready: set(env, 'RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET'),
       detail: keyId.startsWith('rzp_live_') ? 'live mode' : keyId.startsWith('rzp_test_') ? 'test mode: no real money is taken' : undefined,
       help: `Online payments, refunds and payment links. Enter the Razorpay key id and secret in ${inApp}.`,
     },

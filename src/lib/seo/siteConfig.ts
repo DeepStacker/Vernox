@@ -4,6 +4,7 @@
  * default is a placeholder until the production domain is final; the live
  * sitemap and product link previews (api/seo.ts) read the same variable.
  */
+import { runtimeConfig } from "../runtimeConfig";
 import { DEFAULT_SITE_URL } from "./defaultSiteUrl";
 
 export { DEFAULT_SITE_URL };
@@ -14,7 +15,8 @@ export const DEFAULT_DESCRIPTION =
   "Vernox makes laser-cut metal wall art to order in India. Choose a design or create your own, in steel, brass, copper and more, with delivery across India.";
 export const DEFAULT_OG_IMAGE_PATH = "/images/hero-penthouse-brass.jpg";
 
-const rawSiteUrl = (import.meta.env.VITE_SITE_URL as string | undefined)?.trim();
+// /runtime-config.js (one image, any domain) wins over the build-time value.
+const rawSiteUrl = runtimeConfig().siteUrl?.trim() || (import.meta.env.VITE_SITE_URL as string | undefined)?.trim();
 
 export const SITE_URL = (rawSiteUrl || DEFAULT_SITE_URL).replace(/\/+$/, "");
 

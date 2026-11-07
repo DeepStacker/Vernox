@@ -1,85 +1,64 @@
+# Production stack: the app (SPA + API + scheduled jobs in one Node process) behind Caddy, which terminates
+# HTTPS (automatic Let's Encrypt certificates). Run through ./install.sh, or directly:
+#   docker compose --env-file .env.production up -d --build
+# The database is Firebase (Firestore); there is no database container. For local development with the
+# Firestore emulator use docker-compose.dev.yml (DOCKER.md); never use that for production.
+name: vernox
+
 services:
-  # 1. Vernox Database: Cloud Firestore Emulator
-  database:
-    image: mtlynch/firestore-emulator:latest
-    container_name: vernox-database
-    restart: unless-stopped
-    environment:
-      - FIRESTORE_PROJECT_ID=vernox-1b5d5
-      - PORT=8085
-    ports:
-      - "8085:8085"
-    volumes:
-      - firestore_data:/opt/data
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-    networks:
-      - vernox-network
-
-  # 2. Vernox Backend: Node.js API Server with Live tsx watch
-  backend:
+  app:
     build:
       context: .
-      dockerfile: Dockerfile.backend
-    container_name: vernox-backend
+      dockerfile: Dockerfile
+    image: vernox-app:local
     restart: unless-stopped
-    ports:
-      - "3001:3001"
-    volumes:
-      - ./api:/app/api
-      - ./server:/app/server
-      - ./src:/app/src
-    command: ["npx", "tsx", "watch", "server/index.ts"]
+    env_file: .env.production
     environment:
-      - NODE_ENV=development
-      - PORT=3001
-      - FIRESTORE_EMULATOR_HOST=database:8085
-      - FIREBASE_PROJECT_ID=vernox-1b5d5
-      # Razorpay test keys from your shell / .env (see .env.example)
-      - RAZORPAY_KEY_ID
-      - RAZORPAY_KEY_SECRET
-      - RAZORPAY_WEBHOOK_SECRET
-      - CRON_SECRET
-    depends_on:
-      - database
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-    networks:
-      - vernox-network
+      NODE_ENV: production
+      PORT: "3001"
+    # Reachable only from Caddy on the compose network. Publishing it would let clients spoof x-real-ip.
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/readyz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 640m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
-  # 3. Vernox Frontend: Live Vite Dev Server with HMR (Instant Updates)
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend.dev
-    container_name: vernox-frontend
+  caddy:
+    image: caddy:2-alpine
     restart: unless-stopped
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - BACKEND_URL=http://backend:3001
-      - CHOKIDAR_USEPOLLING=true
-      - WATCHPACK_POLLING=true
     depends_on:
-      - backend
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-    networks:
-      - vernox-network
-
-networks:
-  vernox-network:
-    driver: bridge
+      app:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env.production}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
 volumes:
-  firestore_data:
+  # Certificates and the ACME account: keep this volume, or Let's Encrypt rate limits can bite on re-creation.
+  caddy_data:
+  caddy_config:

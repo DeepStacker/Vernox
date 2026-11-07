@@ -18,9 +18,19 @@ Vernox is a professional web-based tool for designing and visualizing custom met
 - **Styling**: Tailwind CSS + shadcn/ui
 - **Studio engine**: Konva (react-konva), Clipper2, HarfBuzz (WASM), imagetracerjs, zustand + zundo (see `docs/adr/0001-studio-engine.md`)
 - **State Management**: React context (storefront), zustand (studio)
-- **Deployment**: Vercel
+- **Deployment**: any Linux VM with one command (`./install.sh`: Docker + Caddy) or Vercel (DEPLOYMENT.md)
 
 ## Getting Started
+
+### Production on any VM (one command)
+On a Linux VM with a domain pointing at it and a Firebase project (Firestore, Storage, Auth, a web app and a service-account key):
+```bash
+./install.sh
+```
+It asks for the domain, your admin email, the service-account JSON and the Firebase web config, installs Docker if needed, starts the
+app behind Caddy with automatic HTTPS, deploys the Firestore/Storage rules and makes you super admin. Then open Admin > Settings >
+Integrations to enter your Razorpay, Shiprocket, Resend, MSG91 and WhatsApp keys. Upgrade with `./update.sh`. Details, DNS, firewall
+and backups: DEPLOYMENT.md. Vercel is also supported (same document).
 
 ### Local Development
 1. Clone the repository
@@ -53,7 +63,7 @@ font preload measured +0.1 to +0.5 s first paint on the throttled harness becaus
 - **Save for later** in the cart (`src/lib/cartLines.ts`): full cart lines kept in this browser's `localStorage` (not the wishlist,
   which only stores product ids and could not keep size, finish or Studio designs).
 - **EMI message**: Razorpay Affordability Widget on product and cart pages (`src/components/shop/EmiWidget.tsx`), lazy, shown only
-  when `VITE_RAZORPAY_KEY_ID` is set.
+  when a Razorpay key id is configured (`RAZORPAY_KEY_ID`, delivered to the browser by `/runtime-config.js`).
 - **Hero image**: the home hero is served as AVIF/WebP at 640, 960 and 1200 px with `srcset` (`node scripts/optimize-images.mjs --responsive-only`).
 
 ### Performance check
