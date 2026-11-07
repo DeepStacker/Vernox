@@ -259,6 +259,26 @@ Rules and side effects:
 pickupScheduledAt, lastEvent: { status, at } | null, error, createdAt, updatedAt }`.
 `RefundDoc`: see DATABASE.md `refunds`. `ReturnDoc`: see DATABASE.md `returns`.
 
+### Staff-entered orders (`/api/admin`, permission `orders.create`: order manager, support, admins)
+
+Counter (walk-in) sales and orders taken by phone, WhatsApp, email or from a trade enquiry. Created by the storefront checkout
+engine (`api/_lib/staffOrders.ts`), so prices, GST, stock, coupons and idempotency are the storefront's.
+
+| Action | Params | Result |
+| --- | --- | --- |
+| `QUOTE_STAFF_ORDER` | `items[]` (checkout item shape), `couponCode?`, `customerEmail?`, `cod`, `handover` | `{ lines[], coupon: { ok, discountPaise \| message } \| null, totals{ subtotalPaise, discountPaise, shippingPaise, codFeePaise, taxPaise, totalPaise } }`; read-only |
+| `CREATE_STAFF_ORDER` | `channel (counter\|phone\|whatsapp\|email\|trade)`, `items[]`, `couponCode?` (needs `customer.email`), `customer{ name, phone, email?, address?, city?, state?, pincode? }` (address required unless `handover`), `payment: { method: offline, mode: cash\|upi\|card\|bank_transfer, reference (required except cash) } \| { method: payment_link } \| { method: cod }`, `handover` (counter + offline only), `idempotencyKey`, `note?`, `tradeEnquiryId?` | `{ staff: true, orderId, orderNumber, status, paymentMethod, paymentLink{ id, url, expiresAt } \| null, invoiceNumber \| null, pricing }`; audited `STAFF_ORDER_CREATED` |
+
+- `offline`: the order starts `Paid` (stock committed, coupon redeemed, `order_confirmed` queued). With `handover` it is `Delivered`
+  at once, charged no shipping, and its GST invoice is issued in the same transaction (intra-state at the seller's address); custom
+  pieces cannot be handed over. Refunds of offline payments are manual (`CREATE_REFUND` with `method: manual`).
+- `payment_link`: the order is `Pending_Payment` with stock held for 72 hours (`PAYMENT_LINK_TTL_HOURS`); Razorpay sends the link by
+  SMS / email ([create a payment link](https://razorpay.com/docs/api/payments/payment-links/create-standard/)). `payment_link.paid`
+  ([webhook](https://razorpay.com/docs/webhooks/payment-links/)) confirms it only when the link id matches the order. Without the
+  Razorpay keys it is refused (409) before anything is created; if the link cannot be created the order is cancelled and stock returned.
+- `cod`: the storefront COD rules apply (catalogue only, PIN eligibility, value and per-phone limits, COD fee).
+- `tradeEnquiryId` marks that `b2b_inquiries` document `won` with `orderId` / `orderNumber`.
+
 
 ## Design consultation (Stage 2)
 

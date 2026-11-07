@@ -14,6 +14,8 @@ export { STAFF_ROLES, isStaffRole, type StaffRole };
 export interface RolePermissions {
   canManageProducts: boolean;
   canManageOrders: boolean;
+  /** orders.create: enter counter, phone, WhatsApp, email and trade orders. */
+  canCreateOrders: boolean;
   canManageProduction: boolean;
   canManageShipping: boolean;
   canManageFinance: boolean;
@@ -49,6 +51,7 @@ function derivePermissions(role: StaffRole): RolePermissions {
   return {
     canManageProducts: has('catalog.write'),
     canManageOrders: updatesStatus && seesCustomers,
+    canCreateOrders: has('orders.create'),
     canManageProduction: updatesStatus && (seesCustomers || !handlesTracking),
     canManageShipping: updatesStatus && handlesTracking,
     canManageFinance: has('orders.refund') || has('reports.export'),
@@ -81,7 +84,7 @@ export function formatRole(role: StaffRole): string {
 export type AdminTabId =
   | 'home' | 'orders' | 'products' | 'customers' | 'analytics' | 'marketing' | 'coupons'
   | 'custom-orders' | 'hero-slider' | 'reviews' | 'notifications' | 'roles' | 'audit' | 'settings'
-  | 'production' | 'qc' | 'support' | 'b2b' | 'shipping' | 'returns' | 'finance' | 'consultations';
+  | 'production' | 'qc' | 'support' | 'b2b' | 'shipping' | 'returns' | 'finance' | 'consultations' | 'new-order';
 
 /** Which admin tabs a role may open. Single source for navigation and the command palette. */
 export function canAccessTab(role: StaffRole, tab: AdminTabId): boolean {
@@ -93,6 +96,8 @@ export function canAccessTab(role: StaffRole, tab: AdminTabId): boolean {
     case 'orders':
     case 'custom-orders':
       return p.canManageOrders || p.canManageProduction || p.canManageShipping;
+    case 'new-order':
+      return p.canCreateOrders;
     case 'production':
     case 'qc':
       return p.canManageProduction;

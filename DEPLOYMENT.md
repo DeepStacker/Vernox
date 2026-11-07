@@ -24,7 +24,8 @@ Required at build time (browser): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_D
    (`SP/…`) until the real seller (legal name, GSTIN, address, state, state code, PIN) is saved in Admin → Settings.
 2. `npm run seed` against an empty project (optional).
 3. Razorpay dashboard: enable auto-capture; add webhook `https://<domain>/api/razorpay-webhook` with secret
-   `RAZORPAY_WEBHOOK_SECRET` and events `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`.
+   `RAZORPAY_WEBHOOK_SECRET` and events `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`,
+   `payment_link.paid` (staff orders paid by payment link; enable Payment Links on the account).
 4. Vercel Cron runs `/api/cron/release-reservations` every 5 minutes and `/api/cron/send-notifications` every 2 minutes
    (`vercel.json`). **Vercel plan: Pro (decided 2026-11-06).** Hobby is for non-commercial use only, sub-daily crons need Pro, and the API is
    17 serverless functions (Hobby allows 12; `api/engage.ts` serves contact, newsletter and reviews; `api/seo.ts` link previews and the sitemap;

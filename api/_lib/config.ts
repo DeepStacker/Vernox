@@ -20,6 +20,11 @@ export function getRazorpayCredentials(): RazorpayCredentials {
   return { keyId: requireEnv('RAZORPAY_KEY_ID'), keySecret: requireEnv('RAZORPAY_KEY_SECRET') };
 }
 
+/** True when Razorpay keys are set; lets flows that can avoid Razorpay refuse early with a clear message. */
+export function isRazorpayConfigured(): boolean {
+  return Boolean(process.env.RAZORPAY_KEY_ID?.trim() && process.env.RAZORPAY_KEY_SECRET?.trim());
+}
+
 /** Webhook secret is configured separately in the Razorpay dashboard; it is never the API key secret. */
 export function getRazorpayWebhookSecret(): string {
   return requireEnv('RAZORPAY_WEBHOOK_SECRET');

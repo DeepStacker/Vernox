@@ -282,6 +282,11 @@ Results (same harness, interleaved runs; done 2026-11-07):
 
 ## Phase 3a follow-ups (status after 3b)
 
+- Done (2026-11-07): staff-entered orders (Admin > New order; `CREATE_STAFF_ORDER`, permission `orders.create` for order manager,
+  support and admins): counter sale with handover and on-the-spot GST invoice, phone / WhatsApp / email / trade orders paid in person
+  (cash, UPI, card, bank transfer), by Razorpay payment link, or COD. Not built: custom (Studio) pieces from the staff screen, partial
+  or advance payments, and a thermal-printer receipt format (the A4 GST invoice is the receipt).
+
 - Done: catalogue photo upload in the product form (`src/lib/data/productImages.ts`): resized in the browser to 2000 px WebP, stored at
   `products/{productId}/` (public read, catalogue staff write, storage.rules).
 - Done (2026-11-07): QC photos. The QC checklist uploads 1-4 photos per item to `qc/{orderId}/` (camera on phones); "Photo taken"

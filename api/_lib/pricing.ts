@@ -302,12 +302,13 @@ export function computeTotals(
   lines: PricedLine[],
   discountPaise: number,
   config: StoreConfig,
-  options: { cod?: boolean } = {},
+  /** `collected`: handed over at the counter (api/_lib/staffOrders.ts), so nothing ships and no shipping is charged. */
+  options: { cod?: boolean; collected?: boolean } = {},
 ): OrderTotals {
   const subtotalPaise = lines.reduce((sum, l) => sum + l.lineTotalPaise, 0);
   const discount = Math.min(subtotalPaise, Math.max(0, Math.round(discountPaise)));
   // Free shipping is judged on the merchandise subtotal before discount, inclusive (>=).
-  const shippable = lines.some(l => !l.isService);
+  const shippable = !options.collected && lines.some(l => !l.isService);
   const shippingPaise = !shippable || subtotalPaise >= config.freeShippingThresholdPaise ? 0 : config.shippingFeePaise;
   const codFeePaise = options.cod ? config.cod.feePaise : 0;
 

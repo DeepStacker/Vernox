@@ -15,6 +15,10 @@ import { deps, NOW, seededStore, SELLER_CONFIG } from './support/serverFixtures'
 class FakeLinks implements PaymentLinkGateway {
   calls: Parameters<PaymentLinkGateway['createPaymentLink']>[0][] = [];
   failWith: Error | null = null;
+  configured = true;
+  isConfigured() {
+    return this.configured;
+  }
   async createPaymentLink(params: Parameters<PaymentLinkGateway['createPaymentLink']>[0]) {
     this.calls.push(params);
     if (this.failWith) throw this.failWith;
@@ -72,6 +76,18 @@ describe('staff orders: offline payment', () => {
     const invoice = store.read(invoicePath(res.orderId)) as { supplyType: string; totals: { totalPaise: number } };
     expect(invoice.supplyType).toBe('intra_state');
     expect(invoice.totals.totalPaise).toBe(doc.amounts.totalPaise);
+  });
+
+  it('charges no shipping on a counter handover, even below the free-shipping threshold', async () => {
+    const store = seededStore();
+    const cheap = [{ productId: 'p-11', finish: 'steel', quantity: 1 }];
+    const counter = { channel: 'counter', items: cheap, handover: true, customer: { name: 'Walk-in', phone: '9876543210' }, payment: { method: 'offline', mode: 'cash' } };
+    const quote = await quoteStaffOrder(store, SELLER_CONFIG, { items: cheap, cod: false, handover: true });
+    const shipped = await quoteStaffOrder(store, SELLER_CONFIG, { items: cheap, cod: false, handover: false });
+    expect(quote.totals.shippingPaise).toBe(0);
+    expect(shipped.totals.shippingPaise).toBeGreaterThan(0);
+    const res = await createStaffOrder(staffDeps(store), input(counter), ACTOR);
+    expect(order(store, res.orderId).amounts.totalPaise).toBe(quote.totals.totalPaise);
   });
 
   it('repeating the same request returns the same order', async () => {
@@ -134,6 +150,14 @@ describe('staff orders: payment link', () => {
     expect(await processWebhookEvent(store, captured, 'evt_2', NOW)).toBe('duplicate_payment');
   });
 
+  it('refuses before creating anything when Razorpay is not configured', async () => {
+    const store = seededStore();
+    const links = new FakeLinks();
+    links.configured = false;
+    await expect(createStaffOrder(staffDeps(store, links), input({ payment: { method: 'payment_link' } }), ACTOR)).rejects.toThrow(/Razorpay keys/);
+    expect(store.collection('orders')).toHaveLength(0);
+  });
+
   it('cancels the order and returns stock when the link cannot be created', async () => {
     const store = seededStore();
     const links = new FakeLinks();
@@ -154,11 +178,11 @@ describe('staff orders: COD and quotes', () => {
 
   it('quotes the same total the order is created with', async () => {
     const store = seededStore();
-    const quote = await quoteStaffOrder(store, SELLER_CONFIG, { items: ITEMS, cod: false });
+    const quote = await quoteStaffOrder(store, SELLER_CONFIG, { items: ITEMS, cod: false, handover: false });
     const res = await createStaffOrder(staffDeps(store), input(), ACTOR);
     expect(quote.totals.totalPaise).toBe(order(store, res.orderId).amounts.totalPaise);
     expect(quote.coupon).toBeNull();
-    const badCoupon = await quoteStaffOrder(store, SELLER_CONFIG, { items: ITEMS, couponCode: 'NOPE', cod: false });
+    const badCoupon = await quoteStaffOrder(store, SELLER_CONFIG, { items: ITEMS, couponCode: 'NOPE', cod: false, handover: false });
     expect(badCoupon.coupon).toMatchObject({ ok: false });
   });
 

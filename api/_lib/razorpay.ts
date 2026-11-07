@@ -7,7 +7,7 @@
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import { ApiError } from './errors';
-import { getRazorpayCredentials } from './config';
+import { getRazorpayCredentials, isRazorpayConfigured } from './config';
 
 function hmacHex(secret: string, payload: string | Buffer): string {
   return crypto.createHmac('sha256', secret).update(payload).digest('hex');
@@ -78,6 +78,8 @@ export function createRazorpayRefundGateway(): RefundGateway {
  * https://razorpay.com/docs/webhooks/payment-links/
  */
 export interface PaymentLinkGateway {
+  /** False until the Razorpay keys are set (DEPLOYMENT.md). */
+  isConfigured(): boolean;
   createPaymentLink(params: {
     amountPaise: number;
     /** Our order number; Razorpay requires it unique per link (max 40 chars). */
@@ -92,6 +94,7 @@ export interface PaymentLinkGateway {
 
 export function createRazorpayPaymentLinkGateway(): PaymentLinkGateway {
   return {
+    isConfigured: isRazorpayConfigured,
     async createPaymentLink({ amountPaise, referenceId, description, customer, expireBy, notes }) {
       const { keyId, keySecret } = getRazorpayCredentials();
       const client = new Razorpay({ key_id: keyId, key_secret: keySecret });

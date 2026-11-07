@@ -80,6 +80,8 @@ export const staffQuoteSchema = z.object({
   couponCode: optionalText(40),
   customerEmail: z.string().trim().toLowerCase().email().max(254).optional().or(z.literal('')).transform(v => v || undefined),
   cod: z.boolean().default(false),
+  /** Counter handover: no shipping. */
+  handover: z.boolean().default(false),
 });
 export type StaffQuoteInput = z.infer<typeof staffQuoteSchema>;
 
@@ -89,6 +91,7 @@ export async function quoteStaffOrder(store: DocStore, config: StoreConfig, inpu
     couponCode: input.couponCode,
     customerEmail: input.customerEmail,
     cod: input.cod,
+    collected: input.handover,
   });
   return {
     lines: lines.map(l => ({ productId: l.productId, name: l.name, sizeLabel: l.sizeLabel, finish: l.finish, quantity: l.quantity, unitPricePaise: l.unitPricePaise, lineTotalPaise: l.lineTotalPaise })),
@@ -126,6 +129,9 @@ function checkoutCustomer(input: StaffOrderInput, config: StoreConfig): Customer
 export async function createStaffOrder(deps: CheckoutDeps, input: StaffOrderInput, actor: string): Promise<StaffCheckoutResponse> {
   const customer = checkoutCustomer(input, deps.config);
   const payment = input.payment;
+  if (payment.method === 'payment_link' && !deps.paymentLinks?.isConfigured()) {
+    throw new ApiError(409, 'CONFLICT', 'Payment links need the Razorpay keys (see Settings > Launch setup). Take the payment offline or by COD for now.');
+  }
   const now = (deps.now ?? Date.now)();
   const response = await createCheckoutIntent(
     deps,

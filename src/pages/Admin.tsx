@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import {
   Bell, Briefcase, BarChart3, ClipboardCheck, ExternalLink, FileText, Hammer, Headphones, Home, LogOut, Lock, Menu,
   MessageSquare, Package, Palette, PanelLeftClose, PanelLeftOpen, Receipt, RotateCcw, Search, Settings, ShieldCheck,
-  ShoppingCart, SlidersHorizontal, Tag, Truck, Users, ArrowLeft, PencilRuler,
+  PlusCircle, ShoppingCart, SlidersHorizontal, Tag, Truck, Users, ArrowLeft, PencilRuler,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AdminCommandPalette } from '@/components/admin/AdminCommandPalette';
@@ -31,6 +31,7 @@ import { SupportConsole } from './admin/support/SupportConsole';
 import { B2bInquiries } from './admin/b2b/B2bInquiries';
 import { ConsultationsConsole } from './admin/consultations/ConsultationsConsole';
 import { AdminOrders } from './admin/AdminOrders';
+import { NewOrderConsole } from './admin/orders/NewOrderConsole';
 import { AdminProducts } from './admin/AdminProducts';
 import { AdminCoupons } from './admin/AdminCoupons';
 import { AdminCustomers } from './admin/AdminCustomers';
@@ -112,6 +113,7 @@ function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; display
       { title: 'Operations', items: [
         { id: 'home', label: 'Home', icon: Home },
         { id: 'orders', label: 'Orders', icon: ShoppingCart, badge: pendingOrders || undefined },
+        { id: 'new-order', label: 'New order', icon: PlusCircle },
         { id: 'production', label: 'Production', icon: Hammer },
         { id: 'qc', label: 'QC and packing', icon: ClipboardCheck },
         { id: 'shipping', label: 'Shipping', icon: Truck },
@@ -196,6 +198,7 @@ function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; display
           {activeTab === 'support' && canAccessTab(role, 'support') && <SupportConsole />}
           {activeTab === 'b2b' && canAccessTab(role, 'b2b') && <B2bInquiries />}
           {activeTab === 'consultations' && canAccessTab(role, 'consultations') && <ConsultationsConsole />}
+          {activeTab === 'new-order' && canAccessTab(role, 'new-order') && <NewOrderConsole />}
           {activeTab === 'orders' && canAccessTab(role, 'orders') && <AdminOrders onSelectTab={tab => selectTab(tab as AdminTabId)} />}
           {activeTab === 'custom-orders' && canAccessTab(role, 'custom-orders') && <AdminOrders initialFilter="custom" onSelectTab={tab => selectTab(tab as AdminTabId)} />}
           {activeTab === 'products' && canAccessTab(role, 'products') && <AdminProducts />}

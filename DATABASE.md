@@ -51,6 +51,11 @@ yet processed), `flags[]` (e.g. `AMOUNT_MISMATCH`, `STOCK_SHORTFALL_AFTER_LATE_P
 `DUPLICATE_PAYMENT`, `REFUND_NOT_STARTED`), `hold` (`{ kind: hold|material_shortage, reason, by, at }` or null: fulfilment paused
 without changing `status`; set and released only by the admin actions `SET_ORDER_HOLD` / `RELEASE_ORDER_HOLD`, and firestore.rules
 refuse direct stage moves while it is set), `placedAt`/`createdAt`/`updatedAt` (ms).
+Staff-entered orders (api/_lib/staffOrders.ts): `source{ channel: counter|phone|whatsapp|email|trade, by }`, `offlinePayment{ mode:
+cash|upi|card|bank_transfer, reference, receivedBy, at } | null` (money taken in person: the order is `prepaid` with no Razorpay
+payment and counts as collected for refunds, which are manual), `paymentLink{ id, url, expiresAt } | null` (Razorpay link; stock is
+held until `expiresAt`). A counter handover has customer address "Collected at the counter" at the seller's city, state and PIN,
+`status: Delivered`, `deliveredAt` and its invoice from creation. `email` may be '' for walk-in and phone customers.
 Phase 2: `paymentMethod` (`prepaid` | `cod` | `replacement`; absent = prepaid), `phoneKey` (10-digit mobile, COD limits),
 `leadTimeDays`, `amounts.codFeePaise`, `amounts.taxBreakdown{ lines[{ discountPaise, taxablePaise, gstRateBps, taxPaise }],
 charges[{ kind: shipping|cod_fee, taxablePaise, gstRateBps, taxPaise }] }`, per item `hsnCode`, `gstRateBps`, `discountPaise`,

@@ -336,7 +336,7 @@ export async function createCheckoutIntent(
       coupon = { id: evaluation.coupon.id, code: evaluation.coupon.code, discountPaise };
       couponConsultationId = evaluation.coupon.consultationId;
     }
-    const totals = computeTotals(lines, discountPaise, config, { cod });
+    const totals = computeTotals(lines, discountPaise, config, { cod, collected: Boolean(staff?.handover) });
     if (totals.totalPaise < MIN_PAYABLE_PAISE) {
       throw new ApiError(400, 'VALIDATION_ERROR', 'The order total is below the minimum payable amount.');
     }
@@ -514,7 +514,7 @@ export async function quoteItems(
   store: DocStore,
   config: StoreConfig,
   items: CheckoutItemInput[],
-  opts: { couponCode?: string; customerEmail?: string; cod?: boolean; now?: number } = {},
+  opts: { couponCode?: string; customerEmail?: string; cod?: boolean; collected?: boolean; now?: number } = {},
 ) {
   const catalogIds = [...new Set(items.filter(i => i.productId !== CUSTOM_PRODUCT_ID).map(i => i.productId))];
   const [coupon, productDocs] = await Promise.all([
@@ -534,6 +534,6 @@ export async function quoteItems(
     evaluation = evaluateCoupon(coupon, lines, { now: opts.now ?? Date.now(), customerUsageCount, customerEmail: opts.customerEmail });
   }
   const discountPaise = evaluation && 'discountPaise' in evaluation ? evaluation.discountPaise : 0;
-  const totals = computeTotals(lines, discountPaise, config, opts.cod ? { cod: true } : undefined);
+  const totals = computeTotals(lines, discountPaise, config, { cod: opts.cod, collected: opts.collected });
   return { evaluation, totals, lines };
 }
