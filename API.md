@@ -259,6 +259,13 @@ Rules and side effects:
 pickupScheduledAt, lastEvent: { status, at } | null, error, createdAt, updatedAt }`.
 `RefundDoc`: see DATABASE.md `refunds`. `ReturnDoc`: see DATABASE.md `returns`.
 
+### Launch setup (`/api/admin` `GET_LAUNCH_STATUS`, permission `settings.write`)
+
+`{ items: [{ id, group: payments|shipping|messages|platform|catalogue, label, ready, required, help, detail? }] }`: whether each
+owner-provided environment variable is set (presence only; values are never returned), how many sample products remain, and whether a
+designer is on the team. `detail` is non-secret (Razorpay test or live mode from the key prefix, the public site URL). Business details
+are checked in the browser from `settings/store`.
+
 ### Staff-entered orders (`/api/admin`, permission `orders.create`: order manager, support, admins)
 
 Counter (walk-in) sales and orders taken by phone, WhatsApp, email or from a trade enquiry. Created by the storefront checkout

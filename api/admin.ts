@@ -37,6 +37,7 @@ import { applyCourierStatus, bulkShipmentDocuments, cancelShipment, courierRates
 import type { PackageDetails } from './_lib/shipping/types';
 import type { DocStore } from './_lib/store';
 import { createStaffOrder, quoteStaffOrder, staffOrderSchema, staffQuoteSchema } from './_lib/staffOrders';
+import { launchStatus } from './_lib/launchStatus';
 import { loadStoreConfig } from './_lib/storeConfig';
 
 interface ActionContext {
@@ -298,6 +299,16 @@ const ACTIONS: Record<string, ActionDefinition> = {
         return next;
       });
       return { orderId: p.orderId, notes };
+    },
+  },
+
+  // ---------- launch setup (presence of owner-provided keys and data; never their values) ----------
+
+  GET_LAUNCH_STATUS: {
+    method: 'GET',
+    permission: 'settings.write',
+    async run(ctx) {
+      return { items: await launchStatus(ctx.store) };
     },
   },
 

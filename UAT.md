@@ -280,6 +280,7 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 |---|---|---|---|---|---|
 | SA-01 | Manage roles | Super admin | Create user, assign role, remove role | Permissions change immediately; audited | |
 | SA-02 | Store settings | None | Update free-shipping threshold, GST details, contact info | Reflected on storefront and invoices | |
+| SA-02a | Launch setup | Super admin | Settings > Launch setup; then set one missing key in Vercel and redeploy | Every key and business detail listed as set, required or optional with where to set it; no key value is shown anywhere; the item turns set after the redeploy; the admin home reminder lists only required items still missing | |
 | SA-03 | Audit logs | Actions performed | Filter by user and action | Complete and tamper-evident | |
 | SA-04 | Deactivate admin user | Active staff user | Deactivate | Session ends; cannot sign in | |
 | SA-05 | Last super admin safeguard | One super admin | Try to remove own super admin role | Refused | |

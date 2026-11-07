@@ -6,6 +6,10 @@
 - **Database and files**: Firestore and Cloud Storage in `asia-south1` (Mumbai). The location is fixed when the Firebase project is created, so pick it then. Keeping customer data in India is the conservative choice under the DPDP Act, 2023.
 
 ## 2. Environment Variables
+After deploying, open Admin > Settings > **Launch setup**: it lists every owner-provided key and business detail, whether each is
+set (never its value), what it switches on and where to set it (`api/_lib/launchStatus.ts`). Every integration can be added later;
+until then the store degrades instead of failing (manual shipping without Shiprocket, offline or COD staff orders without Razorpay,
+no emails or SMS without Resend / MSG91).
 The authoritative list with comments is `.env.example`. Required on the server: `FIREBASE_SERVICE_ACCOUNT_BASE64` (or
 `GOOGLE_APPLICATION_CREDENTIALS`), `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `CRON_SECRET`.
 Optional: `FIREBASE_PROJECT_ID`, the `STORE_*` defaults (GST, shipping, COD, lead times, return window, HSN), Shiprocket

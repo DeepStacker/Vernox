@@ -13,6 +13,7 @@ import { AtelierSelect } from '@/components/ui/select';
 import { useAdminData } from '@/lib/data/adminData';
 import { useSettingsMutations } from '@/lib/data/settings';
 import { BusinessSettingsForm } from './settings/BusinessSettingsForm';
+import { LaunchSetupPanel } from './overview/LaunchChecklist';
 
 export function AdminSettings() {
   const { products, categories, homepageSettings, topics, storeConfig } = useAdminData();
@@ -60,6 +61,8 @@ export function AdminSettings() {
   return (
     <div className="mx-auto max-w-4xl animate-fade-in space-y-8 pb-12">
       <AdminPageHeader title="Settings" line="Tax and shipping used by the storefront and checkout, and the business details behind invoices, contact and COD." />
+
+      <LaunchSetupPanel />
 
       <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border border-border bg-card p-5 shadow-soft">
         <h3 className="font-display text-xl">Store and pricing</h3>
