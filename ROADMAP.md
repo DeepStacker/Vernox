@@ -307,6 +307,12 @@ Launch setup turns Razorpay "set · test mode"). Not verified here: a full `./in
 project (Let's Encrypt, rules deployment with the service account's roles), and `update.sh` against a running stack. Follow-up: a
 server-only dependency set would shrink the 1 GB image.
 
+Firebase project (2026-11-07): the old `vernox-1b5d5` is not reachable from any account on hand, so production moves to `vernox-shop`
+(owner Google account svm.singh.01, `.firebaserc` default). Done from the CLI: web app "Vernox Web", Firestore `(default)` in
+asia-south1 with delete protection, rules and all 12 composite indexes deployed. Left for the console (no CLI command exists): the Blaze
+plan and Storage "Get started" (Storage on new projects needs Blaze), Authentication "Get started" with the Email/Password and Google
+providers, the production domain under Authorized domains, and a service-account key for `install.sh`.
+
 ## End-to-end check (2026-11-07, local emulators, headless Chromium at 390 px and 1280 px)
 
 Verified in the browser or against the running API: guest product page (EMI widget hidden without a key), add to cart, save for

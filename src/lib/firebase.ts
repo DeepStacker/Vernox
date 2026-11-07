@@ -10,9 +10,9 @@ const useEmulator = import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true';
 const runtime = runtimeConfig().firebase ?? {};
 const firebaseConfig = {
   apiKey: firstNonBlank(runtime.apiKey, import.meta.env.VITE_FIREBASE_API_KEY, useEmulator ? 'demo-key' : ''),
-  authDomain: firstNonBlank(runtime.authDomain, import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, useEmulator ? 'vernox-1b5d5.firebaseapp.com' : ''),
-  projectId: firstNonBlank(runtime.projectId, import.meta.env.VITE_FIREBASE_PROJECT_ID, useEmulator ? 'vernox-1b5d5' : ''),
-  storageBucket: firstNonBlank(runtime.storageBucket, import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, useEmulator ? 'vernox-1b5d5.firebasestorage.app' : ''),
+  authDomain: firstNonBlank(runtime.authDomain, import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, useEmulator ? 'vernox-shop.firebaseapp.com' : ''),
+  projectId: firstNonBlank(runtime.projectId, import.meta.env.VITE_FIREBASE_PROJECT_ID, useEmulator ? 'vernox-shop' : ''),
+  storageBucket: firstNonBlank(runtime.storageBucket, import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, useEmulator ? 'vernox-shop.firebasestorage.app' : ''),
   messagingSenderId: firstNonBlank(runtime.messagingSenderId, import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID),
   appId: firstNonBlank(runtime.appId, import.meta.env.VITE_FIREBASE_APP_ID),
 };

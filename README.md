@@ -71,7 +71,7 @@ Measures cold loads of Home, Shop and a product page on a throttled mid-range ph
 "Performance and scale plan"). With the emulators running and seeded (`npm run emulators`, `npm run seed:local`):
 0. Once: `npx playwright install chromium` (or set `CHROMIUM_PATH` to an installed Chromium).
 1. `VITE_USE_FIREBASE_EMULATOR=true npx vite build --outDir /tmp/vernox-perf`
-2. API: `FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_PROJECT_ID=vernox-1b5d5 npx tsx server/index.ts`
+2. API: `FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_PROJECT_ID=vernox-shop npx tsx server/index.ts`
 3. `node scripts/perf/serve.mjs /tmp/vernox-perf` then `RUNS=5 node scripts/perf/measure.mjs`
 Compare builds in interleaved runs on the same machine load; single runs vary by a few hundred milliseconds.
 
