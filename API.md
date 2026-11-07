@@ -274,6 +274,7 @@ engine (`api/_lib/staffOrders.ts`), so prices, GST, stock, coupons and idempoten
 | Action | Params | Result |
 | --- | --- | --- |
 | `QUOTE_STAFF_ORDER` | `items[]` (checkout item shape), `couponCode?`, `customerEmail?`, `cod`, `handover` | `{ lines[], coupon: { ok, discountPaise \| message } \| null, totals{ subtotalPaise, discountPaise, shippingPaise, codFeePaise, taxPaise, totalPaise } }`; read-only |
+| `FIND_CUSTOMER_BY_PHONE` (GET) | `phone` | `{ found: false }` or `{ found: true, orderCount, lastOrderNumber, name, email, address{ address, city, state, pincode } \| null }` from the customer's latest orders (counter handovers are not used as an address) |
 | `CREATE_STAFF_ORDER` | `channel (counter\|phone\|whatsapp\|email\|trade)`, `items[]`, `couponCode?` (needs `customer.email`), `customer{ name, phone, email?, address?, city?, state?, pincode? }` (address required unless `handover`), `payment: { method: offline, mode: cash\|upi\|card\|bank_transfer, reference (required except cash) } \| { method: payment_link } \| { method: cod }`, `handover` (counter + offline only), `idempotencyKey`, `note?`, `tradeEnquiryId?` | `{ staff: true, orderId, orderNumber, status, paymentMethod, paymentLink{ id, url, expiresAt } \| null, invoiceNumber \| null, pricing }`; audited `STAFF_ORDER_CREATED` |
 
 - `offline`: the order starts `Paid` (stock committed, coupon redeemed, `order_confirmed` queued). With `handover` it is `Delivered`

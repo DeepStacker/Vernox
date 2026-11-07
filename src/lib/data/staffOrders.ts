@@ -41,6 +41,12 @@ export interface StaffOrderCreated {
   invoiceNumber: string | null;
 }
 
+export type CustomerLookup =
+  | { found: false }
+  | { found: true; orderCount: number; lastOrderNumber: string; name: string; email: string; address: { address: string; city: string; state: string; pincode: string } | null };
+
+export const findCustomerByPhone = (phone: string) => adminAction<CustomerLookup>('FIND_CUSTOMER_BY_PHONE', { phone });
+
 export const quoteStaffOrder = (input: { items: StaffOrderItem[]; couponCode?: string; customerEmail?: string; cod: boolean; handover: boolean }) =>
   adminAction<StaffOrderQuote>('QUOTE_STAFF_ORDER', input);
 

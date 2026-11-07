@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { AdminNotice, Field } from '@/components/admin/AdminUi';
 import { useSettingsMutations } from '@/lib/data/settings';
 import type { StoreConfig } from '@/types/store';
+import { stateForGstCode } from '@/types/gstStateCodes';
 import { isPlaceholderSeller } from '@/types/settings';
 import { describeSellerFields, draftFromConfig, missingSellerFields, toStorePatch, validateBusiness, type BusinessDraft } from './settingsForm';
 
@@ -10,7 +11,7 @@ const SELLER_TEXT: Array<{ key: keyof BusinessDraft['seller']; label: string; er
   { key: 'legalName', label: 'Legal name' },
   { key: 'tradeName', label: 'Trade name' },
   { key: 'gstin', label: 'GSTIN', error: 'gstin', hint: '15 characters, for example 29ABCDE1234F1Z5.', mono: true },
-  { key: 'stateCode', label: 'GST state code', error: 'stateCode', hint: 'Two digits; must match the start of the GSTIN.', mono: true },
+  { key: 'stateCode', label: 'GST state code', error: 'stateCode', hint: 'Filled in from the GSTIN.', mono: true },
   { key: 'address', label: 'Address' },
   { key: 'city', label: 'City' },
   { key: 'state', label: 'State' },
@@ -42,7 +43,16 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
   const set = <K extends keyof BusinessDraft>(key: K, value: BusinessDraft[K]) => setDraft(d => ({ ...d, [key]: value }));
   const setConsultation = <K extends keyof BusinessDraft['consultation']>(key: K, value: BusinessDraft['consultation'][K]) =>
     setDraft(d => ({ ...d, consultation: { ...d.consultation, [key]: value } }));
-  const setSeller = (key: keyof BusinessDraft['seller'], value: string) => setDraft(d => ({ ...d, seller: { ...d.seller, [key]: value } }));
+  const setSeller = (key: keyof BusinessDraft['seller'], value: string) =>
+    setDraft(d => {
+      const seller = { ...d.seller, [key]: value };
+      // The GSTIN starts with the GST state code, so the code and state follow it instead of being typed twice.
+      if (key === 'gstin') {
+        const state = stateForGstCode(value.slice(0, 2));
+        if (state) Object.assign(seller, { stateCode: value.slice(0, 2), state });
+      }
+      return { ...d, seller };
+    });
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();

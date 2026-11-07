@@ -207,3 +207,14 @@ describe('placeholder seller details (UAT before the real GSTIN is entered)', ()
     expect(defaultSettingsDoc().seller.gstin).toBe(PLACEHOLDER_GSTIN);
   });
 });
+
+describe('GST state names from codes', () => {
+  it('maps a GSTIN prefix back to the checkout state name', async () => {
+    const { stateForGstCode } = await import('../../api/_lib/gst/stateCodes');
+    expect(stateForGstCode('29')).toBe('Karnataka');
+    expect(stateForGstCode('07')).toBe('Delhi');
+    expect(stateForGstCode('26')).toBe('Dadra and Nagar Haveli and Daman and Diu');
+    expect(stateForGstCode('99')).toBeNull();
+    expect(gstStateCode(stateForGstCode('33'))).toBe('33');
+  });
+});

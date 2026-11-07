@@ -7,7 +7,7 @@ import { OUTBOX_COLLECTION } from '../../api/_lib/notifications/outbox';
 import type { OrderDoc } from '../../api/_lib/orders';
 import { collectedPaise } from '../../api/_lib/payments';
 import type { PaymentLinkGateway } from '../../api/_lib/razorpay';
-import { createStaffOrder, quoteStaffOrder, staffOrderSchema, type StaffOrderInput } from '../../api/_lib/staffOrders';
+import { createStaffOrder, findCustomerByPhone, quoteStaffOrder, staffOrderSchema, type StaffOrderInput } from '../../api/_lib/staffOrders';
 import { processWebhookEvent } from '../../api/_lib/webhook';
 import type { MemoryStore } from './support/memoryStore';
 import { deps, NOW, seededStore, SELLER_CONFIG } from './support/serverFixtures';
@@ -191,5 +191,21 @@ describe('staff orders: COD and quotes', () => {
     store.seed('b2b_inquiries/abcdefghij12', { name: 'Ravi', status: 'quoted' });
     const res = await createStaffOrder(staffDeps(store), input({ channel: 'trade', tradeEnquiryId: 'abcdefghij12' }), ACTOR);
     expect(store.read('b2b_inquiries/abcdefghij12')).toMatchObject({ status: 'won', orderId: res.orderId });
+  });
+});
+
+describe('returning customer lookup', () => {
+  it('fills from the latest order and skips counter handovers as an address', async () => {
+    const store = seededStore();
+    const d = staffDeps(store);
+    expect(await findCustomerByPhone(store, '9876543210')).toEqual({ found: false });
+    await createStaffOrder(d, input({ customer: { name: 'Asha Rao', phone: '+91 98765 43210', email: 'asha@example.com', ...ADDRESS } }), ACTOR);
+    await createStaffOrder(
+      { ...d, now: () => NOW + 1000 },
+      input({ idempotencyKey: 'staff-key-0002', channel: 'counter', handover: true, customer: { name: 'Asha R', phone: '09876543210' }, payment: { method: 'offline', mode: 'cash' } }),
+      ACTOR,
+    );
+    const found = await findCustomerByPhone(store, '98765 43210');
+    expect(found).toMatchObject({ found: true, orderCount: 2, name: 'Asha R', email: 'asha@example.com', address: ADDRESS });
   });
 });

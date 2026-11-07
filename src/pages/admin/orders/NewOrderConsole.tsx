@@ -9,10 +9,11 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { Copy, FileText, MessageCircle, Plus, Trash2 } from 'lucide-react';
 import { finishName } from '@/lib/catalog';
+import { INDIAN_STATES_AND_UTS } from '@/lib/checkout/validation';
 import { useB2bInquiries } from '@/lib/data/b2b';
 import { downloadTaxDocument } from '@/lib/data/orderOps';
 import { useProducts } from '@/lib/data/products';
-import { quoteStaffOrder, useCreateStaffOrder, type StaffOrderCreated, type StaffOrderItem, type StaffOrderQuote } from '@/lib/data/staffOrders';
+import { findCustomerByPhone, quoteStaffOrder, useCreateStaffOrder, type CustomerLookup, type StaffOrderCreated, type StaffOrderItem, type StaffOrderQuote } from '@/lib/data/staffOrders';
 import { formatInr } from '@/lib/orders/finance';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import {
@@ -155,6 +156,7 @@ export function NewOrderConsole() {
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<StaffOrderCreated | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(newKey);
+  const [returning, setReturning] = useState<Extract<CustomerLookup, { found: true }> | null>(null);
 
   const canHandover = channel === 'counter' && paymentMethod === 'offline';
   const handingOver = canHandover && handover;
@@ -178,9 +180,33 @@ export function NewOrderConsole() {
     return () => { live = false; clearTimeout(timer); };
   }, [quoteInput, items.length]);
 
+  // A returning customer's details fill in from their last order once a full mobile number is typed; fields
+  // staff already filled are kept.
+  const phoneDigits = customer.phone.replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, '');
+  useEffect(() => {
+    setReturning(null);
+    if (phoneDigits.length !== 10) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      findCustomerByPhone(phoneDigits)
+        .then(found => {
+          if (!live || !found.found) return;
+          setReturning(found);
+          setCustomer(c => ({
+            ...c,
+            name: c.name || found.name,
+            email: c.email || found.email,
+            ...(found.address && !c.address ? found.address : {}),
+          }));
+        })
+        .catch(() => { /* lookup is a convenience; typing the details still works */ });
+    }, 300);
+    return () => { live = false; clearTimeout(timer); };
+  }, [phoneDigits]);
+
   const reset = () => {
     setItems([]); setCustomer(EMPTY_CUSTOMER); setCouponCode(''); setNote(''); setReference(''); setTradeEnquiryId('');
-    setCreated(null); setError(null); setIdempotencyKey(newKey());
+    setCreated(null); setError(null); setReturning(null); setIdempotencyKey(newKey());
   };
 
   const submit = async (e: FormEvent) => {
@@ -297,16 +323,26 @@ export function NewOrderConsole() {
 
         <section className="space-y-3">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Customer</h3>
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            {returning
+              ? `Returning customer: ${returning.orderCount} earlier order${returning.orderCount === 1 ? '' : 's'}, last ${returning.lastOrderNumber}. Details filled in; check them.`
+              : 'Enter the mobile first: a returning customer\'s details fill in by themselves.'}
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            {input('name', 'Name *', { maxLength: 120, autoComplete: 'off' })}
             {input('phone', 'Mobile *', { type: 'tel', inputMode: 'tel', maxLength: 20 })}
+            {input('name', 'Name *', { maxLength: 120, autoComplete: 'off' })}
             {input('email', 'Email (for the receipt and coupons)', { type: 'email', maxLength: 254 })}
           </div>
           {!handingOver && (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">{input('address', 'Delivery address *', { maxLength: 500 })}</div>
               {input('city', 'City *', { maxLength: 100 })}
-              {input('state', 'State / UT *', { maxLength: 100 })}
+              <div className="block text-sm font-medium"><label htmlFor="new-order-state">State / UT *</label>
+                <select id="new-order-state" value={customer.state} onChange={e => setField('state')(e.target.value)} className="field mt-1 font-normal">
+                  <option value="">Choose</option>
+                  {INDIAN_STATES_AND_UTS.map(st => <option key={st} value={st}>{st}</option>)}
+                </select>
+              </div>
               {input('pincode', 'PIN code *', { inputMode: 'numeric', maxLength: 6 })}
             </div>
           )}

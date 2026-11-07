@@ -17,7 +17,7 @@ import { OFFLINE_PAYMENT_MODES, STAFF_ORDER_CHANNELS } from '../../src/types/sta
 import { createCheckoutIntent, customerSchema, itemSchema, quoteItems, type CheckoutDeps, type StaffCheckoutResponse } from './checkout';
 import type { CheckoutItemInput } from './pricing';
 import { ApiError } from './errors';
-import type { CustomerDetails } from './orders';
+import { asOrder, phoneKey, type CustomerDetails } from './orders';
 import type { DocStore } from './store';
 import type { StoreConfig } from './storeConfig';
 
@@ -107,6 +107,30 @@ export async function quoteStaffOrder(store: DocStore, config: StoreConfig, inpu
   };
 }
 
+const COUNTER_ADDRESS = 'Collected at the counter';
+
+export const customerLookupSchema = z.object({ phone: phoneField });
+
+/**
+ * A returning customer's details from their most recent order with this mobile number, so staff do not retype
+ * the name, email and address. Counter handovers are skipped as an address source (they carry the seller's).
+ */
+export async function findCustomerByPhone(store: DocStore, phone: string) {
+  const docs = await store.query('orders', { where: [{ field: 'phoneKey', op: '==', value: phoneKey(phone) }], limit: 50 });
+  const orders = docs.map(d => asOrder(d.data)!).filter(Boolean).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+  if (orders.length === 0) return { found: false as const };
+  const latest = orders[0];
+  const withAddress = orders.find(o => o.customer?.address && o.customer.address !== COUNTER_ADDRESS);
+  return {
+    found: true as const,
+    orderCount: orders.length,
+    lastOrderNumber: latest.orderNumber,
+    name: latest.customer?.name ?? '',
+    email: orders.find(o => o.email)?.email ?? '',
+    address: withAddress ? { address: withAddress.customer.address, city: withAddress.customer.city, state: withAddress.customer.state, pincode: withAddress.customer.pincode } : null,
+  };
+}
+
 /** Customer details for checkout; a counter handover is recorded at the seller's address. */
 function checkoutCustomer(input: StaffOrderInput, config: StoreConfig): CustomerDetails {
   const c = input.customer;
@@ -115,7 +139,7 @@ function checkoutCustomer(input: StaffOrderInput, config: StoreConfig): Customer
     if (!s.state || !s.pincode) {
       throw new ApiError(409, 'CONFLICT', 'Save the business address in Settings before recording counter sales.');
     }
-    return { name: c.name, phone: c.phone, email: c.email ?? '', address: 'Collected at the counter', city: s.city || s.state, state: s.state, pincode: s.pincode, country: 'India' };
+    return { name: c.name, phone: c.phone, email: c.email ?? '', address: COUNTER_ADDRESS, city: s.city || s.state, state: s.state, pincode: s.pincode, country: 'India' };
   }
   // Same address rules as the storefront (6-digit PIN for India).
   const parsed = customerSchema.safeParse({ ...c, email: c.email ?? 'no-email@invalid.example' });

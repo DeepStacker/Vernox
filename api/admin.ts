@@ -36,7 +36,7 @@ import { createShippingProvider } from './_lib/shipping';
 import { applyCourierStatus, bulkShipmentDocuments, cancelShipment, courierRatesFor, createShipment, getLabel, type ManualShipmentDetails } from './_lib/shipping/shipments';
 import type { PackageDetails } from './_lib/shipping/types';
 import type { DocStore } from './_lib/store';
-import { createStaffOrder, quoteStaffOrder, staffOrderSchema, staffQuoteSchema } from './_lib/staffOrders';
+import { createStaffOrder, customerLookupSchema, findCustomerByPhone, quoteStaffOrder, staffOrderSchema, staffQuoteSchema } from './_lib/staffOrders';
 import { launchStatus } from './_lib/launchStatus';
 import { loadStoreConfig } from './_lib/storeConfig';
 
@@ -320,6 +320,15 @@ const ACTIONS: Record<string, ActionDefinition> = {
     async run(ctx) {
       const p = parse(staffQuoteSchema, ctx.params);
       return quoteStaffOrder(ctx.store, await loadStoreConfig(ctx.store), p);
+    },
+  },
+
+  FIND_CUSTOMER_BY_PHONE: {
+    method: 'GET',
+    permission: 'orders.create',
+    async run(ctx) {
+      const p = parse(customerLookupSchema, ctx.params);
+      return findCustomerByPhone(ctx.store, p.phone);
     },
   },
 

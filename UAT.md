@@ -184,6 +184,7 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 | OM-03 | Order detail | Any order | Open detail | Items with variants and custom design files, address, payment reference, timeline | |
 | OM-03a | Counter sale with handover | Seller details saved in Settings; a piece in stock | Admin > New order: Counter / walk-in, add the piece, Paid now: Cash, keep "Customer takes the pieces now", name and mobile only, Create order; then Tax invoice (PDF) | Summary total matches; order created Delivered with no shipping charge; invoice PDF downloads (CGST + SGST); stock reduced; order in the Orders list; audited `STAFF_ORDER_CREATED` | Verified locally 2026-11-07 (specimen invoice: placeholder seller) |
 | OM-03b | Phone / WhatsApp order paid by UPI or card | Any piece | New order: Phone, Paid now: UPI with the UTR, full delivery address | Order Paid and in the production queue; payment note on the timeline; UPI / card without a reference is refused | Verified locally 2026-11-07 |
+| OM-03e | Returning customer and fewer fields | A customer with an earlier order | New order: type their 10-digit mobile | Name, email and last delivery address fill in (filled fields are kept); a note shows how many earlier orders; State is a list, not free text | |
 | OM-03c | Order by payment link | Razorpay test keys, `payment_link.paid` webhook enabled | New order: WhatsApp, Send a payment link, delivery address; pay the link with a test card | Link shown with Copy and Send on WhatsApp; order Pending_Payment, then Paid by the webhook; without keys a clear "Payment links need the Razorpay keys" message and no order | Without keys verified locally; live link needs keys |
 | OM-03d | Trade order from an enquiry | A trade enquiry | New order: Trade / bulk, choose the enquiry, COD or paid now | Order created; the enquiry shows Won | |
 | OM-04 | Verify payment state | Paid and failed orders | Compare with gateway dashboard | Statuses match exactly | |
@@ -280,6 +281,7 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 |---|---|---|---|---|---|
 | SA-01 | Manage roles | Super admin | Create user, assign role, remove role | Permissions change immediately; audited | |
 | SA-02 | Store settings | None | Update free-shipping threshold, GST details, contact info | Reflected on storefront and invoices | |
+| SA-02b | GSTIN fills the state | Settings > Business | Type a GSTIN starting 27 | State code 27 and State Maharashtra fill in; a code that does not match the GSTIN is still flagged | |
 | SA-02a | Launch setup | Super admin | Settings > Launch setup; then set one missing key in Vercel and redeploy | Every key and business detail listed as set, required or optional with where to set it; no key value is shown anywhere; the item turns set after the redeploy; the admin home reminder lists only required items still missing | |
 | SA-03 | Audit logs | Actions performed | Filter by user and action | Complete and tamper-evident | |
 | SA-04 | Deactivate admin user | Active staff user | Deactivate | Session ends; cannot sign in | |
