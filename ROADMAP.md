@@ -294,6 +294,19 @@ Results (same harness, interleaved runs; done 2026-11-07):
 - Done (2026-11-07): staff log email, WhatsApp and phone requests as tickets (`CREATE_TICKET`), linked to the order when the number
   matches; replies are emailed only when the ticket has an email. Done (2026-11-07): WhatsApp end to end by configuration only (Meta Cloud API): order updates as a third outbox channel with approved templates, inbound messages as tickets via `/api/whatsapp-webhook` (STOP / START opt-out), and "Send on WhatsApp" replies in the Support console within the 24-hour window. Setup: DEPLOYMENT.md 4d. Not verified against live Meta (needs keys and approved templates).
 
+## End-to-end check (2026-11-07, local emulators, headless Chromium at 390 px and 1280 px)
+
+Verified in the browser or against the running API: guest product page (EMI widget hidden without a key), add to cart, save for
+later (survives reload) and back; checkout empty and invalid input errors; PIN 560038 fills Karnataka; WhatsApp consent recorded;
+COD order placed and flagged `COD_UNVERIFIED`; staff "Confirm by phone" clears it; newsletter pending, confirmation email queued,
+the emailed link confirms (button press), a forged link is refused; signed WhatsApp webhook opens a ticket linked to the order (forged
+signature 400, repeat delivery not duplicated, handshake and wrong verify token 403) and it shows in Support; New order fills a returning
+customer from the mobile and the state follows a new PIN (fixed: an old autofilled state used to stay); GSTIN fills state code and state;
+Launch setup lists 9 required items on a fresh stack; production staff have no New order tab; a customer account has no admin access;
+API refusals: production and customer 403, no token 401, invalid handover / missing UPI reference / quantity 0 / unknown product 400.
+No page errors, no Google Fonts requests. Not verifiable without keys: Razorpay (payments, links, EMI widget), Shiprocket, Resend,
+MSG91 and Meta WhatsApp delivery.
+
 ## Phase 3a follow-ups (status after 3b)
 
 - Done (2026-11-07): staff-entered orders (Admin > New order; `CREATE_STAFF_ORDER`, permission `orders.create` for order manager,

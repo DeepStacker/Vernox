@@ -148,7 +148,7 @@ export default function Cart() {
                       <p className="font-semibold">{formatINR(item.unitPrice * item.quantity)}</p>
                     </div>
                     <div className="flex items-center gap-4">
-                      <button type="button" onClick={() => { saveForLater(item.id); toast.info(`${item.productName} saved for later.`); }} aria-label={`Save ${item.productName} for later`} className="inline-flex min-h-10 items-center gap-1.5 text-sm text-muted-foreground hover:text-burgundy"><Bookmark className="h-4 w-4" aria-hidden="true" />Save for later</button>
+                      <button type="button" onClick={() => { saveForLater(item.id); toast.info(`${item.productName} saved for later.`); }} aria-label={`Save for later: ${item.productName}`} className="inline-flex min-h-10 items-center gap-1.5 text-sm text-muted-foreground hover:text-burgundy"><Bookmark className="h-4 w-4" aria-hidden="true" />Save for later</button>
                       <button type="button" onClick={() => remove(item.id)} aria-label={`Remove ${item.productName}`} className="inline-flex min-h-10 items-center gap-1.5 text-sm text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" aria-hidden="true" />Remove</button>
                     </div>
                   </div>

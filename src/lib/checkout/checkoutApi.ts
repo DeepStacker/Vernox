@@ -113,6 +113,8 @@ export async function createCheckoutIntent(params: {
   paymentMethod?: PaymentMethod;
   /** From the COD SMS code step (engageApi verifyCodOtp); only sent for cash on delivery. */
   codVerificationToken?: string;
+  /** The customer ticked "Send me order updates on WhatsApp"; never pre-ticked (Meta requires opt-in). */
+  whatsappOptIn?: boolean;
 }): Promise<CheckoutIntent | CodOrder> {
   const data = await postJson('/api/checkout-intent', {
     items: toCheckoutItems(params.items),
@@ -121,6 +123,7 @@ export async function createCheckoutIntent(params: {
     customer: params.customer,
     paymentMethod: params.paymentMethod ?? 'prepaid',
     ...(params.paymentMethod === 'cod' && params.codVerificationToken ? { codVerificationToken: params.codVerificationToken } : {}),
+    ...(params.whatsappOptIn ? { whatsappOptIn: true } : {}),
   });
   // Responses from before COD carry no paymentMethod; they are prepaid.
   return (data.paymentMethod === 'cod' ? data : { ...data, paymentMethod: 'prepaid' }) as unknown as CheckoutIntent | CodOrder;

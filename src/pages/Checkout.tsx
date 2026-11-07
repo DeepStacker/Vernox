@@ -113,6 +113,7 @@ export default function Checkout() {
   // Typing the PIN fills an empty city/state (never overwrites typed values).
   usePincodeAutofill(form.pincode, form, patch => setForm(prev => ({ ...prev, ...patch })), deliveryProductId);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('prepaid');
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const codBlockedReason: string | null =
     storeConfig.codEnabled === false ? 'Cash on delivery is not available right now.'
       : cartHasCustomItem(items) ? 'Custom studio designs are prepaid only.'
@@ -191,7 +192,7 @@ export default function Checkout() {
 
     setPhase('creating');
     try {
-      const created = await createCheckoutIntent({ items, couponCode, idempotencyKey: idempotencyKey.current, customer, paymentMethod, codVerificationToken: codOtp.token ?? undefined });
+      const created = await createCheckoutIntent({ items, couponCode, idempotencyKey: idempotencyKey.current, customer, paymentMethod, codVerificationToken: codOtp.token ?? undefined, whatsappOptIn });
       if (created.paymentMethod === 'cod') {
         // Confirmed at creation: there is no payment step.
         trackStoreEvent('purchase', { orderId: created.orderId, orderTotal: created.pricing.total });
@@ -278,6 +279,10 @@ export default function Checkout() {
                 <FieldError message={errors.phone} />
               </div>
             </div>
+            <label className="flex min-h-11 items-center gap-2 text-sm">
+              <input type="checkbox" checked={whatsappOptIn} onChange={e => setWhatsappOptIn(e.target.checked)} className="h-5 w-5 accent-burgundy" />
+              Send me order updates on WhatsApp (reply STOP any time)
+            </label>
 
             <div>
               <label className={labelClass} htmlFor="co-email">Email (order updates and tracking)</label>
