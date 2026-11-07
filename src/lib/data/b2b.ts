@@ -1,6 +1,6 @@
 /**
- * Trade / B2B enquiries (`b2b_inquiries`). Created by the public Trade form (shape enforced by
- * firestore.rules `validInquiry`); read and status-updated by `b2b.read` roles.
+ * Trade / B2B enquiries (`b2b_inquiries`). Created only by the API from the public Trade form
+ * (api/_lib/tradeEnquiry.ts); read and status-updated by `b2b.read` roles.
  */
 import { useQuery } from '@tanstack/react-query';
 import { collection, doc, getDocs, limit, query, updateDoc } from 'firebase/firestore';

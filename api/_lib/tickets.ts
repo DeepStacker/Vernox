@@ -66,13 +66,20 @@ export const ticketIdSchema = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
 
 export const ticketRef = (id: string) => `T-${id.slice(0, 6).toUpperCase()}`;
 
+/**
+ * The support inbox for internal alerts, or '' when none is set. The server config does not carry the
+ * storefront contact fields, so this reads the raw settings document; the seeded placeholder address
+ * counts as unset, so alerts are skipped rather than sent to example.com.
+ */
+export async function supportInbox(store: DocStore): Promise<string> {
+  const raw = (await store.get('settings/store'))?.supportEmail;
+  return typeof raw === 'string' && !isPlaceholderValue(raw) ? raw.trim().toLowerCase() : '';
+}
+
 export async function createTicket(store: DocStore, input: ContactRequest, now = Date.now()): Promise<{ id: string; ref: string }> {
   const id = store.newId('tickets');
   const ref = ticketRef(id);
-  // The server config does not carry the storefront contact fields, so read the raw settings document.
-  const rawSupportEmail = (await store.get('settings/store'))?.supportEmail;
-  // The seeded placeholder address counts as unset, so alerts are skipped rather than sent to example.com.
-  const supportEmail = typeof rawSupportEmail === 'string' && !isPlaceholderValue(rawSupportEmail) ? rawSupportEmail.trim().toLowerCase() : '';
+  const supportEmail = await supportInbox(store);
   const ticket: TicketDoc = {
     ref,
     channel: 'contact_form',

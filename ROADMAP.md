@@ -248,7 +248,10 @@ Results (same harness, interleaved runs; done 2026-11-07):
   first-load JS fell from ~330 KB to ~190 KB. Pure mapping moved to `catalogMappers.ts` and `orderModel.ts` so guest pages stay SDK-free.
 - S3 tried and measured: preloading `/api/catalog` at low priority (kept: content 0.3 s sooner, Home LCP 3.1 → 2.2 s, first paint
   +0.15 s); preloading the hero image (dropped: delayed first paint 0.4 s on a JS-rendered page for no consistent LCP gain).
-- Next levers, by expected value: Trade enquiry form through the API (it alone still loads Firestore for guests); self-host the three
+- S4 done: the Trade enquiry posts to `/api/engage` (`TRADE_ENQUIRY`) instead of writing Firestore from the browser, so no guest page
+  loads the Firestore SDK; it also gained the honeypot, a rate limit, a collision-free reference and a support-inbox alert, and
+  `b2b_inquiries` no longer accepts client creates.
+- Next levers, by expected value: self-host the three
   Google Fonts families (one less origin before text renders); a smaller hero variant (98 KB at 1200 px); prerendered HTML for Home
   and product pages if LCP must drop below ~2 s.
 - Accessibility follow-up found while testing: `src/pages/Account.tsx` has ~15 more `<label>`s not tied to their inputs (register,

@@ -191,24 +191,9 @@ service cloud.firestore {
 
     // ---------- B2B inquiries ----------
 
-    // Payload written by src/components/shop/B2BTradeModal.tsx.
-    function shortString(data, key, maxLen) {
-      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
-    }
-
-    function validInquiry(d) {
-      return d.keys().hasOnly(['name', 'email', 'company', 'phone', 'projectType', 'volume', 'alloyPreference',
-                               'timeline', 'notes', 'refId', 'createdAt', 'status'])
-        && d.name is string && d.name.size() > 0 && d.name.size() <= 120
-        && d.email is string && d.email.size() <= 254 && d.email.matches('^[^@\\s]+@[^@\\s]+[.][^@\\s]+$')
-        && shortString(d, 'company', 200) && shortString(d, 'phone', 30) && shortString(d, 'projectType', 60)
-        && shortString(d, 'volume', 60) && shortString(d, 'alloyPreference', 60) && shortString(d, 'timeline', 60)
-        && shortString(d, 'notes', 5000) && shortString(d, 'refId', 40) && shortString(d, 'createdAt', 40)
-        && d.get('status', 'pending_review') == 'pending_review';
-    }
-
     match /b2b_inquiries/{inquiryId} {
-      allow create: if validInquiry(request.resource.data);
+      // Created only by the API (POST /api/engage TRADE_ENQUIRY), which validates and rate-limits it.
+      allow create: if false;
       allow read, update, delete: if canReadB2b();
     }
 

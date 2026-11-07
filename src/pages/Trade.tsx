@@ -1,31 +1,17 @@
 import { useState } from 'react';
-import { addDoc, collection } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { Building2, Gift, PenTool, Ruler } from 'lucide-react';
 import { ContentPage } from '@/components/shop/ContentPage';
-import { db } from '@/lib/firestoreDb';
 import { useSeo } from '@/lib/seo';
 import { isEmail } from '@/lib/storefront/contact';
+import { sendTradeEnquiry } from '@/lib/storefront/engageApi';
+import { TRADE_FINISHES, TRADE_PROJECT_TYPES, TRADE_TIMELINES, TRADE_VOLUMES } from '@/types/trade';
 
 const USES = [
   { icon: Building2, title: 'Logo signage' },
   { icon: Gift, title: 'Corporate gifting' },
   { icon: Ruler, title: 'Trade pricing' },
   { icon: PenTool, title: 'Custom artwork' },
-];
-
-const PROJECT_TYPES = [
-  { id: 'corporate-signage', label: 'Logo signage' },
-  { id: 'corporate-gifting', label: 'Corporate gifting' },
-  { id: 'interior-design', label: 'Architect or interior designer' },
-  { id: 'hospitality', label: 'Hotel, restaurant or cafe' },
-  { id: 'other', label: 'Something else' },
-];
-const VOLUMES = ['1-10', '10-25', '25-50', '50-100', '100+'];
-const TIMELINES = ['Under 2 weeks', '2-4 weeks', '1-2 months', 'Flexible'];
-const FINISHES = [
-  { id: 'black_patina', label: 'Black powder coat' }, { id: 'brass', label: 'Brass' }, { id: 'gold', label: 'Gold' },
-  { id: 'copper', label: 'Copper' }, { id: 'stainless', label: 'Stainless steel' }, { id: 'corten_rust', label: 'Corten rust' },
 ];
 
 export default function Trade() {
@@ -35,7 +21,7 @@ export default function Trade() {
     canonicalPath: '/trade',
   });
   const [form, setForm] = useState({
-    name: '', email: '', company: '', phone: '', projectType: 'corporate-signage', volume: '10-25', alloyPreference: 'black_patina', timeline: '2-4 weeks', notes: '',
+    name: '', email: '', company: '', phone: '', projectType: 'corporate-signage', volume: '10-25', alloyPreference: 'black_patina', timeline: '2-4 weeks', notes: '', website: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [refId, setRefId] = useState('');
@@ -50,15 +36,12 @@ export default function Trade() {
       return;
     }
     setSubmitting(true);
-    const id = `VNX-B2B-${Math.floor(1000 + Math.random() * 9000)}`;
-    // Payload shape is enforced by firestore.rules (validInquiry); do not add or rename fields.
-    const payload = { ...form, name: form.name.trim(), email: form.email.trim(), refId: id, createdAt: new Date().toISOString(), status: 'pending_review' };
     try {
-      await addDoc(collection(db, 'b2b_inquiries'), payload);
-      setRefId(id);
+      const { ref } = await sendTradeEnquiry({ ...form, name: form.name.trim(), email: form.email.trim() });
+      // A honeypot hit is answered without a reference; people always get one.
+      setRefId(ref ?? 'received');
     } catch (err) {
-      console.error('Trade enquiry could not be saved:', err);
-      toast.error('Your enquiry could not be sent. Please try again or contact us directly.');
+      toast.error(err instanceof Error && err.message ? err.message : 'Your enquiry could not be sent. Please try again or contact us directly.');
     } finally {
       setSubmitting(false);
     }
@@ -89,20 +72,23 @@ export default function Trade() {
             <label className="text-sm font-medium">Company or studio<input value={form.company} onChange={set('company')} className="field mt-1 font-normal" autoComplete="organization" /></label>
             <label className="text-sm font-medium">Phone<input type="tel" value={form.phone} onChange={set('phone')} className="field mt-1 font-normal" autoComplete="tel" /></label>
             <label className="text-sm font-medium">What do you need?
-              <select value={form.projectType} onChange={set('projectType')} className="field mt-1 font-normal">{PROJECT_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select>
+              <select value={form.projectType} onChange={set('projectType')} className="field mt-1 font-normal">{TRADE_PROJECT_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select>
             </label>
             <label className="text-sm font-medium">Quantity
-              <select value={form.volume} onChange={set('volume')} className="field mt-1 font-normal">{VOLUMES.map(v => <option key={v}>{v}</option>)}</select>
+              <select value={form.volume} onChange={set('volume')} className="field mt-1 font-normal">{TRADE_VOLUMES.map(v => <option key={v}>{v}</option>)}</select>
             </label>
             <label className="text-sm font-medium">Finish
-              <select value={form.alloyPreference} onChange={set('alloyPreference')} className="field mt-1 font-normal">{FINISHES.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select>
+              <select value={form.alloyPreference} onChange={set('alloyPreference')} className="field mt-1 font-normal">{TRADE_FINISHES.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select>
             </label>
             <label className="text-sm font-medium">Timeline
-              <select value={form.timeline} onChange={set('timeline')} className="field mt-1 font-normal">{TIMELINES.map(t => <option key={t}>{t}</option>)}</select>
+              <select value={form.timeline} onChange={set('timeline')} className="field mt-1 font-normal">{TRADE_TIMELINES.map(t => <option key={t}>{t}</option>)}</select>
             </label>
             <label className="text-sm font-medium sm:col-span-2">Project details
               <textarea rows={4} value={form.notes} onChange={set('notes')} maxLength={4000} className="field mt-1 font-normal" placeholder="Sizes, text or logo, where it will be installed" />
             </label>
+            <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
+              <label>Leave this empty<input tabIndex={-1} autoComplete="off" value={form.website} onChange={set('website')} /></label>
+            </div>
             <button type="submit" disabled={submitting} className="btn-primary sm:col-span-2">{submitting ? 'Sending...' : 'Send enquiry'}</button>
           </form>
         )}

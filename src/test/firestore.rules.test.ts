@@ -181,11 +181,11 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     await assertFails(getDoc(doc(as('bob'), 'users/alice')));
   });
 
-  it('b2b inquiries: validated public create, staff read', async () => {
+  it('b2b inquiries: created only by the API, staff read', async () => {
     const inquiry = { name: 'Ravi', email: 'ravi@studio.in', company: 'Studio', notes: '', status: 'pending_review' };
-    await assertSucceeds(setDoc(doc(guest(), 'b2b_inquiries/b1'), inquiry));
-    await assertFails(setDoc(doc(guest(), 'b2b_inquiries/b2'), { ...inquiry, email: 'nope' }));
-    await assertFails(setDoc(doc(guest(), 'b2b_inquiries/b3'), { ...inquiry, isAdmin: true }));
+    await assertFails(setDoc(doc(guest(), 'b2b_inquiries/b1'), inquiry));
+    await assertFails(setDoc(doc(as('alice'), 'b2b_inquiries/b2'), inquiry));
+    await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'b2b_inquiries/b1'), inquiry));
     await assertFails(getDoc(doc(guest(), 'b2b_inquiries/b1')));
     await assertSucceeds(getDoc(doc(as('sup', { role: 'support' }), 'b2b_inquiries/b1')));
   });

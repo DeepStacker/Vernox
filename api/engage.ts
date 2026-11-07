@@ -3,6 +3,8 @@
  * because the deployment is close to its function limit; the actions share nothing but their shape.
  * Body: { action, ...params }:
  *   CONTACT                { name, email, phone?, topic, orderNumber?, message, website }  -> support ticket (public)
+ *   TRADE_ENQUIRY          { name, email, company?, phone?, projectType, volume, alloyPreference, timeline, notes?, website }
+ *                                                                                         -> b2b enquiry (public)
  *   NEWSLETTER_SUBSCRIBE   { email, source?, website }                                     -> subscriber (public)
  *   NEWSLETTER_UNSUBSCRIBE { emailHash, token }                                            -> unsubscribe link (public)
  *   REVIEW_STATUS          { productId }                          -> may this customer review it? (signed in)
@@ -20,6 +22,7 @@ import { subscribe, subscribeRequestSchema, unsubscribe, unsubscribeRequestSchem
 import { enforceRateLimit, RATE_LIMITS, type RateLimitRule } from './_lib/rateLimit';
 import { reviewEligibility, reviewStatusRequestSchema, submitReview, submitReviewRequestSchema } from './_lib/reviewSubmission';
 import { contactRequestSchema, createTicket } from './_lib/tickets';
+import { createTradeEnquiry, tradeEnquiryRequestSchema } from './_lib/tradeEnquiry';
 import type { DocStore } from './_lib/store';
 
 interface ActionContext {
@@ -42,6 +45,16 @@ const ACTIONS: Record<string, EngageAction<unknown>> = {
     async run({ store }, input) {
       if (input.website) return { success: true }; // honeypot: look accepted, store nothing
       const { ref } = await createTicket(store, input);
+      return { success: true, ref };
+    },
+  }),
+
+  TRADE_ENQUIRY: action({
+    schema: tradeEnquiryRequestSchema,
+    limit: RATE_LIMITS.trade,
+    async run({ store }, input) {
+      if (input.website) return { success: true };
+      const { ref } = await createTradeEnquiry(store, input);
       return { success: true, ref };
     },
   }),

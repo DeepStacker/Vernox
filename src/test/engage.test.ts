@@ -56,6 +56,53 @@ beforeEach(() => {
   limited = false;
 });
 
+const trade = {
+  action: 'TRADE_ENQUIRY', name: 'Ravi Menon', email: 'Ravi@Studio.in', company: 'Studio M', phone: '', projectType: 'corporate-signage',
+  volume: '10-25', alloyPreference: 'brass', timeline: '2-4 weeks', notes: 'Logo for reception', website: '',
+};
+
+describe('TRADE_ENQUIRY', () => {
+  it('stores a pending enquiry in the admin shape and alerts the support inbox', async () => {
+    store.seed('settings/store', { supportEmail: 'help@vernox.in' });
+    const res = await call(trade);
+    expect(res.status).toBe(200);
+    const [enquiry] = store.collection('b2b_inquiries');
+    expect(res.body.ref).toBe(`VNX-B2B-${enquiry.id.slice(0, 6).toUpperCase()}`);
+    expect(enquiry.data).toMatchObject({ name: 'Ravi Menon', email: 'ravi@studio.in', company: 'Studio M', refId: res.body.ref, status: 'pending_review' });
+    expect(enquiry.data).not.toHaveProperty('website');
+    expect(enquiry.data).not.toHaveProperty('action');
+    expect(typeof enquiry.data.createdAt).toBe('string');
+
+    const outbox = store.collection(OUTBOX_COLLECTION)[0].data as unknown as OutboxDoc;
+    expect(outbox.event).toBe('trade_enquiry');
+    expect(outbox.channels).toEqual({ email: 'pending', sms: 'skipped' });
+    const mail = renderNotification(outbox.event, outbox.payload);
+    expect(mail.subject).toBe(`New trade enquiry ${res.body.ref}`);
+    expect(mail.text).toContain('Ravi Menon (Studio M) <ravi@studio.in>');
+    expect(mail.text).toContain(`Enquiry ${res.body.ref}`);
+  });
+
+  it('accepts a filled honeypot without storing anything', async () => {
+    expect((await call({ ...trade, website: 'http://spam.example' })).status).toBe(200);
+    expect(store.collection('b2b_inquiries')).toHaveLength(0);
+    expect(store.collection(OUTBOX_COLLECTION)).toHaveLength(0);
+  });
+
+  it('rejects invalid email and values the form does not offer', async () => {
+    expect((await call({ ...trade, email: 'nope' })).status).toBe(400);
+    expect((await call({ ...trade, volume: '9999' })).status).toBe(400);
+    expect((await call({ ...trade, alloyPreference: 'platinum' })).status).toBe(400);
+    expect((await call({ ...trade, notes: 'x'.repeat(4001) })).status).toBe(400);
+    expect(store.collection('b2b_inquiries')).toHaveLength(0);
+  });
+
+  it('is rate limited', async () => {
+    limited = true;
+    expect((await call(trade)).status).toBe(429);
+    expect(store.collection('b2b_inquiries')).toHaveLength(0);
+  });
+});
+
 describe('CONTACT', () => {
   it('stores an open ticket and queues one alert to the support inbox', async () => {
     store.seed('settings/store', { supportEmail: 'Help@Vernox.in' });

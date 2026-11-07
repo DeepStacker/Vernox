@@ -78,6 +78,13 @@ function copyFor(event: NotificationEvent, p: NotificationPayload, base: string)
         smsValue: 'new ticket',
         link: { label: 'Open the admin', url: `${base}/admin` },
       };
+    case 'trade_enquiry':
+      return {
+        subject: `New trade enquiry ${p.orderNumber}`,
+        lines: [p.note ?? 'A business sent an enquiry through the Trade page.', 'Open Trade enquiries in the admin to follow up.'],
+        smsValue: 'new enquiry',
+        link: { label: 'Open the admin', url: `${base}/admin` },
+      };
     case 'ticket_reply':
       return {
         subject: `Re: your message to Vernox (${p.orderNumber})`,
@@ -175,9 +182,9 @@ export function renderNotification(event: NotificationEvent, payload: Notificati
   const base = siteUrl(env);
   const copy = copyFor(event, payload, base);
   const firstName = payload.customerName.trim().split(/\s+/)[0] || 'there';
-  const internal = event === 'support_ticket';
+  const internal = event === 'support_ticket' || event === 'trade_enquiry';
   const greeting = internal ? 'Hello team,' : `Hello ${firstName},`;
-  const reference = `${internal || event === 'ticket_reply' ? 'Ticket' : 'Order'} ${payload.orderNumber}`;
+  const reference = `${event === 'trade_enquiry' ? 'Enquiry' : internal || event === 'ticket_reply' ? 'Ticket' : 'Order'} ${payload.orderNumber}`;
   const sign = 'Vernox, made in India';
   const text = [greeting, '', ...copy.lines, ...(copy.link ? ['', `${copy.link.label}: ${copy.link.url}`] : []), '', reference, sign].join('\n');
   const html = [

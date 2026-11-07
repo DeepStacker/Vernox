@@ -195,7 +195,9 @@ Earlier collections:
   with `npm run export:newsletter > subscribers.csv` (needs the Firebase service account; subscribed addresses only, with the unsubscribe
   token and hash for building `/newsletter/unsubscribe?h=<hash>&t=<token>` links) and import it into whichever tool sends the campaign.
   Re-export before each campaign so unsubscribes are honoured.
-- `b2b_inquiries/{id}` — validated public create (shape of `B2BTradeModal`, `status: 'pending_review'`), read and updated by `b2b.read` roles. The
+- `b2b_inquiries/{id}` — created only by `POST /api/engage` `TRADE_ENQUIRY` (`api/_lib/tradeEnquiry.ts`: contact fields, `projectType`,
+  `volume`, `alloyPreference`, `timeline`, `notes`, `refId`, ISO `createdAt`, `status: 'pending_review'`), which also writes a
+  `notifications_outbox/{id}_trade_enquiry` alert to the support inbox; no client create. Read and updated by `b2b.read` roles. The
   admin screen moves `status` through `pending_review → contacted → quoted → won | lost`; no other field is written.
 - `admin_users` — legacy, closed.
 

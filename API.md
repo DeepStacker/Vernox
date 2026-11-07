@@ -305,6 +305,7 @@ One function for the storefront's engagement writes (the deployment is near its 
 | Action | Auth | Params | Rate limit (per IP) | Result |
 |---|---|---|---|---|
 | `CONTACT` | none | `name, email, phone?, topic (Order help \| Custom or bulk order \| Product question \| Something else), orderNumber?, message (5–4000), website` | 5 / hour | `{ success: true, ref }`; creates `tickets/{id}` and queues a `support_ticket` alert |
+| `TRADE_ENQUIRY` | none | `name, email, company?, phone?, projectType, volume, alloyPreference, timeline, notes? (≤4000), website`; the choice lists are `src/types/trade.ts` | 5 / hour | `{ success: true, ref }` (`VNX-B2B-XXXXXX`); creates `b2b_inquiries/{id}` and queues a `trade_enquiry` alert to the support inbox |
 | `NEWSLETTER_SUBSCRIBE` | none | `email, source? (footer \| checkout \| account), website` | 10 / hour | `{ success: true }` (same answer for new and existing subscribers) |
 | `NEWSLETTER_UNSUBSCRIBE` | none | `emailHash, token` | 10 / hour | `{ success: true }`; `404` for an unknown hash or wrong token |
 | `REVIEW_STATUS` | Bearer ID token | `productId` | 30 / minute | `{ success: true, eligible, reason?: not_purchased \| already_reviewed, reviewStatus? }` |

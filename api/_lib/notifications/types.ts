@@ -13,10 +13,12 @@
  * order id, `order_confirmed` carries `service: 'consultation'` for the purchase receipt, and
  * `proposal_ready` is enqueued with a per-version discriminator.
  *
- * `support_ticket` is the one internal event: a new contact-form ticket (api/_lib/tickets.ts) alerts the
+ * `support_ticket` is an internal event: a new contact-form ticket (api/_lib/tickets.ts) alerts the
  * support inbox. The ticket id is its `orderId`, `orderNumber` is the ticket reference, `email` is the
  * support address (settings/store `supportEmail`) and `note` carries the sender and subject. `ticket_reply`
  * emails a staff reply to the customer (discriminator = message index); `note` is the reply text.
+ * `trade_enquiry` is internal too: a Trade page enquiry (api/_lib/tradeEnquiry.ts) alerts the same inbox,
+ * with the enquiry id as `orderId` and its reference as `orderNumber`.
  */
 
 export const NOTIFICATION_EVENTS = [
@@ -34,6 +36,7 @@ export const NOTIFICATION_EVENTS = [
   'proposal_ready',
   'support_ticket',
   'ticket_reply',
+  'trade_enquiry',
 ] as const;
 
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];

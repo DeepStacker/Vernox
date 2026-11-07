@@ -1,6 +1,6 @@
 /**
- * Client for POST /api/engage (API.md): contact form, newsletter and review submission.
- * Review calls carry the signed-in customer's ID token; the contact and newsletter calls are public.
+ * Client for POST /api/engage (API.md): contact form, trade enquiry, newsletter and review submission.
+ * Review calls carry the signed-in customer's ID token; the other calls are public.
  */
 import { auth } from '@/lib/firebase';
 import { TICKET_TOPICS } from '@/types/tickets';
@@ -41,6 +41,25 @@ export interface ContactInput {
 
 export async function sendContactMessage(input: ContactInput): Promise<{ ref?: string }> {
   const body = await post('CONTACT', { ...input });
+  return { ref: typeof body.ref === 'string' ? body.ref : undefined };
+}
+
+export interface TradeEnquiryInput {
+  name: string;
+  email: string;
+  company: string;
+  phone: string;
+  projectType: string;
+  volume: string;
+  alloyPreference: string;
+  timeline: string;
+  notes: string;
+  /** Honeypot field value; always empty for people. */
+  website: string;
+}
+
+export async function sendTradeEnquiry(input: TradeEnquiryInput): Promise<{ ref?: string }> {
+  const body = await post('TRADE_ENQUIRY', { ...input });
   return { ref: typeof body.ref === 'string' ? body.ref : undefined };
 }
 
