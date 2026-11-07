@@ -107,3 +107,15 @@ widget injects (verify against the current widget in a browser, Razorpay does no
   id only the customer receives, and both are rate-limited.
 - Configure Firestore TTL policies on `rate_limits.expiresAt`, `idempotency.expiresAt` and `webhook_events.expiresAt`.
 - Razorpay auto-capture must be enabled; authorised-but-uncaptured payments are not handled.
+
+
+## Integration keys entered in the app
+
+Razorpay, Resend, MSG91, Shiprocket and WhatsApp keys can be entered by the super admin in Settings > Integrations
+(`api/_lib/integrationSecrets.ts`). They are encrypted with AES-256-GCM (random 96-bit IV, auth tag) before they reach Firestore, in
+`integration_secrets/current`, which no client can read or write (firestore.rules, tested). The encryption key is
+SECRETS_ENCRYPTION_KEY (the VM installer generates it) or, when unset, derived with HKDF-SHA256 from the Firebase service account's
+private key; rotating that account without SECRETS_ENCRYPTION_KEY makes stored keys unreadable (the admin then asks to re-enter them,
+nothing is used wrongly). Values are never returned by the API, logged or written to the audit log (names only); the admin sees the
+last four characters. A value present in the real server environment always wins and cannot be changed from the app. Database
+credentials and the domain are bootstrap settings and stay in the environment.

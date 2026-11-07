@@ -47,62 +47,63 @@ function whatsappTemplatesSet(raw: string | undefined): boolean {
 export function environmentItems(env: NodeJS.ProcessEnv = process.env): LaunchItem[] {
   const keyId = env.RAZORPAY_KEY_ID?.trim() ?? '';
   const site = env.VITE_SITE_URL?.trim() ?? '';
-  const vercel = 'Vercel > Project > Settings > Environment Variables, then redeploy';
+  const vercel = 'the server environment (.env.production on a VM and re-run install.sh, or Vercel > Settings > Environment Variables and redeploy)';
+  const inApp = 'Admin > Settings > Integrations (no redeploy)';
   return [
     {
       id: 'razorpay', group: 'payments', required: true,
       label: 'Razorpay API keys',
       ready: set(env, 'RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'VITE_RAZORPAY_KEY_ID'),
       detail: keyId.startsWith('rzp_live_') ? 'live mode' : keyId.startsWith('rzp_test_') ? 'test mode: no real money is taken' : undefined,
-      help: `Online payments, refunds and payment links. Set RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and VITE_RAZORPAY_KEY_ID (the same key id) in ${vercel}.`,
+      help: `Online payments, refunds and payment links. Enter the Razorpay key id and secret in ${inApp}.`,
     },
     {
       id: 'razorpay-webhook', group: 'payments', required: true,
       label: 'Razorpay webhook secret',
       ready: set(env, 'RAZORPAY_WEBHOOK_SECRET'),
-      help: 'Confirms payments even if the customer closes the page, records refunds, and confirms payment-link orders. Razorpay Dashboard > Webhooks: URL https://<your domain>/api/razorpay-webhook with events payment.captured, order.paid, payment.failed, refund.processed, payment_link.paid; put the secret in RAZORPAY_WEBHOOK_SECRET.',
+      help: 'Confirms payments even if the customer closes the page, records refunds, and confirms payment-link orders. Razorpay Dashboard > Webhooks: URL https://<your domain>/api/razorpay-webhook with events payment.captured, order.paid, payment.failed, refund.processed, payment_link.paid; enter the same secret in Admin > Settings > Integrations.',
     },
     {
       id: 'shiprocket', group: 'shipping', required: false,
       label: 'Shiprocket account',
       ready: set(env, 'SHIPROCKET_EMAIL', 'SHIPROCKET_PASSWORD', 'SHIPROCKET_PICKUP_LOCATION'),
-      help: `Courier rates, booking, labels, manifests and PIN serviceability. Without it shipping is manual (enter the courier and AWB). Set SHIPROCKET_EMAIL, SHIPROCKET_PASSWORD (an API user), SHIPROCKET_PICKUP_LOCATION and SHIPROCKET_PICKUP_PINCODE in ${vercel}.`,
+      help: `Courier rates, booking, labels, manifests and PIN serviceability. Without it shipping is manual (enter the courier and AWB). Set SHIPROCKET_EMAIL, SHIPROCKET_PASSWORD (an API user), SHIPROCKET_PICKUP_LOCATION and SHIPROCKET_PICKUP_PINCODE in ${inApp}.`,
     },
     {
       id: 'shiprocket-webhook', group: 'shipping', required: false,
       label: 'Shiprocket tracking webhook',
       ready: set(env, 'SHIPROCKET_WEBHOOK_TOKEN'),
-      help: 'Moves orders to Shipped, Out for delivery, Delivered and RTO by themselves. Shiprocket > Settings > API > Webhooks: URL https://<your domain>/api/courier-webhook with a token; put the token in SHIPROCKET_WEBHOOK_TOKEN.',
+      help: 'Moves orders to Shipped, Out for delivery, Delivered and RTO by themselves. Shiprocket > Settings > API > Webhooks: URL https://<your domain>/api/courier-webhook with a token; enter the token in Admin > Settings > Integrations.',
     },
     {
       id: 'email', group: 'messages', required: true,
       label: 'Order emails (Resend)',
       ready: set(env, 'RESEND_API_KEY', 'NOTIFY_FROM_EMAIL'),
-      help: `Order confirmations, shipping updates, ticket replies and staff alerts by email. Verify your domain in Resend, then set RESEND_API_KEY and NOTIFY_FROM_EMAIL (e.g. Vernox <orders@yourdomain.in>) in ${vercel}.`,
+      help: `Order confirmations, shipping updates, ticket replies and staff alerts by email. Verify your domain in Resend, then set RESEND_API_KEY and NOTIFY_FROM_EMAIL (e.g. Vernox <orders@yourdomain.in>) in ${inApp}.`,
     },
     {
       id: 'sms', group: 'messages', required: false,
       label: 'Order SMS (MSG91)',
       ready: set(env, 'MSG91_AUTH_KEY') && msg91TemplatesSet(env.MSG91_TEMPLATES),
-      help: `SMS updates. Indian SMS needs DLT-registered templates: register them, create MSG91 Flows, then set MSG91_AUTH_KEY and MSG91_TEMPLATES (JSON of event to template id, see .env.example) in ${vercel}.`,
+      help: `SMS updates. Indian SMS needs DLT-registered templates: register them, create MSG91 Flows, then set MSG91_AUTH_KEY and MSG91_TEMPLATES (JSON of event to template id, see .env.example) in ${inApp}.`,
     },
     {
       id: 'whatsapp', group: 'messages', required: false,
       label: 'WhatsApp order messages (Meta Cloud API)',
       ready: set(env, 'WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID') && whatsappTemplatesSet(env.WHATSAPP_TEMPLATES),
-      help: `WhatsApp updates for confirmed, shipped, out for delivery and delivered orders, and free-form replies from the Support console. Needs a Meta WhatsApp Business app, a phone number, approved message templates and a permanent system-user token: set WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TEMPLATES (JSON of event to template name and language, see DEPLOYMENT.md) in ${vercel}.`,
+      help: `WhatsApp updates for confirmed, shipped, out for delivery and delivered orders, and free-form replies from the Support console. Needs a Meta WhatsApp Business app, a phone number, approved message templates and a permanent system-user token: set WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TEMPLATES (JSON of event to template name and language, see DEPLOYMENT.md) in ${inApp}.`,
     },
     {
       id: 'whatsapp-inbound', group: 'messages', required: false,
       label: 'WhatsApp inbound messages (webhook)',
       ready: set(env, 'WHATSAPP_APP_SECRET', 'WHATSAPP_VERIFY_TOKEN'),
-      help: `Turns customer WhatsApp messages into Support tickets and honours STOP / START. Meta app > WhatsApp > Configuration: callback URL https://<your domain>/api/whatsapp-webhook, verify token of your choice, subscribe to messages; put the token in WHATSAPP_VERIFY_TOKEN and the app secret in WHATSAPP_APP_SECRET in ${vercel}.`,
+      help: `Turns customer WhatsApp messages into Support tickets and honours STOP / START. Meta app > WhatsApp > Configuration: callback URL https://<your domain>/api/whatsapp-webhook, verify token of your choice, subscribe to messages; put the token in WHATSAPP_VERIFY_TOKEN and the app secret in WHATSAPP_APP_SECRET in ${inApp}.`,
     },
     {
       id: 'cod-otp', group: 'messages', required: false,
       label: 'COD confirmation SMS code (MSG91 OTP)',
       ready: set(env, 'MSG91_AUTH_KEY', 'MSG91_OTP_TEMPLATE_ID'),
-      help: `Asks the customer for a one-time code before a cash on delivery order, which cuts fake COD orders and returns. Needs a DLT-registered OTP template: create it in MSG91 > OTP, then set MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID in ${vercel}. Until then COD orders are flagged "Confirm by phone" for your team. Switch it off any time in Settings > Cash on delivery.`,
+      help: `Asks the customer for a one-time code before a cash on delivery order, which cuts fake COD orders and returns. Needs a DLT-registered OTP template: create it in MSG91 > OTP, then set MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID in ${inApp}. Until then COD orders are flagged "Confirm by phone" for your team. Switch it off any time in Settings > Cash on delivery.`,
     },
     {
       id: 'cron', group: 'platform', required: true,

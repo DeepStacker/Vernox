@@ -48,6 +48,7 @@ export const PERMISSIONS = [
   'staff.read',
   'staff.manage', // grant/revoke roles
   'audit.read',
+  'integrations.manage', // third-party keys entered in the app (Settings > Integrations); super admin only
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -56,7 +57,7 @@ const ALL_PERMISSIONS: readonly Permission[] = PERMISSIONS;
 
 export const STAFF_ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
   super_admin: ALL_PERMISSIONS,
-  admin: ALL_PERMISSIONS.filter(p => p !== 'staff.manage' && p !== 'audit.read'),
+  admin: ALL_PERMISSIONS.filter(p => p !== 'staff.manage' && p !== 'audit.read' && p !== 'integrations.manage'),
   catalog_manager: ['catalog.write', 'inventory.write', 'reviews.moderate'],
   order_manager: ['orders.read', 'orders.create', 'orders.update_status', 'orders.tracking', 'customers.read', 'b2b.read', 'tickets.read', 'tickets.write'],
   production: ['orders.read', 'orders.update_status'],

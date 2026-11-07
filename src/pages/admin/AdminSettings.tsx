@@ -14,10 +14,13 @@ import { useAdminData } from '@/lib/data/adminData';
 import { useSettingsMutations } from '@/lib/data/settings';
 import { BusinessSettingsForm } from './settings/BusinessSettingsForm';
 import { LaunchSetupPanel } from './overview/LaunchChecklist';
+import { IntegrationsPanel } from './settings/IntegrationsPanel';
+import { useAuth } from '@/lib/auth/AuthProvider';
 
 export function AdminSettings() {
   const { products, categories, homepageSettings, topics, storeConfig } = useAdminData();
   const { updateStoreConfig } = useSettingsMutations();
+  const { permissions } = useAuth();
 
   const fromConfig = () => ({
     storeName: storeConfig.storeName,
@@ -63,6 +66,7 @@ export function AdminSettings() {
       <AdminPageHeader title="Settings" line="Tax and shipping used by the storefront and checkout, and the business details behind invoices, contact and COD." />
 
       <LaunchSetupPanel />
+      {permissions?.canManageIntegrations && <IntegrationsPanel />}
 
       <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border border-border bg-card p-5 shadow-soft">
         <h3 className="font-display text-xl">Store and pricing</h3>

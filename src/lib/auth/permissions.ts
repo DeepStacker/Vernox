@@ -29,6 +29,8 @@ export interface RolePermissions {
   canModerateReviews: boolean;
   canManageStaff: boolean;
   canViewAuditLogs: boolean;
+  /** integrations.manage: enter Razorpay, Resend, MSG91, Shiprocket and WhatsApp keys (super admin). */
+  canManageIntegrations: boolean;
   canManageSettings: boolean;
   canManageSupport: boolean;
   /** May write order status, assignment and notes (orders.update_status). Support is read-only. */
@@ -62,6 +64,7 @@ function derivePermissions(role: StaffRole): RolePermissions {
     canModerateReviews: has('reviews.moderate'),
     canManageStaff: has('staff.manage'),
     canViewAuditLogs: has('audit.read'),
+    canManageIntegrations: has('integrations.manage'),
     canManageSettings: has('settings.write'),
     canManageSupport: seesCustomers,
     canUpdateOrders: updatesStatus,

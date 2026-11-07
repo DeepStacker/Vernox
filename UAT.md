@@ -293,6 +293,7 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 |---|---|---|---|---|---|
 | SA-01 | Manage roles | Super admin | Create user, assign role, remove role | Permissions change immediately; audited | |
 | SA-02 | Store settings | None | Update free-shipping threshold, GST details, contact info | Reflected on storefront and invoices | |
+| SA-02c | Integration keys in the app | Super admin; Razorpay test keys | Settings > Integrations: paste the Razorpay key id and secret, Save, Check; place a test order; Remove the secret | Saved shows only ••••last4; Check says accepted (test mode); checkout works without a redeploy; after Remove, Launch setup shows Razorpay missing; an admin (not super admin) does not see the panel and the API refuses (403); the audit log lists names, never values | |
 | SA-02b | GSTIN fills the state | Settings > Business | Type a GSTIN starting 27 | State code 27 and State Maharashtra fill in; a code that does not match the GSTIN is still flagged | |
 | SA-02a | Launch setup | Super admin | Settings > Launch setup; then set one missing key in Vercel and redeploy | Every key and business detail listed as set, required or optional with where to set it; no key value is shown anywhere; the item turns set after the redeploy; the admin home reminder lists only required items still missing | |
 | SA-03 | Audit logs | Actions performed | Filter by user and action | Complete and tamper-evident | |

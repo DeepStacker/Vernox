@@ -218,7 +218,8 @@ export async function saveIntegrations(store: DocStore, changes: Record<string, 
     }
     tx.set(INTEGRATION_SECRETS_PATH, { values: next, updatedAt: now, updatedBy: by });
   });
-  cache = null; // apply on this instance at once
+  // Expire the cache but keep the applied names, so a removed key is also taken out of process.env at once.
+  cache = { at: Number.NEGATIVE_INFINITY, applied: cache?.applied ?? new Set() };
   await applyStoredIntegrations(store, now);
   return entries.map(([name]) => name);
 }

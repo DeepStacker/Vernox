@@ -287,6 +287,19 @@ Rules and side effects:
 pickupScheduledAt, lastEvent: { status, at } | null, error, createdAt, updatedAt }`.
 `RefundDoc`: see DATABASE.md `refunds`. `ReturnDoc`: see DATABASE.md `returns`.
 
+### Integrations (`/api/admin`, permission `integrations.manage`: super admin only)
+
+Third-party keys entered in Admin > Settings > Integrations instead of the server environment (`api/_lib/integrationSecrets.ts`).
+
+| Action | Params | Result |
+| --- | --- | --- |
+| `GET_INTEGRATIONS` (GET) | none | `{ fields: [{ name, group, label, secret, hint?, source: environment \| app \| null, preview, updatedAt, unreadable? }] }`; `preview` is the full value for non-secrets and `••••` + last four for secrets |
+| `SAVE_INTEGRATIONS` | `values: { NAME: string \| null }` (null removes) | the same list; 400 for unknown names or bad formats, 409 when the name is set in the server environment; audited `INTEGRATIONS_UPDATED` with names only |
+| `CHECK_INTEGRATION` | `id: razorpay \| resend \| shiprocket \| whatsapp` | `{ ok, message }` from a read-only provider call with the keys in effect (Razorpay orders list, Resend domains incl. the sending domain's verification, Shiprocket API-user login, Meta phone number) |
+
+Every API handler is wrapped by `withStoredIntegrations` (`api/_lib/withIntegrations.ts`), which copies stored values into
+`process.env` for names the real environment leaves empty (cached 30 s per instance; a save applies at once on the saving instance).
+
 ### Launch setup (`/api/admin` `GET_LAUNCH_STATUS`, permission `settings.write`)
 
 `{ items: [{ id, group: payments|shipping|messages|platform|catalogue, label, ready, required, help, detail? }] }`: whether each

@@ -251,6 +251,11 @@ service cloud.firestore {
     match /cod_otps/{phone} {
       allow read, write: if false;
     }
+
+    // Third-party keys entered in the admin, encrypted by the API (api/_lib/integrationSecrets.ts). Server only.
+    match /integration_secrets/{docId} {
+      allow read, write: if false;
+    }
     // WhatsApp opt-out per customer phone (STOP / START replies), server-only.
     match /whatsapp_contacts/{phone} {
       allow read, write: if false;

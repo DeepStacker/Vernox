@@ -41,6 +41,8 @@ import { applyCourierStatus, bulkShipmentDocuments, cancelShipment, courierRates
 import type { PackageDetails } from './_lib/shipping/types';
 import type { DocStore } from './_lib/store';
 import { createStaffOrder, customerLookupSchema, findCustomerByPhone, quoteStaffOrder, staffOrderSchema, staffQuoteSchema } from './_lib/staffOrders';
+import { checkIntegration } from './_lib/integrationChecks';
+import { listIntegrations, saveIntegrations } from './_lib/integrationSecrets';
 import { launchStatus } from './_lib/launchStatus';
 import { loadStoreConfig } from './_lib/storeConfig';
 import { withStoredIntegrations } from './_lib/withIntegrations';
@@ -340,6 +342,37 @@ const ACTIONS: Record<string, ActionDefinition> = {
     permission: 'settings.write',
     async run(ctx) {
       return { items: await launchStatus(ctx.store) };
+    },
+  },
+
+  // ---------- integrations: third-party keys entered in the app (super admin; values never returned) ----------
+
+  GET_INTEGRATIONS: {
+    method: 'GET',
+    permission: 'integrations.manage',
+    async run(ctx) {
+      return { fields: await listIntegrations(ctx.store) };
+    },
+  },
+
+  SAVE_INTEGRATIONS: {
+    method: 'POST',
+    permission: 'integrations.manage',
+    async run(ctx) {
+      const p = parse(z.object({ values: z.record(z.string().regex(/^[A-Z0-9_]{3,64}$/), z.string().max(4000).nullable()) }), ctx.params);
+      const names = await saveIntegrations(ctx.store, p.values as Record<string, string | null>, ctx.actor.email ?? ctx.actor.uid);
+      // Names only: values never reach the audit log.
+      await recordAudit(ctx.store, audit(ctx, 'INTEGRATIONS_UPDATED', 'config', 'integrations', { names, removed: names.filter(n => p.values[n] === null) }));
+      return { fields: await listIntegrations(ctx.store) };
+    },
+  },
+
+  CHECK_INTEGRATION: {
+    method: 'POST',
+    permission: 'integrations.manage',
+    async run(ctx) {
+      const p = parse(z.object({ id: z.enum(['razorpay', 'resend', 'shiprocket', 'whatsapp']) }), ctx.params);
+      return { ...(await checkIntegration(p.id, process.env)) };
     },
   },
 

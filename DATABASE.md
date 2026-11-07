@@ -165,6 +165,9 @@ Earlier collections:
 - `idempotency/{key}` — `{ orderId, requestHash, createdAt, expiresAt }`.
 - `webhook_events/{eventId}` (Razorpay events; WhatsApp messages use `wa_<sha256(message id)>` with `{ event: 'whatsapp.message', outcome, receivedAt, expiresAt }`) — `{ event, outcome, orderId, razorpayOrderId, razorpayPaymentId, razorpayRefundId, amountPaise,
   receivedAt, expiresAt }`; outcome `unmatched` = needs reconciliation.
+- `integration_secrets/current` — server-only (rules deny every client). `{ values: { NAME: { iv, tag, data, last4, updatedAt, updatedBy } },
+  updatedAt, updatedBy }`: integration keys entered in Settings > Integrations, each AES-256-GCM encrypted with SECRETS_ENCRYPTION_KEY or,
+  when unset, a key derived (HKDF) from the Firebase service account's private key. Only names in `INTEGRATION_FIELDS` are accepted.
 - `whatsapp_contacts/{phoneKey}` — server-only consent record. `{ phoneKey, whatsappOptIn, optInAt, optInSource: checkout | staff |
   inbound | start, whatsappOptOut, optOutChangedAt, updatedAt }`. Opt-in is written by checkout (`whatsappOptIn` tick-box), a staff order
   (customer agreed), a START reply, or the customer's first inbound message; STOP sets `whatsappOptOut`, which only an explicit opt-in

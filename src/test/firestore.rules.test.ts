@@ -173,6 +173,16 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     }
   });
 
+  it('integration keys (encrypted) are closed to every client, the super admin included', async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'integration_secrets/current'), { values: {} });
+    });
+    for (const ctx of [guest(), as('alice'), as('boss', { role: 'super_admin' })]) {
+      await assertFails(getDoc(doc(ctx, 'integration_secrets/current')));
+      await assertFails(setDoc(doc(ctx, 'integration_secrets/current'), { values: { RAZORPAY_KEY_SECRET: 'x' } }));
+    }
+  });
+
   it('WhatsApp opt-out contacts hold customer phones: closed to every client', async () => {
     await env.withSecurityRulesDisabled(async ctx => {
       await setDoc(doc(ctx.firestore(), 'whatsapp_contacts/9876543210'), { phoneKey: '9876543210', whatsappOptOut: true });
