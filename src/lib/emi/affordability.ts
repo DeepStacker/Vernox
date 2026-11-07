@@ -5,6 +5,8 @@
  * pages call `renderAffordabilityWidget` after the page is loaded and the browser is idle (`whenPageIdle`). Everything
  * here degrades to "show nothing": no key, a tiny amount, a blocked script or a thrown error leave the page as it was.
  */
+import { firstNonBlank, runtimeConfig, type RuntimeConfig } from '../runtimeConfig';
+
 export const AFFORDABILITY_SCRIPT_URL = 'https://cdn.razorpay.com/widgets/affordability/affordability.js';
 /** The widget renders into the element with this fixed id; only one instance fits on a page. */
 export const AFFORDABILITY_CONTAINER_ID = 'razorpay-affordability-widget';
@@ -17,10 +19,13 @@ type SuiteCtor = new (config: WidgetConfig) => AffordabilitySuite;
 
 const suiteOnWindow = () => (window as unknown as { RazorpayAffordabilitySuite?: SuiteCtor }).RazorpayAffordabilitySuite;
 
-/** The publishable key id from the build environment, or null when unset (the same key checkout uses). */
-export function razorpayKeyId(env: Record<string, unknown> = import.meta.env): string | null {
-  const key = env.VITE_RAZORPAY_KEY_ID;
-  return typeof key === 'string' && key.trim() !== '' ? key.trim() : null;
+/**
+ * The publishable key id (the same key checkout uses), or null when unset. The server's runtime config
+ * (/runtime-config.js, which includes a key id entered in the admin) wins over the build-time VITE_RAZORPAY_KEY_ID.
+ */
+export function razorpayKeyId(env: Record<string, unknown> = import.meta.env, runtime: RuntimeConfig = runtimeConfig()): string | null {
+  const buildTime = typeof env.VITE_RAZORPAY_KEY_ID === 'string' ? env.VITE_RAZORPAY_KEY_ID : '';
+  return firstNonBlank(runtime.razorpayKeyId, buildTime) || null;
 }
 
 /** Rupees to the paise the widget wants, or null when the widget should not show (no key or amount too small). */

@@ -52,9 +52,9 @@ export function environmentItems(env: NodeJS.ProcessEnv = process.env): LaunchIt
     {
       id: 'razorpay', group: 'payments', required: true,
       label: 'Razorpay API keys',
-      ready: set(env, 'RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'VITE_RAZORPAY_KEY_ID'),
+      ready: set(env, 'RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET'),
       detail: keyId.startsWith('rzp_live_') ? 'live mode' : keyId.startsWith('rzp_test_') ? 'test mode: no real money is taken' : undefined,
-      help: `Online payments, refunds and payment links. Set RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and VITE_RAZORPAY_KEY_ID (the same key id) in ${vercel}.`,
+      help: `Online payments, refunds and payment links. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET (Admin > Settings > Integrations, or ${vercel}); the browser receives the key id at runtime, so no rebuild or VITE_RAZORPAY_KEY_ID is needed.`,
     },
     {
       id: 'razorpay-webhook', group: 'payments', required: true,

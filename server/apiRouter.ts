@@ -23,6 +23,7 @@ import returnRequestHandler from '../api/return-request';
 import consultationHandler from '../api/consultation';
 import engageHandler from '../api/engage';
 import seoHandler from '../api/seo';
+import runtimeConfigHandler from '../api/runtime-config';
 import catalogHandler from '../api/catalog';
 import whatsappWebhookHandler from '../api/whatsapp-webhook';
 
@@ -46,32 +47,46 @@ const ROUTES: Record<string, Handler> = {
   '/api/consultation': consultationHandler,
   '/api/engage': engageHandler,
   '/api/seo': seoHandler,
+  '/api/runtime-config': runtimeConfigHandler,
+  '/runtime-config.js': runtimeConfigHandler,
   '/api/catalog': catalogHandler,
   '/api/whatsapp-webhook': whatsappWebhookHandler,
 };
 
-function setSecurityAndCorsHeaders(req: http.IncomingMessage, res: http.ServerResponse) {
-  const origin = (req.headers.origin as string) || '';
-  const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:8080',
-    'https://vernox.com',
-    'https://www.vernox.com',
-    'https://vernox-atelier.vercel.app'
-  ];
-
-  if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production' || !origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+/** Public origins allowed to call the API from a browser: the configured site URL and its www / apex twin. */
+export function allowedOrigins(env: NodeJS.ProcessEnv = process.env): string[] {
+  const raw = env.VITE_SITE_URL?.trim();
+  if (!raw) return [];
+  try {
+    const { protocol, host } = new URL(raw);
+    const twin = host.startsWith('www.') ? host.slice(4) : `www.${host}`;
+    return [`${protocol}//${host}`, `${protocol}//${twin}`];
+  } catch {
+    return [];
   }
+}
 
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+/** Baseline security headers; also used for the static site (server/production.ts). */
+export function setSecurityHeaders(res: http.ServerResponse) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+}
+
+function setSecurityAndCorsHeaders(req: http.IncomingMessage, res: http.ServerResponse) {
+  const origin = (req.headers.origin as string) || '';
+  const production = process.env.NODE_ENV === 'production';
+
+  // Outside production any origin may call (local dev servers); in production only the configured site.
+  if (!origin || !production || allowedOrigins().includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    if (origin) res.setHeader('Vary', 'Origin');
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setSecurityHeaders(res);
 }
 
 function sendJson(res: http.ServerResponse, status: number, body: unknown) {

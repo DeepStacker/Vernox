@@ -1,0 +1,31 @@
+# TLS reverse proxy in front of the app container (docker-compose.yml). Caddy obtains and renews the
+# Let's Encrypt certificate by itself; DOMAIN and ADMIN_EMAIL come from .env.production.
+{
+	email {$ADMIN_EMAIL}
+}
+
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# The API caps bodies at 1 MB; uploads go straight to Firebase Storage, never through here.
+	request_body {
+		max_size 2MB
+	}
+
+	reverse_proxy app:3001 {
+		# The API rate-limits by x-real-ip (api/_lib/http.ts), so overwrite whatever the client sent.
+		header_up X-Real-IP {remote_host}
+		# Ride out an app restart (update.sh) instead of returning 502.
+		lb_try_duration 15s
+		lb_try_interval 500ms
+	}
+}

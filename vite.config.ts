@@ -17,7 +17,7 @@ function apiMiddlewarePlugin(): Plugin {
       // Server code reads secrets from process.env; load .env* files (all keys, not only VITE_*).
       Object.assign(process.env, loadEnv(server.config.mode, process.cwd(), ""));
       server.middlewares.use(async (req, res, next) => {
-        if (!req.url?.startsWith("/api/") && req.url !== "/health") return next();
+        if (!req.url?.startsWith("/api/") && req.url !== "/health" && req.url !== "/runtime-config.js") return next();
         try {
           const { handleApiRequest } = await server.ssrLoadModule("/server/apiRouter.ts");
           await handleApiRequest(req, res);
@@ -42,7 +42,8 @@ function siteUrlHtmlPlugin(env: Record<string, string>): Plugin {
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   // A production bundle without its Firebase project would load a blank site; fail the build instead.
-  if (command === "build" && mode === "production" && env.VITE_USE_FIREBASE_EMULATOR !== "true") {
+  // The Docker image sets VERNOX_RUNTIME_CONFIG=true: it takes these values from /runtime-config.js at start-up instead.
+  if (command === "build" && mode === "production" && env.VITE_USE_FIREBASE_EMULATOR !== "true" && process.env.VERNOX_RUNTIME_CONFIG !== "true") {
     const missing = ["VITE_FIREBASE_API_KEY", "VITE_FIREBASE_AUTH_DOMAIN", "VITE_FIREBASE_PROJECT_ID", "VITE_FIREBASE_STORAGE_BUCKET", "VITE_FIREBASE_APP_ID"].filter(k => !env[k]);
     if (missing.length > 0) throw new Error(`Missing ${missing.join(", ")} (see .env.example)`);
   }

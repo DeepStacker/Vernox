@@ -24,6 +24,10 @@
       "destination": "/api/seo?kind=sitemap"
     },
     {
+      "source": "/runtime-config.js",
+      "destination": "/api/runtime-config"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

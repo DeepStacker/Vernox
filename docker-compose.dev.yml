@@ -18,20 +18,26 @@ services:
     networks:
       - vernox-network
 
-  # 2. Vernox Backend: Node.js API Server
+  # 2. Vernox Backend: Node.js API Server with Live tsx watch
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: Dockerfile.backend.dev
     container_name: vernox-backend
     restart: unless-stopped
     ports:
       - "3001:3001"
+    volumes:
+      - ./api:/app/api
+      - ./server:/app/server
+      - ./src:/app/src
+    command: ["npx", "tsx", "watch", "server/index.ts"]
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - PORT=3001
       - FIRESTORE_EMULATOR_HOST=database:8085
       - FIREBASE_PROJECT_ID=vernox-1b5d5
+      # Razorpay test keys from your shell / .env (see .env.example)
       - RAZORPAY_KEY_ID
       - RAZORPAY_KEY_SECRET
       - RAZORPAY_WEBHOOK_SECRET
@@ -45,21 +51,29 @@ services:
     networks:
       - vernox-network
 
-  # 3. Vernox Frontend: Production Nginx SPA & API Reverse Proxy
+  # 3. Vernox Frontend: Live Vite Dev Server with HMR (Instant Updates)
   frontend:
     build:
       context: .
-      dockerfile: Dockerfile.frontend
+      dockerfile: Dockerfile.frontend.dev
     container_name: vernox-frontend
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "8080:8080"
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - BACKEND_URL=http://backend:3001
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
     depends_on:
       - backend
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 512M
     networks:
       - vernox-network
 

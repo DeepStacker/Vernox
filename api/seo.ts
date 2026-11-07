@@ -21,7 +21,8 @@ async function indexHtml(req: VercelRequest): Promise<string> {
   const host = req.headers['x-forwarded-host'] ?? req.headers.host;
   // Vercel always sends x-forwarded-proto; the local adapter serves plain http.
   const proto = req.headers['x-forwarded-proto'] ?? (/^(localhost|127\.0\.0\.1)(:|$)/.test(String(host)) ? 'http' : 'https');
-  const res = await fetch(`${proto}://${host}/index.html`);
+  // The Node server (server/production.ts) sets INTERNAL_ORIGIN so it reads its own page instead of going out via the public URL.
+  const res = await fetch(`${process.env.INTERNAL_ORIGIN || `${proto}://${host}`}/index.html`);
   if (!res.ok) throw new Error(`index.html fetch failed: ${res.status}`);
   template = { html: await res.text(), at: Date.now() };
   return template.html;
