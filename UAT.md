@@ -211,7 +211,8 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 
 | ID | Case | Preconditions | Steps | Expected result | Result |
 |---|---|---|---|---|---|
-| QC-01 | QC pass | Order in Quality Check | QC console: tick all five checks per item, Pass item; save package size and weight; Mark packed | Item shows Passed with user; order moves to Packed; package saved. Photo is a "photo taken" tick only (no upload yet) | |
+| QC-01 | QC pass | Order in Quality Check | QC console: tick the four checks per item, Add photo (camera on a phone), Pass item; save package size and weight; Mark packed | Pass stays disabled until a photo is uploaded, then "Photo taken (1/4)" shows; item shows Passed with user and its photo; order moves to Packed; package saved | |
+| QC-01a | QC photo evidence | QC-01 done, customer then requests a return | Returns console: open the order's return | The QC photos appear under "Photographed at QC before dispatch" beside the customer's photos; a support or finance user can open them; a customer cannot (storage.rules) | |
 | QC-02 | QC fail | Order in Quality Check | Fail an item with a reason, choose Finishing or Cutting | Order moves back with the reason stored in the notes QC log; item results reset so rework is fully re-inspected | |
 | QC-03 | Mandatory checklist | None | Try to pass with any box unticked; try to fail without a reason; try Mark packed before all items pass or package details saved | Pass, fail and Mark packed stay disabled; a missing reason is refused | |
 | QC-04 | Packing | Item passed QC | Enter length, width, height (cm) and weight (kg), save; print packing slip | Order Packed; dimensions and weight stored in notes and shown on the Packed card and slip | |

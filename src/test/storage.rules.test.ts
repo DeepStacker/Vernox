@@ -103,6 +103,25 @@ describe.skipIf(!firestoreHost || !storageHost)('storage.rules', () => {
     await assertFails(uploadBytes(ref(admin, 'products/vx-001/x3.webp'), bytes(2 * 1024 * 1024 + 1), webp));
   });
 
+  it('QC photos: order staff upload WebP; order readers view; the customer and other staff cannot', async () => {
+    const path = 'qc/ord_rulestest/p1.webp';
+    created.push(path);
+    const production = storageAs('p', { role: 'production' });
+    await assertSucceeds(uploadBytes(ref(production, path), bytes(), webp));
+    // Evidence is immutable: no overwrite, no delete, even by a super admin.
+    await assertFails(uploadBytes(ref(storageAs('s', { role: 'super_admin' }), path), bytes(), webp));
+    await assertFails(deleteObject(ref(storageAs('s', { role: 'super_admin' }), path)));
+    for (const reader of ['support', 'finance', 'shipping', 'admin']) await assertSucceeds(getBytes(ref(storageAs(reader, { role: reader }), path)));
+    for (const denied of [storageAs(OWNER), guest(), storageAs('c', { role: 'catalog_manager' }), storageAs('d', { role: 'designer' })]) {
+      await assertFails(getBytes(ref(denied, path)));
+    }
+    for (const denied of [storageAs(OWNER), storageAs('sup', { role: 'support' }), storageAs('f', { role: 'finance' })]) {
+      await assertFails(uploadBytes(ref(denied, 'qc/ord_rulestest/p2.webp'), bytes(), webp));
+    }
+    await assertFails(uploadBytes(ref(production, 'qc/ord_rulestest/p3.jpg'), bytes(), jpeg));
+    await assertFails(uploadBytes(ref(production, 'qc/ord_rulestest/p4.webp'), bytes(2 * 1024 * 1024 + 1), webp));
+  });
+
   it('consultation photos: the customer and consultation staff read; no client writes a wall snapshot', async () => {
     for (const reader of [storageAs(OWNER), storageAs('d', { role: 'designer' }), storageAs('a', { role: 'admin' }), storageAs('s', { role: 'super_admin' })]) {
       await assertSucceeds(getBytes(ref(reader, WALL)));

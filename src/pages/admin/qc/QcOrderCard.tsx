@@ -38,13 +38,13 @@ export function QcOrderCard({ order, sla, busy, setBusy, onPrintSlip }: Props) {
     }
   };
 
-  const pass = (itemId: string, checks: QcChecks) => guarded(async () => {
-    await actions.saveNotes(order, recordQc(order.adminNotes, { itemId, checks, outcome: 'pass', by: actions.who, at: Date.now() }));
+  const pass = (itemId: string, checks: QcChecks, photos: string[]) => guarded(async () => {
+    await actions.saveNotes(order, recordQc(order.adminNotes, { itemId, checks, outcome: 'pass', by: actions.who, at: Date.now(), photos }));
   });
 
   // A failed item sends the whole order back; results are cleared so rework is re-inspected in full.
-  const fail = (itemId: string, checks: QcChecks, reason: string, target: OrderStatus) => guarded(async () => {
-    const notes = resetQc(recordQc(order.adminNotes, { itemId, checks, outcome: 'fail', by: actions.who, at: Date.now(), reason }));
+  const fail = (itemId: string, checks: QcChecks, reason: string, target: OrderStatus, photos: string[]) => guarded(async () => {
+    const notes = resetQc(recordQc(order.adminNotes, { itemId, checks, outcome: 'fail', by: actions.who, at: Date.now(), reason, photos }));
     await actions.moveTo(order, target, notes);
   });
 
@@ -57,11 +57,11 @@ export function QcOrderCard({ order, sla, busy, setBusy, onPrintSlip }: Props) {
         <SlaBadge sla={sla} />
       </header>
       {order.items.map(item => (
-        <QcItemChecklist key={`${item.id}-${data.qc[item.id]?.at ?? 0}`} item={item} result={data.qc[item.id]}
+        <QcItemChecklist key={`${item.id}-${data.qc[item.id]?.at ?? 0}`} orderId={order.id} item={item} result={data.qc[item.id]}
           disabled={busy || !actions.canWrite}
-          onPass={checks => pass(item.id, checks)}
+          onPass={(checks, photos) => pass(item.id, checks, photos)}
           reworkTargets={reworkTargets}
-          onFail={(checks, reason, target) => fail(item.id, checks, reason, target)} />
+          onFail={(checks, reason, target, photos) => fail(item.id, checks, reason, target, photos)} />
       ))}
       <PackageForm order={order} disabled={busy || !actions.canWrite} />
       <div className="flex flex-wrap gap-2">

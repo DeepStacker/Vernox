@@ -25,6 +25,10 @@ rules_version = '2';
 //  Names are never overwritten, so what a moderator saw is what gets published.
 // reviews/{reviewId}/{n}.webp: PUBLIC copies the server makes when a moderator publishes a review
 //  (api/_lib/reviewPhotos.ts), removed on unpublish/delete. Public read; never written from clients.
+// qc/{orderId}/{file}.webp: photos of the finished piece taken at quality check (src/lib/data/orderPhotos.ts),
+//  evidence for damage claims and returns. Read by staff who can read orders; created by staff who can update
+//  orders (mirrors canUpdateOrders() / 'orders.update_status'). WebP only, at most 2 MB, never overwritten or
+//  deleted from clients.
 // Cross-service reads (firestore.get) require the Storage service agent to have
 // Firestore read access — Firebase grants it when these rules are first deployed.
 service firebase.storage {
@@ -50,6 +54,11 @@ service firebase.storage {
         || (request.auth.token.get('email_verified', false) == true
             && request.auth.token.get('email', '').lower() == orderOf(orderId).email)
       );
+    }
+
+    function isStaffOrderWriter() {
+      return request.auth != null && emailTrusted()
+        && request.auth.token.get('role', '') in ['super_admin', 'admin', 'order_manager', 'production', 'shipping'];
     }
 
     function isConsultationStaff() {
@@ -122,6 +131,16 @@ service firebase.storage {
     match /reviews/{reviewId}/{fileName} {
       allow read: if true;
       allow write: if false;
+    }
+
+    match /qc/{orderId}/{fileName} {
+      allow read: if isStaffOrderReader();
+      allow create: if isStaffOrderWriter() && resource == null
+        && orderId.matches('^[A-Za-z0-9_-]{1,128}$')
+        && fileName.matches('^[A-Za-z0-9_-]{1,60}[.]webp$')
+        && request.resource.size <= 2 * 1024 * 1024
+        && request.resource.contentType == 'image/webp';
+      allow update, delete: if false;
     }
 
     match /returns/{orderId}/{fileName} {

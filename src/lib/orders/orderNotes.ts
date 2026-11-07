@@ -7,6 +7,9 @@
  *   <free-text internal notes, one "[date by] text" line per note>
  *   #vernox:v1 {"qc":{...},"qcLog":[...],"package":{...}}
  *
+ * QC photos are stored in Storage at `qc/{orderId}/{file}.webp` (src/lib/data/orderPhotos.ts); only
+ * their paths are kept here, on the item's QC result.
+ *
  * The block is the LAST line, introduced by NOTES_MARKER, and holds compact JSON. Free text and
  * block are edited independently so neither can clobber the other. A block that fails to parse is
  * kept as plain text (never silently dropped) and a fresh block is appended after it.
@@ -26,12 +29,18 @@ export const QC_CHECKS = [
 export type QcCheckId = (typeof QC_CHECKS)[number]['id'];
 export type QcChecks = Record<QcCheckId, boolean>;
 
+/** Photos kept per item; at ~45 characters a path, a full order stays far under the 20 000-character notes limit. */
+export const MAX_QC_PHOTOS = 4;
+const QC_PHOTO_PATH = /^qc\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_-]{1,60}\.webp$/;
+
 export interface QcItemResult {
   outcome: 'pass' | 'fail';
   checks: QcChecks;
   at: number;
   by: string;
   reason?: string;
+  /** Storage paths of the photos taken at this inspection. */
+  photos?: string[];
 }
 
 export interface QcLogEntry {
@@ -40,6 +49,8 @@ export interface QcLogEntry {
   at: number;
   by: string;
   reason?: string;
+  /** Photos of a FAILED attempt only (rare), so the defect stays on record after the results reset. */
+  photos?: string[];
 }
 
 export interface PackageInfo {
@@ -74,6 +85,9 @@ export function emptyStructuredNotes(): StructuredNotes {
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
+const cleanPhotos = (value: unknown): string[] =>
+  Array.isArray(value) ? [...new Set(value.filter((p): p is string => typeof p === 'string' && QC_PHOTO_PATH.test(p)))].slice(0, MAX_QC_PHOTOS) : [];
+
 function sanitise(value: unknown): StructuredNotes | null {
   if (!isRecord(value)) return null;
   const data = emptyStructuredNotes();
@@ -82,19 +96,25 @@ function sanitise(value: unknown): StructuredNotes | null {
       if (!isRecord(r) || (r.outcome !== 'pass' && r.outcome !== 'fail') || !isRecord(r.checks)) continue;
       const checks = emptyChecks();
       for (const { id } of QC_CHECKS) checks[id] = r.checks[id] === true;
+      const photos = cleanPhotos(r.photos);
       data.qc[itemId] = {
         outcome: r.outcome, checks, at: Number(r.at) || 0, by: String(r.by ?? ''),
         ...(typeof r.reason === 'string' && r.reason ? { reason: r.reason } : {}),
+        ...(photos.length ? { photos } : {}),
       };
     }
   }
   if (Array.isArray(value.qcLog)) {
     data.qcLog = value.qcLog.filter(isRecord)
       .filter(e => e.outcome === 'pass' || e.outcome === 'fail')
-      .map(e => ({
-        itemId: String(e.itemId ?? ''), outcome: e.outcome as 'pass' | 'fail', at: Number(e.at) || 0, by: String(e.by ?? ''),
-        ...(typeof e.reason === 'string' && e.reason ? { reason: e.reason } : {}),
-      }));
+      .map(e => {
+        const photos = e.outcome === 'fail' ? cleanPhotos(e.photos) : [];
+        return {
+          itemId: String(e.itemId ?? ''), outcome: e.outcome as 'pass' | 'fail', at: Number(e.at) || 0, by: String(e.by ?? ''),
+          ...(typeof e.reason === 'string' && e.reason ? { reason: e.reason } : {}),
+          ...(photos.length ? { photos } : {}),
+        };
+      });
   }
   const pkg = value.package;
   if (isRecord(pkg)) {
@@ -156,18 +176,30 @@ export interface QcRecordInput {
   by: string;
   at: number;
   reason?: string;
+  photos?: readonly string[];
 }
 
-/** Records a QC attempt. A pass requires every check; a fail requires a reason. Throws otherwise. */
+/**
+ * Records a QC attempt. "Photo taken" is not a tick box: it is true exactly when a stored photo is
+ * attached. A pass therefore requires every check plus at least one photo; a fail requires a reason.
+ * Throws otherwise.
+ */
 export function recordQc(raw: string | undefined, input: QcRecordInput): string {
   const reason = input.reason?.trim();
-  if (input.outcome === 'pass' && !isQcComplete(input.checks)) throw new Error('Every QC check must be ticked to pass an item.');
+  const photos = cleanPhotos(input.photos);
+  if ((input.photos?.length ?? 0) !== photos.length) throw new Error(`Attach at most ${MAX_QC_PHOTOS} QC photos.`);
+  const checks: QcChecks = { ...input.checks, photo: photos.length > 0 };
+  if (input.outcome === 'pass' && !checks.photo) throw new Error('Add at least one QC photo to pass an item.');
+  if (input.outcome === 'pass' && !isQcComplete(checks)) throw new Error('Every QC check must be ticked to pass an item.');
   if (input.outcome === 'fail' && !reason) throw new Error('Enter a reason when failing an item.');
   const parsed = parseNotes(raw);
   const result: QcItemResult = {
-    outcome: input.outcome, checks: input.checks, at: input.at, by: input.by, ...(reason ? { reason } : {}),
+    outcome: input.outcome, checks, at: input.at, by: input.by, ...(reason ? { reason } : {}), ...(photos.length ? { photos } : {}),
   };
-  const entry: QcLogEntry = { itemId: input.itemId, outcome: input.outcome, at: input.at, by: input.by, ...(reason ? { reason } : {}) };
+  const entry: QcLogEntry = {
+    itemId: input.itemId, outcome: input.outcome, at: input.at, by: input.by, ...(reason ? { reason } : {}),
+    ...(input.outcome === 'fail' && photos.length ? { photos } : {}),
+  };
   return serializeNotes({
     text: parsed.text,
     data: { ...parsed.data, qc: { ...parsed.data.qc, [input.itemId]: result }, qcLog: [...parsed.data.qcLog, entry].slice(-MAX_QC_LOG) },
@@ -178,6 +210,11 @@ export function recordQc(raw: string | undefined, input: QcRecordInput): string 
 export function resetQc(raw: string | undefined): string {
   const parsed = parseNotes(raw);
   return serializeNotes({ text: parsed.text, data: { ...parsed.data, qc: {} } });
+}
+
+/** Every QC photo recorded on the order (latest result per item), for return and damage disputes. */
+export function qcPhotoPaths(raw: string | undefined): string[] {
+  return Object.values(parseNotes(raw).data.qc).flatMap(r => r.photos ?? []);
 }
 
 export function allItemsPassedQc(itemIds: readonly string[], data: StructuredNotes): boolean {

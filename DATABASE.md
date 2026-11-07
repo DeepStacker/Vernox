@@ -64,12 +64,17 @@ server. The staff consoles read the money, payment, refund and shipment fields a
 whole document): see `OrderOps` in `src/types/orderOps.ts`.
 `notes` is a string with two parts (parser: `src/lib/orders/orderNotes.ts`): free text (one `[YYYY-MM-DD HH:mm UTC <email>] text`
 line per internal note) and, as the LAST line, an optional structured block `#vernox:v1 <compact JSON>`:
-`{"qc":{"<itemId>":{"outcome":"pass|fail","checks":{"dimensions","finish","edges","hardware","photo": bool},"at","by","reason?"}},
-"qcLog":[{"itemId","outcome","at","by","reason?"}] (last 50, append-only),"package":{"lengthCm","widthCm","heightCm","weightKg","at","by"}}`.
+`{"qc":{"<itemId>":{"outcome":"pass|fail","checks":{"dimensions","finish","edges","hardware","photo": bool},"at","by","reason?","photos?"}},
+"qcLog":[{"itemId","outcome","at","by","reason?","photos?"}] (last 50, append-only),"package":{"lengthCm","widthCm","heightCm","weightKg","at","by"}}`.
 `qc` holds the latest result per item and is cleared when QC fails an order (so rework is re-inspected); `qcLog` keeps every
 attempt with its reason; `package` is read by the Shipping console (length, width as `breadthCm`, height, weight prefill the Shiprocket booking). A block that does not parse is kept as plain text and
 never discarded. Staff write it through the console helpers only; any editor of `notes` must go through `withFreeText`/`appendNote`
 so the block survives. Plain legacy notes need no migration.
+`photos` are Storage paths `qc/{orderId}/{file}.webp` (at most 4 per item; staff with `orders.update_status` upload them, staff with
+`orders.read` view them, nobody overwrites or deletes them; storage.rules). `checks.photo` is derived: true exactly when a photo is
+attached, so a pass needs one. A log entry keeps `photos` only for a FAILED attempt, since `qc` is cleared on failure. Passes recorded
+before photos existed keep `photo: true` with no `photos` and stay valid. The Returns console shows the QC photos next to the
+customer's evidence.
 Display copies written once at creation for the existing admin UI (do not use for money logic): `subtotal`, `discount`,
 `shipping`, `tax`, `total` (₹), `items[].unitPrice/lineTotal/productName`, `shippingName/Address/City/State/Zip/Country`, `phone`, `couponCode`.
 

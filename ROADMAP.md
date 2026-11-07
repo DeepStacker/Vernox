@@ -230,8 +230,9 @@ previews are the flat metal shape, not the wall preview.
 ## Phase 3a follow-ups (status after 3b)
 
 - Done: catalogue photo upload in the product form (`src/lib/data/productImages.ts`): resized in the browser to 2000 px WebP, stored at
-  `products/{productId}/` (public read, catalogue staff write, storage.rules). Still open: QC "photo taken" is a tick (store the photo
-  in Storage and keep its URL in the `qc` block).
+  `products/{productId}/` (public read, catalogue staff write, storage.rules).
+- Done (2026-11-07): QC photos. The QC checklist uploads 1-4 photos per item to `qc/{orderId}/` (camera on phones); "Photo taken"
+  follows the uploads, a pass needs one, and the Returns console shows them beside the customer's photos (DATABASE.md, `orders.notes`).
 - Done: `tickets/{id}` with `tickets.read` / `tickets.write` (support, order manager, admins) in `src/types/admin.ts`, mirrored in `firestore.rules`.
   The contact form creates tickets through `POST /api/engage`; the Support console has a Tickets view (status filter, thread, reply log, internal note,
   status change). Support notes on orders still go through `ADD_ORDER_NOTE` (3b), which keeps the `#vernox:v1` block.

@@ -6,32 +6,15 @@ import { ReasonDialog } from '@/components/admin/ReasonDialog';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { canAccessTab, type AdminTabId } from '@/lib/auth/permissions';
 import { opsApi, useOpsRunner, useOrderDocuments, type ReturnView } from '@/lib/data/orderOps';
-import { useReturnPhotos } from '@/lib/data/returnPhotos';
 import { formatInr, refundCeilingPaise } from '@/lib/orders/finance';
+import { qcPhotoPaths } from '@/lib/orders/orderNotes';
 import type { Order } from '@/types/store';
 import { Badge, StatusBadge } from '../shared/badges';
+import { PhotoStrip } from '../shared/PhotoStrip';
 
 const REASON_LABELS: Record<string, string> = {
   damaged: 'Arrived damaged', defective: 'Manufacturing defect', wrong_item: 'Wrong item', not_as_described: 'Not as described', changed_mind: 'Changed my mind',
 };
-
-function Photos({ paths }: { paths: readonly string[] }) {
-  const photos = useReturnPhotos(paths);
-  if (paths.length === 0) return <p className="text-xs text-muted-foreground">No photos attached.</p>;
-  return (
-    <ul className="flex flex-wrap gap-2" aria-label="Customer photos">
-      {photos.map(p => (
-        <li key={p.path} className="h-24 w-24 overflow-hidden rounded-md border border-border bg-muted">
-          {p.url ? (
-            <a href={p.url} target="_blank" rel="noopener noreferrer"><img src={p.url} alt="Return evidence" className="h-full w-full object-cover" /></a>
-          ) : (
-            <span className="flex h-full items-center justify-center px-1 text-center text-[11px] text-muted-foreground">{p.loading ? 'Loading…' : p.error ?? 'Unavailable'}</span>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 type Dialog = 'approve' | 'reject' | 'received' | null;
 
@@ -48,6 +31,7 @@ export function ReturnCard({ order, onNavigate }: { order: Order; onNavigate?: (
 
   const label = order.orderNumber ?? order.id;
   const ret: ReturnView | null = docs.data?.return ?? null;
+  const qcPaths = qcPhotoPaths(order.adminNotes);
   const close = () => { setDialog(null); setNote(''); setError(null); };
 
   const approve = async () => {
@@ -82,7 +66,13 @@ export function ReturnCard({ order, onNavigate }: { order: Order; onNavigate?: (
           <p><span className="font-semibold">{REASON_LABELS[ret.reason] ?? ret.reason}</span>
             <span className="text-xs text-muted-foreground"> · requested {new Date(ret.requestedAt).toLocaleDateString('en-IN')}</span></p>
           {ret.details && <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-3">{ret.details}</p>}
-          <Photos paths={ret.photoPaths} />
+          <PhotoStrip paths={ret.photoPaths} label="Customer photos" alt="Return evidence" empty="No photos attached." />
+          {qcPaths.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground">Photographed at QC before dispatch</p>
+              <PhotoStrip paths={qcPaths} label="QC photos" alt="Piece at quality check" />
+            </div>
+          )}
           {ret.decisionNote && <p className="text-xs text-muted-foreground">Note to customer: {ret.decisionNote}</p>}
         </div>
       )}

@@ -19,7 +19,7 @@ Required at build time (browser): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_D
 `npm run build` fails without them. Locally put them in the gitignored `.env.local`.
 
 ## 2a. One-time setup
-1. `firebase deploy --only firestore,storage` (rules, indexes, storage rules for return photos) and configure TTL policies
+1. `firebase deploy --only firestore,storage` (rules, indexes, and the storage rules for return, QC, review, catalogue, space and consultation photos) and configure TTL policies
    (DATABASE.md). `npm run seed` fills `settings/store` with placeholder business details, so invoices are specimens
    (`SP/…`) until the real seller (legal name, GSTIN, address, state, state code, PIN) is saved in Admin → Settings.
 2. `npm run seed` against an empty project (optional).
