@@ -22,10 +22,12 @@ interface Props {
   fromAddress: string;
   missingSeller: string[];
   onOpenSettings?: () => void;
+  /** When set, a checkbox lets staff add this order to a bulk label/manifest selection. */
+  selection?: { selected: boolean; onToggle: () => void };
 }
 
 /** One order in the shipping queue with the actions its state allows. */
-export function ShipmentCard({ order, storeName, fromAddress, missingSeller, onOpenSettings }: Props) {
+export function ShipmentCard({ order, storeName, fromAddress, missingSeller, onOpenSettings, selection }: Props) {
   const { permissions } = useAuth();
   const { run, busy } = useOpsRunner();
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -58,7 +60,12 @@ export function ShipmentCard({ order, storeName, fromAddress, missingSeller, onO
   return (
     <article className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-soft">
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="font-mono text-base font-bold">{label}</h4>
+        <h4 className="flex items-center gap-2 font-mono text-base font-bold">
+          {selection && (
+            <input type="checkbox" checked={selection.selected} onChange={selection.onToggle} aria-label={`Select ${label} for bulk labels`} className="h-5 w-5 accent-primary" />
+          )}
+          {label}
+        </h4>
         <div className="flex flex-wrap items-center gap-2">
           {isCod && <Badge tone="warn" title="Cash to collect on delivery">COD {formatInr(totalPaise(order))}</Badge>}
           <StatusBadge status={order.status} />

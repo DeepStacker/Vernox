@@ -14,6 +14,22 @@ import { AdminApiError, adminAction } from './adminApi';
 
 export interface PackageInput { lengthCm: number; breadthCm: number; heightCm: number; weightKg: number }
 export interface ManualShipmentInput { courier: string; awb: string; trackingUrl?: string }
+export interface CourierRateView {
+  courierId: number;
+  name: string;
+  freightCharge: number | null;
+  codCharge: number | null;
+  totalCharge: number | null;
+  estimatedDays: number | null;
+  etd: string | null;
+  codAvailable: boolean;
+  rating: number | null;
+  recommended: boolean;
+}
+export interface BulkDocumentsView {
+  batches: Array<{ orderIds: string[]; labelUrl: string | null; manifestUrl: string | null; error: string | null }>;
+  skipped: Array<{ orderId: string; reason: string }>;
+}
 export type DeliveryStatus = 'Shipped' | 'Out_For_Delivery' | 'Delivered' | 'RTO_Initiated' | 'RTO_Delivered';
 export type RefundMethod = 'razorpay' | 'manual';
 
@@ -65,10 +81,13 @@ export interface OrderDocuments {
 export const orderDocumentsKey = (orderId: string) => ['admin', 'order-documents', orderId] as const;
 
 export const opsApi = {
-  createShipment: (orderId: string, input: { package: PackageInput } | { manual: ManualShipmentInput }) =>
+  createShipment: (orderId: string, input: { package: PackageInput; courierId?: number } | { manual: ManualShipmentInput }) =>
     adminAction<{ shipment: ShipmentView; status: string | null; invoiceNumber: string | null }>('CREATE_SHIPMENT', { orderId, ...input }),
   cancelShipment: (orderId: string, reason: string) => adminAction('CANCEL_SHIPMENT', { orderId, reason }),
   getLabel: (orderId: string) => adminAction<{ labelUrl: string | null; manifestUrl: string | null }>('GET_LABEL', { orderId }),
+  getCourierRates: (orderId: string, pkg: PackageInput) =>
+    adminAction<{ automated: boolean; rates: CourierRateView[] }>('GET_COURIER_RATES', { orderId, ...pkg }),
+  bulkShipmentDocuments: (orderIds: string[]) => adminAction<BulkDocumentsView>('BULK_SHIPMENT_DOCUMENTS', { orderIds }),
   updateDeliveryStatus: (orderId: string, status: DeliveryStatus, note?: string) => adminAction('UPDATE_DELIVERY_STATUS', { orderId, status, note }),
   cancelOrder: (orderId: string, reason: string, refund: boolean) =>
     adminAction<{ status: string; refund: RefundView | null; refundError: string | null }>('CANCEL_ORDER', { orderId, reason, refund }),

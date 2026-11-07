@@ -118,7 +118,7 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
      details and photos; approve as refund or replacement, reject with reason, mark received), business settings form (seller/GSTIN, contact, COD,
      lead times, return window), `ADD_ORDER_NOTE` so support can add notes, one admin shell and shared UI components, COD orders in the production
      queue, and the customer order summary reading the same API shape on every path.
-   - **Not built (3b):** courier rate list and ETA at booking; bulk label or manifest printing (the API is per order); Done since: courier COD remittance CSV import
+   - **Done since (3b):** courier rate list, charges and ETA at booking with a courier pick (`GET_COURIER_RATES`, `courierId` on `CREATE_SHIPMENT`; manual fallback keeps manual entry); bulk labels and manifest for ticked orders (`BULK_SHIPMENT_DOCUMENTS` merged Shiprocket PDFs in chunks, combined print sheet for manual shipments), both unverified against the live Shiprocket API until credentials exist; courier COD remittance CSV import
      (`src/lib/orders/codRemittance.ts`, matched by AWB) and Razorpay settlement CSV import in Finance → Reconciliation (`src/lib/orders/settlement.ts`, read-only, matched by payment id); (hold and material shortage are done, below).
 4. **Storefront redesign:** simpler navigation, shop by room/theme, filters, PDP with MRP,
    delivery estimate, room view and trust, SEO and performance.

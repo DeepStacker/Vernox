@@ -9,6 +9,19 @@
  * resumes where it stopped instead of creating a duplicate Shiprocket order:
  *   POST /orders/create/adhoc → POST /courier/assign/awb → POST /courier/generate/pickup
  *   → POST /courier/generate/label → POST /manifests/generate
+ *
+ * Courier choice: GET /courier/serviceability/ (pickup_postcode, delivery_postcode, weight, cod,
+ * declared_value, length, breadth, height) lists `data.available_courier_companies` with
+ * courier_company_id, courier_name, rate, freight_charge, cod_charges, etd, estimated_delivery_days,
+ * cod, rating, plus `data.recommended_courier_company_id`. The chosen id goes to POST /courier/assign/awb
+ * as `courier_id`; omitted, Shiprocket auto-assigns its recommendation.
+ * Bulk documents: POST /courier/generate/label {shipment_id: []} → label_url (one merged PDF);
+ * POST /manifests/generate {shipment_id: []}; POST /manifests/print {order_ids: []} → manifest_url (one merged PDF).
+ * Shiprocket publishes no per-request id cap for these, so requests are chunked conservatively (BULK_CHUNK_SIZE).
+ * Sources: https://apidocs.shiprocket.in/ (Couriers and Shipments sections; the page is a client-rendered
+ * Postman document, so field names were cross-checked against
+ * https://support.shiprocket.in/support/solutions/articles/43000337456-shiprocket-api-document-helpsheet
+ * and the open-source SDK https://github.com/ajitdas123/laravel-shiprocket). Not verified against the live API.
  */
 import { ApiError } from '../errors';
 import { paiseToRupees } from '../money';
@@ -17,6 +30,9 @@ import type { DocStore } from '../store';
 import type { FetchLike } from '../notifications/channels';
 import {
   ShipmentStepError,
+  type BulkDocumentBatch,
+  type CourierRate,
+  type CourierRateQuery,
   type CreateShipmentRequest,
   type ServiceabilityQuery,
   type ServiceabilityResult,
@@ -27,6 +43,8 @@ import {
 const BASE_URL = 'https://apiv2.shiprocket.in/v1/external';
 const TOKEN_PATH = 'integrations/shiprocket';
 const TOKEN_TTL_MS = 9 * 24 * 3600_000;
+/** Shipments per label/manifest request; the API documents no cap, so stay well under typical gateway limits. */
+export const BULK_CHUNK_SIZE = 50;
 
 export interface ShiprocketConfig {
   email: string;
@@ -46,7 +64,43 @@ interface CourierCompany {
   courier_company_id?: number;
   estimated_delivery_days?: string | number;
   cod?: number;
-  rating?: number;
+  rating?: number | string;
+  rate?: number | string;
+  freight_charge?: number | string;
+  cod_charges?: number | string;
+  etd?: string;
+}
+
+const finiteOrNull = (v: unknown): number | null => {
+  const n = typeof v === 'string' ? Number.parseFloat(v) : typeof v === 'number' ? v : NaN;
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Pure: lists the couriers of a /courier/serviceability response, recommended first then cheapest. */
+export function parseCourierRates(body: unknown, codOnly: boolean): CourierRate[] {
+  const data = (body as { data?: { available_courier_companies?: CourierCompany[]; recommended_courier_company_id?: number; shiprocket_recommended_courier_id?: number } })?.data;
+  const companies = Array.isArray(data?.available_courier_companies) ? data!.available_courier_companies! : [];
+  const recommendedId = data?.recommended_courier_company_id ?? data?.shiprocket_recommended_courier_id ?? null;
+  const rates = companies
+    .filter(c => typeof c.courier_company_id === 'number' && c.courier_name)
+    .map<CourierRate>(c => {
+      const days = Number.parseInt(String(c.estimated_delivery_days ?? ''), 10);
+      return {
+        courierId: c.courier_company_id!,
+        name: c.courier_name!,
+        freightCharge: finiteOrNull(c.freight_charge),
+        codCharge: finiteOrNull(c.cod_charges),
+        totalCharge: finiteOrNull(c.rate),
+        estimatedDays: Number.isFinite(days) && days > 0 ? days : null,
+        etd: c.etd?.trim() || null,
+        codAvailable: Number(c.cod) === 1,
+        rating: finiteOrNull(c.rating),
+        recommended: c.courier_company_id === recommendedId,
+      };
+    })
+    .filter(r => !codOnly || r.codAvailable);
+  const cost = (r: CourierRate) => r.totalCharge ?? r.freightCharge ?? Number.MAX_SAFE_INTEGER;
+  return rates.sort((a, b) => Number(b.recommended) - Number(a.recommended) || cost(a) - cost(b));
 }
 
 /** Pure: interprets a /courier/serviceability response. */
@@ -139,6 +193,23 @@ export class ShiprocketProvider implements ShippingProvider {
     return parseServiceability(body);
   }
 
+  async getCourierRates(query: CourierRateQuery): Promise<CourierRate[]> {
+    const { package: pkg } = query;
+    const params = new URLSearchParams({
+      pickup_postcode: this.config.pickupPincode,
+      delivery_postcode: query.deliveryPincode,
+      weight: String(pkg.weightKg),
+      length: String(pkg.lengthCm),
+      breadth: String(pkg.breadthCm),
+      height: String(pkg.heightCm),
+      declared_value: String(query.declaredValue),
+      cod: query.cod ? '1' : '0',
+    });
+    const { status, body } = await this.call<unknown>('GET', `/courier/serviceability/?${params.toString()}`);
+    if (status === 404) return [];
+    return parseCourierRates(body, query.cod);
+  }
+
   /**
    * Amounts sent to Shiprocket are GST-inclusive so the COD amount the courier
    * collects (sub_total + shipping_charges + transaction_charges) equals the order total.
@@ -228,7 +299,7 @@ export class ShiprocketProvider implements ShippingProvider {
         const { body } = await this.call<{ awb_assign_status?: number; response?: { data?: { awb_code?: string; courier_name?: string } }; message?: string }>(
           'POST',
           '/courier/assign/awb',
-          { shipment_id: progress.shipmentId },
+          { shipment_id: progress.shipmentId, ...(request.courierId ? { courier_id: request.courierId } : {}) },
         );
         const awb = body?.response?.data?.awb_code;
         if (!awb) throw new Error(body?.message ?? 'no AWB assigned');
@@ -263,6 +334,34 @@ export class ShiprocketProvider implements ShippingProvider {
   private async labelFor(shipmentId: string): Promise<string | null> {
     const { body } = await this.call<{ label_url?: string }>('POST', '/courier/generate/label', { shipment_id: [shipmentId] });
     return body?.label_url ?? null;
+  }
+
+  /**
+   * Merged label and manifest PDFs for already-booked shipments, one request set per chunk.
+   * A failing chunk is reported on its batch so the other chunks' documents are still usable.
+   * Manifests are generated only for shipments that lack one (booking normally did), then printed together.
+   */
+  async getBulkDocuments(shipments: ShipmentRecord[]): Promise<BulkDocumentBatch[]> {
+    const batches: BulkDocumentBatch[] = [];
+    for (let i = 0; i < shipments.length; i += BULK_CHUNK_SIZE) {
+      const chunk = shipments.slice(i, i + BULK_CHUNK_SIZE);
+      const shipmentIds = chunk.map(s => s.shipmentId!);
+      try {
+        const { body: label } = await this.call<{ label_url?: string }>('POST', '/courier/generate/label', { shipment_id: shipmentIds.map(Number) });
+        const unmanifested = chunk.filter(s => !s.manifestUrl).map(s => Number(s.shipmentId));
+        if (unmanifested.length > 0) await this.call('POST', '/manifests/generate', { shipment_id: unmanifested });
+        const orderIds = chunk.filter(s => s.providerOrderId).map(s => Number(s.providerOrderId));
+        const { body: manifest } = orderIds.length > 0
+          ? await this.call<{ manifest_url?: string }>('POST', '/manifests/print', { order_ids: orderIds })
+          : { body: {} as { manifest_url?: string } };
+        batches.push({ shipmentIds, labelUrl: label?.label_url ?? null, manifestUrl: manifest?.manifest_url ?? null, error: null });
+      } catch (err) {
+        const detail = err instanceof ApiError ? err.internalDetail ?? err.message : err instanceof Error ? err.message : String(err);
+        console.error(`[shipping] bulk documents failed for ${shipmentIds.length} shipment(s): ${detail}`);
+        batches.push({ shipmentIds, labelUrl: null, manifestUrl: null, error: 'The courier service could not produce these documents. Try again.' });
+      }
+    }
+    return batches;
   }
 
   async cancelShipment(shipment: ShipmentRecord): Promise<void> {

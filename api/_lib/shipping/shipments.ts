@@ -13,7 +13,7 @@
  *    Shipped → Out_For_Delivery → Delivered, or → RTO_Initiated → RTO_Delivered.
  *    A COD order records `codCollectedPaise` when delivered.
  */
-import { auditInTransaction, buildAuditEntry } from '../audit';
+import { auditInTransaction, buildAuditEntry, recordAudit } from '../audit';
 import { ApiError } from '../errors';
 import { applyInvoice, planInvoice } from '../gst/invoice';
 import { canTransition, type OrderStatus } from '../orderLifecycle';
@@ -21,7 +21,8 @@ import { applyStatusChange, planStatusChange } from '../orderTransitions';
 import { asOrder, orderPath, type OrderDoc, type ShipmentRecord } from '../orders';
 import { arrayUnion, type DocStore } from '../store';
 import type { StoreConfig } from '../storeConfig';
-import { ShipmentStepError, type PackageDetails, type ShipmentUpdate, type ShippingProvider } from './types';
+import { paiseToRupees } from '../money';
+import { ShipmentStepError, type CourierRate, type PackageDetails, type ShipmentUpdate, type ShippingProvider } from './types';
 
 type Actor = Parameters<typeof buildAuditEntry>[0]['actor'];
 
@@ -61,7 +62,7 @@ export async function createShipment(
   store: DocStore,
   provider: ShippingProvider,
   config: StoreConfig,
-  params: { orderId: string; package?: PackageDetails; manual?: ManualShipmentDetails; actor: Actor; now?: number },
+  params: { orderId: string; package?: PackageDetails; courierId?: number; manual?: ManualShipmentDetails; actor: Actor; now?: number },
 ): Promise<ShipmentRecord> {
   const now = params.now ?? Date.now();
   const current = await loadOrder(store, params.orderId);
@@ -92,7 +93,7 @@ export async function createShipment(
     };
   } else {
     try {
-      update = await provider.createShipment({ order, package: params.package!, invoiceNumber, existing: previous });
+      update = await provider.createShipment({ order, package: params.package!, courierId: params.courierId, invoiceNumber, existing: previous });
     } catch (err) {
       if (err instanceof ShipmentStepError) {
         // Keep the progress so a retry resumes instead of booking twice.
@@ -203,4 +204,70 @@ export async function applyCourierStatus(
     });
     return 'applied';
   });
+}
+
+export type CourierRatesResult = {
+  /** False when the provider cannot list couriers (manual fallback); the caller shows a note instead of a list. */
+  automated: boolean;
+  rates: CourierRate[];
+}
+
+/** Couriers, charges and ETA for a Packed order's parcel, before booking. Nothing is stored or booked. */
+export async function courierRatesFor(
+  store: DocStore,
+  provider: ShippingProvider,
+  params: { orderId: string; package: PackageDetails },
+): Promise<CourierRatesResult> {
+  const order = await loadOrder(store, params.orderId);
+  if (order.status !== 'Packed') throw new ApiError(409, 'CONFLICT', `Courier rates are listed for packed orders (status is ${order.status}).`);
+  if (!provider.automated) return { automated: false, rates: [] };
+  const rates = await provider.getCourierRates({
+    deliveryPincode: order.customer.pincode,
+    package: params.package,
+    cod: order.paymentMethod === 'cod',
+    declaredValue: paiseToRupees(order.amounts.totalPaise),
+  });
+  return { automated: true, rates };
+}
+
+export type BulkDocumentsResult = {
+  /** One merged PDF per chunk of shipments. */
+  batches: Array<{ orderIds: string[]; labelUrl: string | null; manifestUrl: string | null; error: string | null }>;
+  /** Orders left out, with the reason (no active Shiprocket shipment, or unknown order). */
+  skipped: Array<{ orderId: string; reason: string }>;
+}
+
+/** Combined label and manifest PDFs for several booked Shiprocket shipments (see ShiprocketProvider.getBulkDocuments). */
+export async function bulkShipmentDocuments(
+  store: DocStore,
+  provider: ShippingProvider,
+  params: { orderIds: string[]; actor: Actor; now?: number },
+): Promise<BulkDocumentsResult> {
+  const now = params.now ?? Date.now();
+  const skipped: BulkDocumentsResult['skipped'] = [];
+  const eligible: Array<{ orderId: string; shipment: ShipmentRecord }> = [];
+  for (const orderId of [...new Set(params.orderIds)]) {
+    const order = asOrder(await store.get(orderPath(orderId)));
+    const shipment = order?.shipment;
+    if (!order) skipped.push({ orderId, reason: 'Order not found.' });
+    else if (!shipment || shipment.status === 'cancelled' || !shipment.awb) skipped.push({ orderId, reason: 'No booked shipment.' });
+    else if (shipment.provider !== 'shiprocket' || !shipment.shipmentId) skipped.push({ orderId, reason: 'Manual shipment: print its label from the card.' });
+    else eligible.push({ orderId, shipment });
+  }
+  if (eligible.length > 0 && provider.name !== 'shiprocket') {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'Courier documents are not available: Shiprocket is not configured.');
+  }
+  const batches = (await provider.getBulkDocuments(eligible.map(e => e.shipment))).map(b => ({
+    orderIds: eligible.filter(e => b.shipmentIds.includes(e.shipment.shipmentId!)).map(e => e.orderId),
+    labelUrl: b.labelUrl,
+    manifestUrl: b.manifestUrl,
+    error: b.error,
+  }));
+  if (eligible.length > 0) {
+    await recordAudit(store, buildAuditEntry({
+      actor: params.actor, action: 'SHIPMENT_DOCUMENTS_BULK', targetType: 'order', targetId: eligible[0].orderId,
+      details: { orderIds: eligible.map(e => e.orderId), batches: batches.length, failedBatches: batches.filter(b => b.error).length }, now,
+    }));
+  }
+  return { batches, skipped };
 }

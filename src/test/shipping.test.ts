@@ -3,11 +3,11 @@ import type { VercelRequest } from '@vercel/node';
 import { describe, expect, it } from 'vitest';
 import { createCheckoutIntent } from '../../api/_lib/checkout';
 import { ApiError } from '../../api/_lib/errors';
-import { orderPath } from '../../api/_lib/orders';
+import { orderPath, type ShipmentRecord } from '../../api/_lib/orders';
 import { buildDeliveryEstimate, istDatePlusDays, serviceabilityFor } from '../../api/_lib/shipping';
 import { ManualShippingProvider } from '../../api/_lib/shipping/manual';
-import { cancelShipment, createShipment } from '../../api/_lib/shipping/shipments';
-import { parseServiceability, ShiprocketProvider } from '../../api/_lib/shipping/shiprocket';
+import { bulkShipmentDocuments, cancelShipment, courierRatesFor, createShipment } from '../../api/_lib/shipping/shipments';
+import { BULK_CHUNK_SIZE, parseCourierRates, parseServiceability, ShiprocketProvider } from '../../api/_lib/shipping/shiprocket';
 import { mapCourierStatus } from '../../api/_lib/shipping/statusMap';
 import { processCourierEvent, verifyCourierWebhookToken } from '../../api/_lib/shipping/trackingWebhook';
 import { checkoutRequest, deps, NOW, paidOrder, scriptedFetch, seededStore, SELLER_CONFIG, setStatus, STAFF_ACTOR } from './support/serverFixtures';
@@ -204,5 +204,126 @@ describe('manual shipping and delivery estimate', () => {
 
   it('parses an empty serviceability answer as not serviceable', () => {
     expect(parseServiceability({ data: { available_courier_companies: [] } })).toMatchObject({ serviceable: false });
+  });
+});
+
+const RATES_BODY = {
+  data: {
+    recommended_courier_company_id: 2,
+    available_courier_companies: [
+      { courier_company_id: 1, courier_name: 'Cheap Surface', rate: 90.5, freight_charge: 80, cod_charges: 10.5, estimated_delivery_days: '6', etd: 'Nov 13, 2026', cod: 1, rating: 3.9 },
+      { courier_company_id: 2, courier_name: 'Fast Air', rate: 150, freight_charge: 140, cod_charges: 10, estimated_delivery_days: '2', etd: 'Nov 9, 2026', cod: 1, rating: 4.6 },
+      { courier_company_id: 3, courier_name: 'Prepaid Only', rate: 70, freight_charge: 70, cod_charges: 0, estimated_delivery_days: '5', cod: 0, rating: '4.0' },
+    ],
+  },
+};
+
+describe('courier rates at booking', () => {
+  it('lists couriers recommended first then cheapest, and drops non-COD couriers for COD parcels', () => {
+    const all = parseCourierRates(RATES_BODY, false);
+    expect(all.map(r => r.name)).toEqual(['Fast Air', 'Prepaid Only', 'Cheap Surface']);
+    expect(all[0]).toEqual({ courierId: 2, name: 'Fast Air', freightCharge: 140, codCharge: 10, totalCharge: 150, estimatedDays: 2, etd: 'Nov 9, 2026', codAvailable: true, rating: 4.6, recommended: true });
+    expect(all[1]).toMatchObject({ rating: 4, etd: null });
+    expect(parseCourierRates(RATES_BODY, true).map(r => r.name)).toEqual(['Fast Air', 'Cheap Surface']);
+    expect(parseCourierRates({ data: {} }, false)).toEqual([]);
+  });
+
+  it('queries serviceability with the parcel, COD flag and declared value of the order', async () => {
+    const store = seededStore();
+    const res = await packedOrder(store, { paymentMethod: 'cod' });
+    const sr = scriptedFetch([{ match: /auth\/login/, body: { token: 'tok_1' } }, { match: /courier\/serviceability/, body: RATES_BODY }]);
+    const out = await courierRatesFor(store, new ShiprocketProvider(SR_CONFIG, store, sr.impl, () => NOW), { orderId: res.orderId, package: PACKAGE });
+    expect(out.automated).toBe(true);
+    expect(out.rates).toHaveLength(2);
+    const q = new URL(sr.calls[1].url).searchParams;
+    expect(Object.fromEntries(q)).toMatchObject({ pickup_postcode: '560058', delivery_postcode: '560001', weight: '3', length: '60', breadth: '60', height: '8', cod: '1' });
+    expect(Number(q.get('declared_value'))).toBeCloseTo(res.pricing.total, 2);
+  });
+
+  it('answers "not automated" without calling a courier when Shiprocket is not configured', async () => {
+    const store = seededStore();
+    const res = await packedOrder(store);
+    const manual = new ManualShippingProvider({ transitDays: 5, codEnabled: true });
+    expect(await courierRatesFor(store, manual, { orderId: res.orderId, package: PACKAGE })).toEqual({ automated: false, rates: [] });
+  });
+
+  it('refuses rates for an order that is not packed', async () => {
+    const store = seededStore();
+    const res = await paidOrder(store);
+    const err = await courierRatesFor(store, new ManualShippingProvider({ transitDays: 5, codEnabled: true }), { orderId: res.orderId, package: PACKAGE }).catch(e => e);
+    expect((err as ApiError).code).toBe('CONFLICT');
+  });
+
+  it('sends the chosen courier_id to AWB assignment, and none when auto', async () => {
+    const store = seededStore();
+    const res = await packedOrder(store);
+    const sr = scriptedFetch(bookingResponses());
+    await createShipment(store, new ShiprocketProvider(SR_CONFIG, store, sr.impl, () => NOW), SELLER_CONFIG, { orderId: res.orderId, package: PACKAGE, courierId: 2, actor: STAFF_ACTOR, now: NOW });
+    expect(JSON.parse(sr.calls.find(c => c.url.includes('assign/awb'))!.init.body!)).toEqual({ shipment_id: '7001', courier_id: 2 });
+
+    const auto = seededStore();
+    const res2 = await packedOrder(auto);
+    const sr2 = scriptedFetch(bookingResponses());
+    await createShipment(auto, new ShiprocketProvider(SR_CONFIG, auto, sr2.impl, () => NOW), SELLER_CONFIG, { orderId: res2.orderId, package: PACKAGE, actor: STAFF_ACTOR, now: NOW });
+    expect(JSON.parse(sr2.calls.find(c => c.url.includes('assign/awb'))!.init.body!)).toEqual({ shipment_id: '7001' });
+  });
+});
+
+describe('bulk labels and manifest', () => {
+  const bookedShipment = (id: number, extra: Record<string, unknown> = {}) => ({
+    provider: 'shiprocket', status: 'awb_assigned', shipmentId: String(id), providerOrderId: String(id + 1000), awb: `AWB${id}`, courier: 'X',
+    trackingUrl: null, labelUrl: null, manifestUrl: null, pickupScheduledAt: null, lastEvent: null, error: null, createdAt: NOW, updatedAt: NOW, ...extra,
+  });
+
+  it('merges labels and the printed manifest in chunks, generating manifests only where missing', async () => {
+    const store = seededStore();
+    const a = await packedOrder(store);
+    const b = await packedOrder(store, { idempotencyKey: 'idem-key-0002' });
+    store.seed(orderPath(a.orderId), { ...store.read(orderPath(a.orderId))!, shipment: bookedShipment(11, { manifestUrl: 'https://sr.example/m11.pdf' }) });
+    store.seed(orderPath(b.orderId), { ...store.read(orderPath(b.orderId))!, shipment: bookedShipment(12) });
+    const sr = scriptedFetch([
+      { match: /auth\/login/, body: { token: 'tok_1' } },
+      { match: /courier\/generate\/label/, body: { label_url: 'https://sr.example/all-labels.pdf' } },
+      { match: /manifests\/generate/, body: {} },
+      { match: /manifests\/print/, body: { manifest_url: 'https://sr.example/all-manifest.pdf' } },
+    ]);
+    const out = await bulkShipmentDocuments(store, new ShiprocketProvider(SR_CONFIG, store, sr.impl, () => NOW), { orderIds: [a.orderId, b.orderId], actor: STAFF_ACTOR, now: NOW });
+    expect(out.skipped).toEqual([]);
+    expect(out.batches).toEqual([{ orderIds: [a.orderId, b.orderId], labelUrl: 'https://sr.example/all-labels.pdf', manifestUrl: 'https://sr.example/all-manifest.pdf', error: null }]);
+    expect(JSON.parse(sr.calls.find(c => c.url.includes('generate/label'))!.init.body!)).toEqual({ shipment_id: [11, 12] });
+    expect(JSON.parse(sr.calls.find(c => c.url.includes('manifests/generate'))!.init.body!)).toEqual({ shipment_id: [12] });
+    expect(JSON.parse(sr.calls.find(c => c.url.includes('manifests/print'))!.init.body!)).toEqual({ order_ids: [1011, 1012] });
+    expect(store.collection('audit_logs').some(l => l.data.action === 'SHIPMENT_DOCUMENTS_BULK')).toBe(true);
+  });
+
+  it('splits a large selection into chunks and reports a failing chunk without losing the others', async () => {
+    const shipments = Array.from({ length: BULK_CHUNK_SIZE + 1 }, (_, i) => bookedShipment(100 + i, { manifestUrl: 'https://sr.example/m.pdf' })) as unknown as ShipmentRecord[];
+    const sr = scriptedFetch([
+      { match: /auth\/login/, body: { token: 'tok_1' } },
+      { match: /courier\/generate\/label/, body: { label_url: 'https://sr.example/l1.pdf' } },
+      { match: /manifests\/print/, body: { manifest_url: 'https://sr.example/m1.pdf' } },
+      { match: /courier\/generate\/label/, status: 500, body: { message: 'boom' } },
+    ]);
+    const batches = await new ShiprocketProvider(SR_CONFIG, seededStore(), sr.impl, () => NOW).getBulkDocuments(shipments);
+    expect(batches.map(b => b.shipmentIds.length)).toEqual([BULK_CHUNK_SIZE, 1]);
+    expect(batches[0]).toMatchObject({ labelUrl: 'https://sr.example/l1.pdf', error: null });
+    expect(batches[1].error).toBeTruthy();
+    expect(batches[1].error).not.toContain('boom');
+  });
+
+  it('skips manual, unbooked and unknown orders with a reason, and needs Shiprocket for the rest', async () => {
+    const store = seededStore();
+    const unbooked = await packedOrder(store);
+    const manualOrder = await packedOrder(store, { idempotencyKey: 'idem-key-0002' });
+    store.seed(orderPath(manualOrder.orderId), { ...store.read(orderPath(manualOrder.orderId))!, shipment: bookedShipment(0, { provider: 'manual', shipmentId: null, providerOrderId: null }) });
+    const manual = new ManualShippingProvider({ transitDays: 5, codEnabled: true });
+    const out = await bulkShipmentDocuments(store, manual, { orderIds: [unbooked.orderId, manualOrder.orderId, 'doesnotexist00'], actor: STAFF_ACTOR });
+    expect(out.batches).toEqual([]);
+    expect(out.skipped.map(s => s.orderId)).toEqual([unbooked.orderId, manualOrder.orderId, 'doesnotexist00']);
+
+    const booked = await packedOrder(store, { idempotencyKey: 'idem-key-0003' });
+    store.seed(orderPath(booked.orderId), { ...store.read(orderPath(booked.orderId))!, shipment: bookedShipment(21) });
+    const err = await bulkShipmentDocuments(store, manual, { orderIds: [booked.orderId], actor: STAFF_ACTOR }).catch(e => e);
+    expect((err as ApiError).code).toBe('VALIDATION_ERROR');
   });
 });

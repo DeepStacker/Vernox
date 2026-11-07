@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Order } from '@/types/store';
 import { code39Svg } from '../code39';
-import { buildJobSheetsHtml, buildPackingSlipHtml, escapeHtml } from '../printSheets';
+import { buildJobSheetsHtml, buildPackingSlipHtml, buildShippingLabelsHtml, escapeHtml } from '../printSheets';
 
 const order: Order = {
   id: 'o1', orderNumber: 'VX-20261105-ABC123', email: 'a@b.in', customerName: '<script>alert(1)</script>', status: 'Cutting', placedAt: 0,
@@ -22,6 +22,15 @@ describe('print sheets', () => {
     expect(html).toContain('600 × 600 mm');
     expect(html).toContain('Edges deburred');
     expect(html).toContain('<svg');
+  });
+
+  it('combines manual shipping labels into one print job, one escaped label per page', () => {
+    const shipped = (id: string, awb: string): Order => ({ ...order, id, orderNumber: id, tracking: { carrier: 'DTDC', trackingNumber: awb, url: '' } });
+    const html = buildShippingLabelsHtml([shipped('VX-1', 'AWB111'), shipped('VX-2', 'AWB222')], { storeName: 'Vernox', fromAddress: 'Bengaluru' });
+    expect(html.match(/class="sheet"/g)).toHaveLength(2);
+    expect(html).toContain('AWB AWB111');
+    expect(html).toContain('AWB AWB222');
+    expect(html).not.toContain('<script>alert');
   });
 
   it('never injects customer-supplied markup into the packing slip', () => {
