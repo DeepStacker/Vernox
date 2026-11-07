@@ -251,6 +251,8 @@ Results (same harness, interleaved runs; done 2026-11-07):
 - Next levers, by expected value: Trade enquiry form through the API (it alone still loads Firestore for guests); self-host the three
   Google Fonts families (one less origin before text renders); a smaller hero variant (98 KB at 1200 px); prerendered HTML for Home
   and product pages if LCP must drop below ~2 s.
+- Accessibility follow-up found while testing: `src/pages/Account.tsx` has ~15 more `<label>`s not tied to their inputs (register,
+  profile and address forms; the sign-in pair is fixed). Same fix: `htmlFor`/`id` plus `autoComplete`.
 
 
 
