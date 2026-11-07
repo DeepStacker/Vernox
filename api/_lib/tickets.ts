@@ -1,20 +1,21 @@
 /**
- * Support tickets (`tickets/{id}`), created from the public contact form and worked by staff.
+ * Support tickets (`tickets/{id}`), created from the public contact form or logged by staff for a
+ * request that arrived by email, WhatsApp or phone, and worked by staff.
  *
  * Clients cannot write tickets (firestore.rules); the contact form posts to /api/engage (CONTACT)
- * and staff change tickets through /api/admin (ADD_TICKET_MESSAGE, SET_TICKET_STATUS). Creating a
+ * and staff use /api/admin (CREATE_TICKET, ADD_TICKET_MESSAGE, SET_TICKET_STATUS). A contact-form
  * ticket also queues a `support_ticket` alert for the support inbox in the same transaction, so a
- * saved ticket always has its alert and a failed write leaves neither.
+ * saved ticket always has its alert and a failed write leaves neither. Staff-logged tickets need no
+ * alert: the person logging it is already handling it.
  */
 import { isPlaceholderValue } from '../../src/types/settings';
+import { STAFF_TICKET_CHANNELS, TICKET_STATUSES, TICKET_TOPICS, type TicketChannel, type TicketStatus } from '../../src/types/tickets';
 import { z } from 'zod';
 import { ApiError } from './errors';
 import { enqueueNotification, planNotification } from './notifications/outbox';
 import type { DocStore } from './store';
 
-export const TICKET_TOPICS = ['Order help', 'Custom or bulk order', 'Product question', 'Something else'] as const;
-export const TICKET_STATUSES = ['open', 'waiting', 'resolved'] as const;
-export type TicketStatus = (typeof TICKET_STATUSES)[number];
+export { TICKET_STATUSES, TICKET_TOPICS };
 /** inbound = from the customer; reply = staff answer, emailed to the customer; note = internal. */
 export type TicketDirection = 'inbound' | 'reply' | 'note';
 
@@ -29,11 +30,14 @@ export interface TicketMessage {
 
 export interface TicketDoc {
   ref: string;
-  channel: 'contact_form';
+  channel: TicketChannel;
   topic: string;
   subject: string;
   orderNumber: string | null;
+  /** Set when the order number matched an order (staff-logged tickets). */
+  orderId?: string | null;
   customerName: string;
+  /** '' when the customer reached us by WhatsApp or phone and gave no email; replies then cannot be emailed. */
   customerEmail: string;
   customerPhone: string | null;
   status: TicketStatus;
@@ -41,6 +45,8 @@ export interface TicketDoc {
   messages: TicketMessage[];
   createdAt: number;
   updatedAt: number;
+  /** Staff member who logged an email / WhatsApp / phone ticket. */
+  loggedBy?: string;
 }
 
 export const contactRequestSchema = z.object({
@@ -104,6 +110,62 @@ export async function createTicket(store: DocStore, input: ContactRequest, now =
   return { id, ref };
 }
 
+export const staffTicketSchema = z.object({
+  channel: z.enum(STAFF_TICKET_CHANNELS),
+  topic: z.enum(TICKET_TOPICS),
+  customerName: z.string().trim().max(120).optional(),
+  customerEmail: z.string().trim().toLowerCase().email().max(254).optional().or(z.literal('')),
+  customerPhone: z.string().trim().regex(/^[+0-9 ()-]{6,20}$/, 'Enter a valid phone number').optional().or(z.literal('')),
+  orderNumber: z.string().trim().max(40).optional(),
+  message: z.string().trim().min(1).max(4000),
+});
+export type StaffTicketInput = z.infer<typeof staffTicketSchema>;
+
+/**
+ * Logs a ticket for a request that came in by email, WhatsApp or phone. An order number must match an
+ * order; its customer fills any name, email or phone left blank, so the ticket links to the order and
+ * replies can be emailed. The ticket needs an email or a phone to be answerable.
+ */
+export async function createStaffTicket(store: DocStore, input: StaffTicketInput, by: string, now = Date.now()): Promise<{ id: string; ref: string }> {
+  let name = input.customerName || '';
+  let email = input.customerEmail || '';
+  let phone = input.customerPhone || '';
+  let orderId: string | null = null;
+  const orderNumber = input.orderNumber?.toUpperCase() || null;
+  if (orderNumber) {
+    const [match] = await store.query('orders', { where: [{ field: 'orderNumber', op: '==', value: orderNumber }], limit: 1 });
+    if (!match) throw new ApiError(404, 'NOT_FOUND', `No order ${orderNumber}. Check the number or leave it blank.`);
+    const order = match.data as { customer?: { name?: unknown; phone?: unknown }; email?: unknown };
+    orderId = match.id;
+    name ||= typeof order.customer?.name === 'string' ? order.customer.name : '';
+    email ||= typeof order.email === 'string' ? order.email : '';
+    phone ||= typeof order.customer?.phone === 'string' ? order.customer.phone : '';
+  }
+  if (!email && !phone) throw new ApiError(400, 'VALIDATION_ERROR', 'Enter the customer\'s email or phone so the ticket can be answered.');
+
+  const id = store.newId('tickets');
+  const ref = ticketRef(id);
+  const ticket: TicketDoc = {
+    ref,
+    channel: input.channel,
+    topic: input.topic,
+    subject: input.topic,
+    orderNumber,
+    orderId,
+    customerName: name || email || phone,
+    customerEmail: email,
+    customerPhone: phone || null,
+    status: 'open',
+    assignedTo: by,
+    messages: [{ at: now, by: email || phone, direction: 'inbound', text: input.message }],
+    createdAt: now,
+    updatedAt: now,
+    loggedBy: by,
+  };
+  await store.create(`tickets/${id}`, ticket as unknown as Record<string, unknown>);
+  return { id, ref };
+}
+
 async function mutateTicket(store: DocStore, id: string, change: (ticket: TicketDoc) => Partial<TicketDoc>): Promise<TicketDoc> {
   return store.runTransaction(async tx => {
     const current = (await tx.get(`tickets/${id}`)) as unknown as TicketDoc | null;
@@ -127,6 +189,9 @@ export async function addTicketMessage(
   return store.runTransaction(async tx => {
     const ticket = (await tx.get(`tickets/${params.id}`)) as unknown as TicketDoc | null;
     if (!ticket) throw new ApiError(404, 'NOT_FOUND', 'Ticket not found.');
+    if (params.direction === 'reply' && !ticket.customerEmail) {
+      throw new ApiError(409, 'CONFLICT', 'This customer has no email address. Answer them on WhatsApp or phone and log it as a note.');
+    }
     if (ticket.messages.length >= MAX_TICKET_MESSAGES) {
       throw new ApiError(409, 'CONFLICT', 'This ticket has too many messages. Resolve it and ask the customer to write again.');
     }

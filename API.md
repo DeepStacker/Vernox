@@ -311,8 +311,13 @@ One function for the storefront's engagement writes (the deployment is near its 
 | `SUBMIT_REVIEW` | Bearer ID token | `productId, rating (1–5), comment (10–2000)` | 30 / minute | `{ success: true }`; `403` without a Delivered order containing the product, `409` if already reviewed |
 
 - `website` is a honeypot: a non-empty value is answered with `200` and nothing is stored.
+- Staff log a request that came in by email, WhatsApp or phone with `/api/admin` `CREATE_TICKET { channel: email \| whatsapp \| phone,
+  topic, customerName?, customerEmail?, customerPhone?, orderNumber?, message }` → `{ id, ref }` (`tickets.write`, audited). An
+  `orderNumber` must match an order (404 otherwise) and fills blank customer fields from it; with neither email nor phone the result
+  is 400. No support alert is queued.
 - Tickets are worked through `/api/admin` actions `ADD_TICKET_MESSAGE { ticketId, direction: reply \| note, text }` and
-  `SET_TICKET_STATUS { ticketId, status: open \| waiting \| resolved }` (permission `tickets.write`, audited).
+  `SET_TICKET_STATUS { ticketId, status: open \| waiting \| resolved }` (permission `tickets.write`, audited). A `reply` on a ticket
+  without an email returns 409 (answer on the customer's channel and log a `note`).
 
 ## Link previews and sitemap
 

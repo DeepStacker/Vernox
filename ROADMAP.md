@@ -225,7 +225,9 @@ previews are the flat metal shape, not the wall preview.
 - Light theme only (the old `.dark` block duplicated the light values). Legacy colour tokens remain as aliases for account, checkout and admin screens.
 - Built after this pass: contact form to support tickets, newsletter signup (list kept in Firestore, no ESP), and review submission by verified buyers (all through `POST /api/engage`).
   Product cards crossfade to `lifestyleImage` on hover when a product has one; the cart drawer settles with a soft spring (`--ease-spring-soft`); shop filter changes already re-run the staggered reveal.
-- Not built: EMI messaging, save-for-later, a welcome or double opt-in newsletter email and campaign sending (needs an ESP), tickets for WhatsApp/phone/email channels (only `contact_form` is created).
+- Not built: EMI messaging, save-for-later, a welcome or double opt-in newsletter email and campaign sending (needs an ESP).
+- Done (2026-11-07): staff log email, WhatsApp and phone requests as tickets (`CREATE_TICKET`), linked to the order when the number
+  matches; replies are emailed only when the ticket has an email. Automatic WhatsApp intake needs a WhatsApp Business API provider.
 
 ## Phase 3a follow-ups (status after 3b)
 

@@ -1,17 +1,20 @@
 /**
- * Support tickets (`tickets`). Created by the public contact form through /api/engage; staff read
+ * Support tickets (`tickets`). Created by the public contact form through /api/engage, or logged by
+ * staff for requests that came in by email, WhatsApp or phone (CREATE_TICKET); staff read
  * them straight from Firestore (`tickets.read`, firestore.rules) and change them only through the
  * admin API (`tickets.write`), which audits every change.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { adminAction } from './adminApi';
+import { TICKET_CHANNELS, TICKET_STATUSES, type StaffTicketChannel, type TicketChannel, type TicketStatus, type TicketTopic } from '@/types/tickets';
 import { useOptimisticMutation } from './optimistic';
 
-export const TICKET_STATUSES = ['open', 'waiting', 'resolved'] as const;
-export type TicketStatus = (typeof TICKET_STATUSES)[number];
+export { STAFF_TICKET_CHANNELS, TICKET_STATUSES, TICKET_TOPICS, type StaffTicketChannel, type TicketChannel, type TicketStatus } from '@/types/tickets';
 export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = { open: 'Open', waiting: 'Waiting on customer', resolved: 'Resolved' };
+
+export const TICKET_CHANNEL_LABELS: Record<TicketChannel, string> = { contact_form: 'Contact form', email: 'Email', whatsapp: 'WhatsApp', phone: 'Phone' };
 
 export interface TicketMessage {
   at: number;
@@ -23,9 +26,11 @@ export interface TicketMessage {
 export interface Ticket {
   id: string;
   ref: string;
+  channel: TicketChannel;
   topic: string;
   orderNumber: string | null;
   customerName: string;
+  /** '' when the customer gave no email (WhatsApp / phone); replies cannot be emailed then. */
   customerEmail: string;
   customerPhone: string | null;
   status: TicketStatus;
@@ -45,6 +50,7 @@ export function normaliseTicket(id: string, raw: Record<string, unknown>): Ticke
   return {
     id,
     ref: str(raw.ref) || id,
+    channel: (TICKET_CHANNELS as readonly unknown[]).includes(raw.channel) ? (raw.channel as TicketChannel) : 'contact_form',
     topic: str(raw.topic),
     orderNumber: str(raw.orderNumber) || null,
     customerName: str(raw.customerName),
@@ -67,6 +73,25 @@ export function useTickets(enabled: boolean) {
       const snap = await getDocs(query(collection(db, 'tickets'), orderBy('updatedAt', 'desc'), limit(MAX_TICKETS)));
       return snap.docs.map(d => normaliseTicket(d.id, d.data()));
     },
+  });
+}
+
+export interface NewStaffTicket {
+  channel: StaffTicketChannel;
+  topic: TicketTopic;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  orderNumber?: string;
+  message: string;
+}
+
+/** Logs an email / WhatsApp / phone request as a ticket. Errors (unknown order, no contact) surface to the form. */
+export function useCreateTicket() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: NewStaffTicket) => adminAction<{ id: string; ref: string }>('CREATE_TICKET', { ...input }),
+    onSuccess: () => client.invalidateQueries({ queryKey: TICKETS_KEY }),
   });
 }
 

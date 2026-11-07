@@ -176,8 +176,10 @@ Earlier collections:
   unpublishing or archiving deletes the public copies and sets `photos: []`, `DELETE_REVIEW` also deletes the private uploads. Clients
   never write `photos`/`photoPaths` (the SAVE_REVIEW schema drops them). Moderation by `reviews.moderate` roles through `SAVE_REVIEW`
   (`api/_lib/reviewPhotos.ts`). List queries from the storefront must filter `status == 'published'`.
-- `tickets/{id}` — support tickets from the contact form (`POST /api/engage` `CONTACT`); read by `tickets.read` roles
-  (`super_admin`, `admin`, `order_manager`, `support`), **never written by clients**. `{ ref ("T-ABC123"), channel: 'contact_form', topic,
+- `tickets/{id}` — support tickets from the contact form (`POST /api/engage` `CONTACT`) or logged by staff for an email, WhatsApp or
+  phone request (`CREATE_TICKET`: `channel` email | whatsapp | phone, `loggedBy`, `orderId` when the order number matched; no support
+  alert; `customerEmail` is `''` when only a phone is known, and a `reply` is then refused with 409); read by `tickets.read` roles
+  (`super_admin`, `admin`, `order_manager`, `support`), **never written by clients**. `{ ref ("T-ABC123"), channel: contact_form | email | whatsapp | phone, topic,
   subject, orderNumber?, customerName, customerEmail, customerPhone?, status: open | waiting | resolved, assignedTo (first staff to act),
   messages[{ at, by, direction: inbound | reply | note, text }] (max 100), createdAt, updatedAt }`. Staff change them through the admin
   actions `ADD_TICKET_MESSAGE` / `SET_TICKET_STATUS` (`tickets.write`, audited). A `reply` is emailed to the customer (outbox event

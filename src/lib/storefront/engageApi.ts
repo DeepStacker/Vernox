@@ -3,8 +3,9 @@
  * Review calls carry the signed-in customer's ID token; the contact and newsletter calls are public.
  */
 import { auth } from '@/lib/firebase';
+import { TICKET_TOPICS } from '@/types/tickets';
 
-export const CONTACT_TOPICS = ['Order help', 'Custom or bulk order', 'Product question', 'Something else'] as const;
+export const CONTACT_TOPICS = TICKET_TOPICS;
 
 export interface ReviewEligibility {
   eligible: boolean;

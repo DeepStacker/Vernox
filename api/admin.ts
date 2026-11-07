@@ -31,7 +31,7 @@ import { deleteReviewAndPhotos, syncPublicReviewPhotos } from './_lib/reviewPhot
 import { claimConsultation, proposalDraftSchema, saveProposalDraft, sendProposal } from './_lib/proposals';
 import { createRefund, refundCeilingPaise } from './_lib/refunds';
 import { decideReturn, markReturnReceived, returnPath } from './_lib/returns';
-import { addTicketMessage, setTicketStatus, ticketIdSchema, TICKET_STATUSES } from './_lib/tickets';
+import { addTicketMessage, createStaffTicket, setTicketStatus, staffTicketSchema, ticketIdSchema, TICKET_STATUSES } from './_lib/tickets';
 import { createShippingProvider } from './_lib/shipping';
 import { applyCourierStatus, cancelShipment, createShipment, getLabel, type ManualShipmentDetails } from './_lib/shipping/shipments';
 import type { PackageDetails } from './_lib/shipping/types';
@@ -288,6 +288,17 @@ const ACTIONS: Record<string, ActionDefinition> = {
   },
 
   // ---------- support tickets (permission tickets.write; reads are firestore.rules) ----------
+
+  CREATE_TICKET: {
+    method: 'POST',
+    permission: 'tickets.write',
+    async run(ctx) {
+      const p = parse(staffTicketSchema, ctx.params);
+      const created = await createStaffTicket(ctx.store, p, ctx.actor.email ?? ctx.actor.uid);
+      await recordAudit(ctx.store, audit(ctx, 'TICKET_CREATED', 'ticket', created.id, { channel: p.channel }));
+      return created;
+    },
+  },
 
   ADD_TICKET_MESSAGE: {
     method: 'POST',
