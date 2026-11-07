@@ -69,6 +69,9 @@ interface CourierCompany {
   freight_charge?: number | string;
   cod_charges?: number | string;
   etd?: string;
+  /** Delivery locality of the queried PIN, repeated on every courier entry. */
+  city?: string;
+  state?: string;
 }
 
 const finiteOrNull = (v: unknown): number | null => {
@@ -103,6 +106,17 @@ export function parseCourierRates(body: unknown, codOnly: boolean): CourierRate[
   return rates.sort((a, b) => Number(b.recommended) - Number(a.recommended) || cost(a) - cost(b));
 }
 
+const titleCase = (v: string) => v.toLowerCase().replace(/(^|[\s\-(])([a-z])/g, (_m, sep: string, ch: string) => sep + ch.toUpperCase());
+
+/** First non-empty trimmed string among the courier entries' `field` (Shiprocket repeats the delivery city/state on each). */
+function placeName(companies: CourierCompany[], field: 'city' | 'state'): string | null {
+  for (const c of companies) {
+    const v = typeof c[field] === 'string' ? c[field]!.trim() : '';
+    if (v) return titleCase(v);
+  }
+  return null;
+}
+
 /** Pure: interprets a /courier/serviceability response. */
 export function parseServiceability(body: unknown): ServiceabilityResult {
   const data = (body as { data?: { available_courier_companies?: CourierCompany[]; recommended_courier_company_id?: number } })?.data;
@@ -120,6 +134,8 @@ export function parseServiceability(body: unknown): ServiceabilityResult {
     codAvailable: companies.some(c => Number(c.cod) === 1),
     transitDays: days(recommended),
     courierName: recommended.courier_name ?? null,
+    city: placeName(companies, 'city'),
+    state: placeName(companies, 'state'),
   };
 }
 

@@ -91,6 +91,14 @@ The Shiprocket API token is cached server-only in `integrations/shiprocket`. Not
 the server-only `notifications_outbox`; logs record event and order id, never addresses or phone numbers. Only `RAZORPAY_KEY_ID` (returned as `keyId`) and the Firebase web config are public.
 Errors returned to clients never include provider responses or internal details; those are logged server-side.
 
+## Content-Security-Policy origins
+
+The repository sets no CSP header yet. If one is added (Vercel `headers` in `vercel.json`), the storefront needs: scripts from
+`cdn.razorpay.com` (Affordability Widget on product and cart pages, loaded lazily; `checkout.razorpay.com` for Checkout), connections to
+`api.razorpay.com` and `lumberjack.razorpay.com`, frames from `api.razorpay.com` and `checkout.razorpay.com`, and images/styles the
+widget injects (verify against the current widget in a browser, Razorpay does not publish a CSP list). Fonts are self-hosted
+(`/fonts`), so no Google Fonts origins are needed. `img-src` needs `data:` for Studio previews.
+
 ## Known gaps
 
 - Rules unit tests need the emulators: `npm run test:rules` runs `src/test/firestore.rules.test.ts` and `src/test/storage.rules.test.ts`

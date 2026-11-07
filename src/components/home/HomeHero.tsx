@@ -20,6 +20,8 @@ export function HomeHero() {
           <Picture
             {...SITE_IMAGES.livingRoom}
             priority
+            widths={[640, 960]}
+            sizes="(min-width: 1024px) 50vw, 100vw"
             alt="Laser-cut metal wall art above a sofa in a living room"
             className="hero-drift aspect-[4/3] w-full object-cover"
           />

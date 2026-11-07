@@ -40,6 +40,22 @@ npm is the only supported package manager (`package-lock.json` is the single loc
 ### Configuration
 Copy `.env.example` to `.env`. `VITE_SITE_URL` is the canonical public origin (default `https://vernox.in`); it feeds canonical and Open Graph URLs, `index.html` and the sitemap. Also update the `Sitemap:` line in `public/robots.txt` when the domain changes.
 
+### Fonts
+Cormorant Garamond, Plus Jakarta Sans and JetBrains Mono are self-hosted in `public/fonts/` (variable woff2, latin and latin-ext
+subsets from Google Fonts v21/v12/v24, declared in `src/index.css` with `font-display: swap`), so pages make no request to Google
+Fonts. All three are licensed under the SIL Open Font License 1.1 (free to self-host and redistribute; the licence texts are at
+https://github.com/google/fonts/tree/main/ofl/cormorantgaramond, `/plusjakartasans` and `/jetbrainsmono`). Nothing is preloaded: a
+font preload measured +0.1 to +0.5 s first paint on the throttled harness because it competes with the CSS and JS.
+
+### Storefront conveniences
+- **PIN fills city and state** (checkout, Account address, Admin > New order): `src/lib/pincode.ts` maps a PIN's prefix to its state
+  or UT (no service, works offline) and `GET /api/serviceability` adds the courier's city and state; fields are filled only when empty.
+- **Save for later** in the cart (`src/lib/cartLines.ts`): full cart lines kept in this browser's `localStorage` (not the wishlist,
+  which only stores product ids and could not keep size, finish or Studio designs).
+- **EMI message**: Razorpay Affordability Widget on product and cart pages (`src/components/shop/EmiWidget.tsx`), lazy, shown only
+  when `VITE_RAZORPAY_KEY_ID` is set.
+- **Hero image**: the home hero is served as AVIF/WebP at 640, 960 and 1200 px with `srcset` (`node scripts/optimize-images.mjs --responsive-only`).
+
 ### Performance check
 Measures cold loads of Home, Shop and a product page on a throttled mid-range phone (results and baseline: ROADMAP.md,
 "Performance and scale plan"). With the emulators running and seeded (`npm run emulators`, `npm run seed:local`):

@@ -179,7 +179,7 @@ rounded to the paisa, so `tax` equals the invoice's tax total exactly.
 
 Public; 30 requests/min per IP. `productId` is optional (`custom-bespoke` gives the custom lead time).
 `200`: `{ "success": true, "pincode", "serviceable", "codAvailable", "estimatedDispatchDays", "estimatedDeliveryDate": "YYYY-MM-DD" | null,
-"courierName": string | null }`. Dispatch days = product `leadTimeDays` (else `defaultLeadTimeDays`; custom pieces
+"courierName": string | null, "city": string | null, "state": string | null }`. `city` and `state` are the delivery locality as the courier (Shiprocket) names it, null when the courier gives none (manual provider, or answers cached before this field); the storefront uses them to prefill the address and falls back to its own PIN-prefix table (`src/lib/pincode.ts`). Dispatch days = product `leadTimeDays` (else `defaultLeadTimeDays`; custom pieces
 `customLeadTimeDays`); delivery date = today (IST) + dispatch + courier transit (Shiprocket estimate, else `manualTransitDays`).
 `codAvailable` is false for custom pieces. Errors: `400 VALIDATION_ERROR` (bad PIN), `429`, `502 SHIPPING_PROVIDER_ERROR`.
 Answers are cached per PIN for 12 h.

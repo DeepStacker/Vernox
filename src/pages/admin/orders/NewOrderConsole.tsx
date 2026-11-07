@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Copy, FileText, MessageCircle, Plus, Trash2 } from 'lucide-react';
 import { finishName } from '@/lib/catalog';
 import { INDIAN_STATES_AND_UTS } from '@/lib/checkout/validation';
+import { usePincodeAutofill } from '@/lib/shipping/usePincodeAutofill';
 import { useB2bInquiries } from '@/lib/data/b2b';
 import { downloadTaxDocument } from '@/lib/data/orderOps';
 import { useProducts } from '@/lib/data/products';
@@ -163,6 +164,8 @@ export function NewOrderConsole() {
   const handingOver = canHandover && handover;
   const productName = (id: string) => products.find(p => p.id === id)?.name ?? id;
   const setField = (key: keyof typeof EMPTY_CUSTOMER) => (value: string) => setCustomer(c => ({ ...c, [key]: value }));
+  // Typing the PIN fills an empty city/state (never overwrites typed values).
+  usePincodeAutofill(customer.pincode, customer, patch => setCustomer(c => ({ ...c, ...patch })));
   // Any change to what is ordered is a new order, not a retry of the last one.
   const quoteInput = useMemo(
     () => ({ items, couponCode: couponCode.trim() || undefined, customerEmail: customer.email.trim() || undefined, cod: paymentMethod === 'cod', handover: handingOver }),
@@ -342,6 +345,7 @@ export function NewOrderConsole() {
           {!handingOver && (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">{input('address', 'Delivery address *', { maxLength: 500 })}</div>
+              {input('pincode', 'PIN code *', { inputMode: 'numeric', maxLength: 6 })}
               {input('city', 'City *', { maxLength: 100 })}
               <div className="block text-sm font-medium"><label htmlFor="new-order-state">State / UT *</label>
                 <select id="new-order-state" value={customer.state} onChange={e => setField('state')(e.target.value)} className="field mt-1 font-normal">
@@ -349,7 +353,6 @@ export function NewOrderConsole() {
                   {INDIAN_STATES_AND_UTS.map(st => <option key={st} value={st}>{st}</option>)}
                 </select>
               </div>
-              {input('pincode', 'PIN code *', { inputMode: 'numeric', maxLength: 6 })}
             </div>
           )}
         </section>

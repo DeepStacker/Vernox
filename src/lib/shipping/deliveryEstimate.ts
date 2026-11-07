@@ -13,6 +13,9 @@ export interface DeliveryEstimate {
   /** YYYY-MM-DD (IST), or null when not serviceable. */
   estimatedDeliveryDate: string | null;
   courierName: string | null;
+  /** Delivery city and state from the courier's serviceability answer, when it has them (used to prefill addresses). */
+  city: string | null;
+  state: string | null;
 }
 
 export class DeliveryEstimateError extends Error {
@@ -58,6 +61,8 @@ export async function fetchDeliveryEstimate(pincode: string, productId?: string,
     estimatedDispatchDays: Number(body.estimatedDispatchDays ?? 0),
     estimatedDeliveryDate: typeof body.estimatedDeliveryDate === 'string' ? body.estimatedDeliveryDate : null,
     courierName: typeof body.courierName === 'string' ? body.courierName : null,
+    city: typeof body.city === 'string' && body.city ? body.city : null,
+    state: typeof body.state === 'string' && body.state ? body.state : null,
   };
 }
 

@@ -251,9 +251,22 @@ Results (same harness, interleaved runs; done 2026-11-07):
 - S4 done: the Trade enquiry posts to `/api/engage` (`TRADE_ENQUIRY`) instead of writing Firestore from the browser, so no guest page
   loads the Firestore SDK; it also gained the honeypot, a rate limit, a collision-free reference and a support-inbox alert, and
   `b2b_inquiries` no longer accepts client creates.
-- Next levers, by expected value: self-host the three
-  Google Fonts families (one less origin before text renders); a smaller hero variant (98 KB at 1200 px); prerendered HTML for Home
-  and product pages if LCP must drop below ~2 s.
+- Next lever: prerendered HTML for Home and product pages if LCP must drop below ~2 s.
+- Storefront ease-of-use and speed pass (2026-11-07), measured with the same harness on a busy machine (load average 8 to 29, so
+  single runs swing by +-0.3 s; medians of 3 runs, interleaved, two rounds):
+  - PIN autofill (`src/lib/pincode.ts` prefix table with range overrides for Chandigarh/Mohali, Puducherry enclaves, Lakshadweep,
+    Roorkee, Daman/Diu; `/api/serviceability` now also returns the courier's `city` and `state`, unverified against the live
+    Shiprocket API because the field names come from its documented response). Checkout, Account and New order fill empty fields only.
+  - Save for later: separate `vernox-saved-for-later` list of full cart lines (a wishlist stores product ids only, so it could not
+    keep size, finish or Studio designs); localStorage for guests and signed-in users alike. Cross-device sync would need a
+    `savedForLater` document plus rules: not built.
+  - EMI widget: loaded after `load` + idle on product and cart only; renders nothing without `VITE_RAZORPAY_KEY_ID`.
+  - Self-hosted fonts: with a preload, first paint rose 1.6 to 1.8-2.3 s (Home) so the preload was dropped; without it first paint
+    equals the Google Fonts build (1.57-1.62 s vs 1.57-1.66 s) and the font requests fall from 4 (2 origins) to 3 (same origin).
+    LCP was not better: Home 2.45-2.52 s vs 2.24-2.38 s (baseline once hit 3.9 s from noise), Product 2.91-2.92 s vs 2.74-2.80 s, so it
+    is neutral to slightly worse here; kept for privacy, no third-party origin or CSP entry, and robustness, not for speed.
+  - Hero: 1200 px AVIF 67 KB (was WebP 101 KB), 960 px 47 KB, 640 px 25 KB with `srcset`; the harness phone (412 px at 2.6x) still
+    picks the 1200 px file, so Home LCP was within noise (2.35, 2.89 vs 2.61, 2.28 s). The saving is real bytes on slower/smaller phones.
 - Done: every `<label>` on `src/pages/Account.tsx` (sign-in, phone OTP, register, profile, address, password) is tied to its
   input with `htmlFor`/`id` and carries the matching `autoComplete` token, so screen readers, password managers and autofill work.
 
@@ -276,7 +289,7 @@ Results (same harness, interleaved runs; done 2026-11-07):
 - Light theme only (the old `.dark` block duplicated the light values). Legacy colour tokens remain as aliases for account, checkout and admin screens.
 - Built after this pass: contact form to support tickets, newsletter signup (list kept in Firestore, no ESP), and review submission by verified buyers (all through `POST /api/engage`).
   Product cards crossfade to `lifestyleImage` on hover when a product has one; the cart drawer settles with a soft spring (`--ease-spring-soft`); shop filter changes already re-run the staggered reveal.
-- Not built: EMI messaging, save-for-later, a welcome newsletter email and campaign sending (needs an ESP).
+- Done (2026-11-07): EMI message (Razorpay Affordability Widget), save-for-later and PIN autofill, see "Performance and scale plan". Not built: a welcome newsletter email and campaign sending (needs an ESP).
 - Done (2026-11-07): COD order confirmation. MSG91 OTP code at checkout when `MSG91_OTP_TEMPLATE_ID` is set (`api/_lib/codOtp.ts`, engage actions `COD_OTP_*`), automatic fallback otherwise: orders flagged `COD_UNVERIFIED` with a "Confirm by phone" prompt (Orders, Production) and the audited `CONFIRM_COD_ORDER`. Newsletter double opt-in: sign-ups are `pending` until the emailed link (`/newsletter/confirm`) is opened; export is confirmed-only; confirmation emails wait in the outbox while Resend is unset. Owner inputs: a DLT-approved MSG91 OTP template (`MSG91_OTP_TEMPLATE_ID`); live MSG91/Resend not yet exercised with real keys.
 - Done (2026-11-07): staff log email, WhatsApp and phone requests as tickets (`CREATE_TICKET`), linked to the order when the number
   matches; replies are emailed only when the ticket has an email. Done (2026-11-07): WhatsApp end to end by configuration only (Meta Cloud API): order updates as a third outbox channel with approved templates, inbound messages as tickets via `/api/whatsapp-webhook` (STOP / START opt-out), and "Send on WhatsApp" replies in the Support console within the 24-hour window. Setup: DEPLOYMENT.md 4d. Not verified against live Meta (needs keys and approved templates).

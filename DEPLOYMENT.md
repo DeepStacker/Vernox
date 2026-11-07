@@ -22,6 +22,10 @@ Required at build time (browser): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_D
 `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_APP_ID` (and `VITE_FIREBASE_MESSAGING_SENDER_ID`), set per environment in Vercel;
 `npm run build` fails without them. Locally put them in the gitignored `.env.local`.
 
+`VITE_RAZORPAY_KEY_ID` also drives the EMI / pay-in-instalments message (Razorpay Affordability Widget) on product and cart pages: enable
+it in the Razorpay Dashboard (Affordability > Others > Enable Widget; Owner, Admin or Manager role). It loads `cdn.razorpay.com` lazily
+after the page is idle; unset key or a blocked script shows nothing. If you add a CSP, allow that origin (SECURITY.md, "Content-Security-Policy origins").
+
 ## 2a. One-time setup
 1. `firebase deploy --only firestore,storage` (rules, indexes, and the storage rules for return, QC, review, catalogue, space and consultation photos) and configure TTL policies
    (DATABASE.md). `npm run seed` fills `settings/store` with placeholder business details, so invoices are specimens
