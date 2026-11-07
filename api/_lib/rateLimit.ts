@@ -35,6 +35,10 @@ export const RATE_LIMITS = {
   review: { scope: 'review', limit: 30, windowMs: 60_000 },
   // COD abuse: per mobile number and per email, independent of IP.
   codCheckoutPhone: { scope: 'cod_phone', limit: 3, windowMs: 3600_000 },
+  // COD OTP: sends per mobile number and per IP, code checks per IP (attempts per code are capped in codOtp.ts).
+  codOtpPhone: { scope: 'cod_otp_phone', limit: 5, windowMs: 3600_000 },
+  codOtpIp: { scope: 'cod_otp_ip', limit: 15, windowMs: 3600_000 },
+  codOtpVerifyIp: { scope: 'cod_otp_verify_ip', limit: 30, windowMs: 3600_000 },
   codCheckoutEmail: { scope: 'cod_email', limit: 3, windowMs: 3600_000 },
 } as const satisfies Record<string, RateLimitRule>;
 

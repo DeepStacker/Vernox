@@ -1,5 +1,5 @@
 /**
- * Client for POST /api/engage (API.md): contact form, trade enquiry, newsletter and review submission.
+ * Client for POST /api/engage (API.md): contact form, trade enquiry, newsletter (double opt-in), COD SMS code and review submission.
  * Review calls carry the signed-in customer's ID token; the other calls are public.
  */
 import { auth } from '@/lib/firebase';
@@ -69,6 +69,28 @@ export async function subscribeToNewsletter(email: string, website: string): Pro
 
 export async function unsubscribeFromNewsletter(emailHash: string, token: string): Promise<void> {
   await post('NEWSLETTER_UNSUBSCRIBE', { emailHash, token });
+}
+
+export async function confirmNewsletterSubscription(emailHash: string, token: string): Promise<void> {
+  await post('NEWSLETTER_CONFIRM', { emailHash, token });
+}
+
+/** Is an SMS code needed to place a COD order? False when the store has no OTP provider configured. */
+export async function fetchCodOtpStatus(): Promise<boolean> {
+  const body = await post('COD_OTP_STATUS', {});
+  return body.required === true;
+}
+
+/** Texts a code to a 10-digit mobile; resolves with the seconds until another code may be requested. */
+export async function sendCodOtp(phone: string): Promise<number> {
+  const body = await post('COD_OTP_SEND', { phone });
+  return typeof body.resendSeconds === 'number' ? body.resendSeconds : 30;
+}
+
+/** Exchanges the code for the single-use token that checkout-intent requires. */
+export async function verifyCodOtp(phone: string, code: string): Promise<string> {
+  const body = await post('COD_OTP_VERIFY', { phone, code });
+  return String(body.verificationToken);
 }
 
 export async function fetchReviewEligibility(productId: string): Promise<ReviewEligibility> {

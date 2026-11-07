@@ -52,7 +52,7 @@ export interface CodOrder {
 }
 
 export type CheckoutErrorCode =
-  | 'INSUFFICIENT_STOCK' | 'INVALID_ITEM' | 'INVALID_COUPON' | 'VALIDATION_ERROR' | 'COD_NOT_AVAILABLE'
+  | 'INSUFFICIENT_STOCK' | 'INVALID_ITEM' | 'INVALID_COUPON' | 'VALIDATION_ERROR' | 'COD_NOT_AVAILABLE' | 'COD_OTP_REQUIRED' | 'COD_OTP_INVALID'
   | 'RATE_LIMITED' | 'PAYMENT_PROVIDER_ERROR' | 'CONFIG_ERROR' | 'NETWORK_ERROR' | 'UNKNOWN';
 
 export class CheckoutError extends Error {
@@ -111,6 +111,8 @@ export async function createCheckoutIntent(params: {
   idempotencyKey: string;
   customer: CheckoutCustomer;
   paymentMethod?: PaymentMethod;
+  /** From the COD SMS code step (engageApi verifyCodOtp); only sent for cash on delivery. */
+  codVerificationToken?: string;
 }): Promise<CheckoutIntent | CodOrder> {
   const data = await postJson('/api/checkout-intent', {
     items: toCheckoutItems(params.items),
@@ -118,6 +120,7 @@ export async function createCheckoutIntent(params: {
     idempotencyKey: params.idempotencyKey,
     customer: params.customer,
     paymentMethod: params.paymentMethod ?? 'prepaid',
+    ...(params.paymentMethod === 'cod' && params.codVerificationToken ? { codVerificationToken: params.codVerificationToken } : {}),
   });
   // Responses from before COD carry no paymentMethod; they are prepaid.
   return (data.paymentMethod === 'cod' ? data : { ...data, paymentMethod: 'prepaid' }) as unknown as CheckoutIntent | CodOrder;

@@ -93,6 +93,7 @@ export interface StoreConfig {
   adminEmail?: string;
   /** Cash on delivery (display; the server enforces eligibility). */
   codEnabled?: boolean;
+  codOtpRequired?: boolean;
   codFee?: number;
   codMaxOrderValue?: number;
   returnWindowDays?: number;

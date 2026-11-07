@@ -146,6 +146,9 @@ export interface OrderDoc {
   parentOrderId?: string | null;
   replacementOrderId?: string | null;
   flags: string[];
+  /** Set by CONFIRM_COD_ORDER when staff phoned the customer (clears the COD_UNVERIFIED flag). */
+  codConfirmedAt?: number;
+  codConfirmedBy?: string;
   /** Fulfilment paused (src/types/orderStatus.ts OrderHold); null or absent when not held. */
   hold?: OrderHold | null;
   /**

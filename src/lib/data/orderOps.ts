@@ -94,6 +94,7 @@ export const opsApi = {
   createRefund: (input: { orderId: string; amount: number; reason: string; method: RefundMethod; reference?: string; idempotencyKey: string }) =>
     adminAction<{ refund: RefundView }>('CREATE_REFUND', input),
   setOrderHold: (orderId: string, kind: HoldKind, reason: string) => adminAction('SET_ORDER_HOLD', { orderId, kind, reason }),
+  confirmCodOrder: (orderId: string, note?: string) => adminAction('CONFIRM_COD_ORDER', { orderId, note }),
   releaseOrderHold: (orderId: string) => adminAction('RELEASE_ORDER_HOLD', { orderId }),
   issueServiceInvoice: (orderId: string) => adminAction<{ invoiceNumber?: string }>('ISSUE_SERVICE_INVOICE', { orderId }),
   getOrderDocuments: (orderId: string) => adminAction<OrderDocuments>('GET_ORDER_DOCUMENTS', { orderId }),

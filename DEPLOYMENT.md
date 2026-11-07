@@ -46,6 +46,14 @@ Required at build time (browser): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_D
    MSG91 Flow templates with variables `##var1##` (first name), `##var2##` (order number), `##var3##` (amount / AWB / status, ≤ 30
    characters), then set `MSG91_AUTH_KEY` and `MSG91_TEMPLATES` (JSON event → template id). WhatsApp is not wired yet (the
    `NotificationChannel` interface in `api/_lib/notifications/types.ts` is the extension point).
+   **COD confirmation code (optional):** in MSG91 > OTP create an OTP template and get it DLT-approved (OTP templates need DLT
+   registration like any Indian SMS; body must contain the `##OTP##` variable), then set `MSG91_AUTH_KEY` and `MSG91_OTP_TEMPLATE_ID`.
+   The checkout then asks for a 6-digit code before a COD order (Settings > Cash on delivery > "Confirm COD orders with an SMS
+   code", default on). Without these two variables COD still works: orders are flagged `COD_UNVERIFIED` and staff see a "Confirm by
+   phone" prompt (Orders and Production) with a one-tap Confirmed / Cancel. **Newsletter double opt-in:** sign-ups receive a
+   confirmation email through the same outbox, so Resend must be configured; until it is, the confirmation emails wait in the outbox
+   (status `pending`) and are sent automatically once `RESEND_API_KEY` and `NOTIFY_FROM_EMAIL` are set. Add a Firestore TTL policy on
+   `cod_otps.purgeAt`.
 5. `npm run grant-super-admin -- owner@example.com` to create the first staff account; manage others with `SET_STAFF_ROLE`.
 
 Local development: use Razorpay **test** keys and either real Firebase credentials or the emulators

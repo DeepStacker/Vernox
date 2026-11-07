@@ -23,7 +23,7 @@ Shape: `StoreSettingsDoc` in `src/types/settings.ts`; parsing and defaults: `api
 fields; `npm run seed` writes the same defaults). **Public document: never store secrets here.**
 `gstRatePercent` (goods, default 5), `shippingFee` (₹, default 150), `freeShippingThreshold` (₹, free when subtotal ≥ it, default 1,499),
 `customPieces: { [finishId]: { label, setupFee (₹), ratePerCm2 (₹), minimum (₹) } }` merged over the built-in defaults,
-`codEnabled`, `codFee` (₹), `codMaxOrderValue` (₹), `codMaxOpenOrdersPerPhone`, `returnWindowDays`, `defaultLeadTimeDays`,
+`codEnabled`, `codOtpRequired` (default true; SMS code before COD, effective only when MSG91 OTP is configured), `codFee` (₹), `codMaxOrderValue` (₹), `codMaxOpenOrdersPerPhone`, `returnWindowDays`, `defaultLeadTimeDays`,
 `customLeadTimeDays`, `manualTransitDays`, `defaultHsnCode`,
 `consultation: { enabled (default false), priceInr (default 999, before GST, ₹1–1,00,000), creditTowardsOrder (default true), creditValidityDays (default 60), turnaroundDays (default 3), sacCode (default 998391), gstRatePercent (default 18, the service rate, independent of the goods rate) }`,
 `seller: { legalName, tradeName, gstin, address, city, state, stateCode (2-digit GST code = GSTIN prefix), pincode, email, phone }`
@@ -165,7 +165,7 @@ Earlier collections:
 - `idempotency/{key}` — `{ orderId, requestHash, createdAt, expiresAt }`.
 - `webhook_events/{eventId}` — `{ event, outcome, orderId, razorpayOrderId, razorpayPaymentId, razorpayRefundId, amountPaise,
   receivedAt, expiresAt }`; outcome `unmatched` = needs reconciliation.
-- `rate_limits/{scope_hash_window}` — `{ count, scope, windowStart, expiresAt }`. Scopes include `contact` (5/h per IP), `newsletter` (10/h) and `review` (30/min).
+- `rate_limits/{scope_hash_window}` — `{ count, scope, windowStart, expiresAt }`. Scopes include `contact` (5/h per IP), `newsletter` (10/h), `review` (30/min) and the COD OTP limits `cod_otp_phone` (5/h), `cod_otp_ip` (15/h) and `cod_otp_verify_ip` (30/h).
 - `audit_logs/{id}` — `AuditLog` (`src/types/admin.ts`); readable by `super_admin`.
 - `staff/{uid}` — `StaffMember` mirror of the role claim; readable by the member and `staff.read` roles.
 
@@ -194,12 +194,22 @@ Earlier collections:
   `ticket_reply`, id `{ticketId}_ticket_reply_{messageIndex}`, email only) in the same transaction; a `note` is internal (answers given on
   WhatsApp or phone are recorded as notes). Creating a ticket also writes a `notifications_outbox/{ticketId}_support_ticket`
   alert to `settings/store.supportEmail` in the same transaction (skipped when that address is empty; the ticket is still saved).
-- `newsletter_subscribers/{sha256(email)}` — server-only (closed to clients; holds emails and tokens). `{ email, status: subscribed |
-  unsubscribed, source, consentAt, unsubscribedAt, unsubscribeToken, updatedAt }`. Signing up again is idempotent (a current subscriber is
-  unchanged); someone returning after unsubscribing gets a new `consentAt` and keeps the token. There is no email provider: export the list
-  with `npm run export:newsletter > subscribers.csv` (needs the Firebase service account; subscribed addresses only, with the unsubscribe
-  token and hash for building `/newsletter/unsubscribe?h=<hash>&t=<token>` links) and import it into whichever tool sends the campaign.
-  Re-export before each campaign so unsubscribes are honoured.
+- `newsletter_subscribers/{sha256(email)}` — server-only (closed to clients; holds emails and tokens). Double opt-in (DPDP consent
+  record): `{ email, status: pending | subscribed | unsubscribed, source, consentAt (when consent was asked), confirmedAt (when the
+  address owner clicked the emailed link), confirmedIpHash, confirmToken, confirmationSentAt, unsubscribedAt, unsubscribeToken,
+  updatedAt }`. Signing up creates a `pending` document and a `newsletter_confirm` outbox email
+  (`notifications_outbox/nl_{hash}_newsletter_confirm_{discriminator}`); the same answer is given for new, pending and confirmed
+  addresses, a pending address is re-mailed at most hourly, and a confirmed subscriber is unchanged. Documents from before double
+  opt-in have no `confirmedAt` and stay `subscribed` (a missing status counts as confirmed, `isDeliverableSubscriber`). Someone
+  returning after unsubscribing becomes `pending` again with a new `consentAt` and keeps the unsubscribe token. There is no email
+  provider: export the list with `npm run export:newsletter > subscribers.csv` (needs the Firebase service account; **confirmed
+  subscribers only**, pending and unsubscribed are left out; columns include `confirmed_at`, the unsubscribe token and hash for
+  building `/newsletter/unsubscribe?h=<hash>&t=<token>` links) and import it into whichever tool sends the campaign. Re-export before
+  each campaign so unsubscribes are honoured.
+- `cod_otps/{phone}` — server-only (`allow read, write: if false`). COD SMS confirmation: `{ codeHash (salted sha256, null once used or
+  locked), salt, expiresAt (5 min), attempts (max 5), sentAt (30 s resend cooldown), tokenHash (single-use verification token, 30 min),
+  tokenExpiresAt, updatedAt, purgeAt }`. Orders created without SMS confirmation carry `flags: ['COD_UNVERIFIED']` until
+  `CONFIRM_COD_ORDER` (then `codConfirmedAt`, `codConfirmedBy`).
 - `b2b_inquiries/{id}` — created only by `POST /api/engage` `TRADE_ENQUIRY` (`api/_lib/tradeEnquiry.ts`: contact fields, `projectType`,
   `volume`, `alloyPreference`, `timeline`, `notes`, `refId`, ISO `createdAt`, `status: 'pending_review'`), which also writes a
   `notifications_outbox/{id}_trade_enquiry` alert to the support inbox; no client create. Read and updated by `b2b.read` roles. The
@@ -214,5 +224,5 @@ Earlier collections:
 
 ## TTL policies (configure once in the console / gcloud)
 `rate_limits.expiresAt`, `idempotency.expiresAt`, `webhook_events.expiresAt`, `courier_events.expiresAt`,
-`serviceability_cache.expiresAt`. Never set TTLs on `invoices`, `credit_notes`, `counters` or `refunds` (statutory records:
+`serviceability_cache.expiresAt`, `cod_otps.purgeAt`. Never set TTLs on `invoices`, `credit_notes`, `counters` or `refunds` (statutory records:
 retain at least 72 months after the annual return).

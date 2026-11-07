@@ -6,7 +6,7 @@ import { MemoryStore } from './support/memoryStore';
 const FULL = {
   RAZORPAY_KEY_ID: 'rzp_live_abc', RAZORPAY_KEY_SECRET: 'secret-value-1', VITE_RAZORPAY_KEY_ID: 'rzp_live_abc', RAZORPAY_WEBHOOK_SECRET: 'whsec-2',
   SHIPROCKET_EMAIL: 'api@x.in', SHIPROCKET_PASSWORD: 'pw-3', SHIPROCKET_PICKUP_LOCATION: 'Primary', SHIPROCKET_WEBHOOK_TOKEN: 'tok-4',
-  RESEND_API_KEY: 're_5', NOTIFY_FROM_EMAIL: 'Vernox <o@x.in>', MSG91_AUTH_KEY: 'msg-6', MSG91_TEMPLATES: '{"shipped":"t1"}',
+  RESEND_API_KEY: 're_5', NOTIFY_FROM_EMAIL: 'Vernox <o@x.in>', MSG91_AUTH_KEY: 'msg-6', MSG91_TEMPLATES: '{"shipped":"t1"}', MSG91_OTP_TEMPLATE_ID: 'otp-8',
   CRON_SECRET: 'cron-7', VITE_SITE_URL: 'https://vernox.in', FIREBASE_SERVICE_ACCOUNT_BASE64: 'e30=',
 } as NodeJS.ProcessEnv;
 
@@ -15,7 +15,7 @@ describe('launch status', () => {
     const items = environmentItems(FULL);
     expect(items.every(i => i.ready)).toBe(true);
     const json = JSON.stringify(items);
-    for (const secret of ['secret-value-1', 'whsec-2', 'pw-3', 'tok-4', 're_5', 'msg-6', 'cron-7', 'e30=']) expect(json).not.toContain(secret);
+    for (const secret of ['secret-value-1', 'whsec-2', 'pw-3', 'tok-4', 're_5', 'msg-6', 'cron-7', 'e30=', 'otp-8']) expect(json).not.toContain(secret);
     expect(items.find(i => i.id === 'razorpay')?.detail).toBe('live mode');
   });
 
@@ -24,6 +24,7 @@ describe('launch status', () => {
     const byId = Object.fromEntries(items.map(i => [i.id, i]));
     expect(byId.razorpay).toMatchObject({ ready: false, required: true, detail: 'test mode: no real money is taken' });
     expect(byId.sms.ready).toBe(false);
+    expect(byId['cod-otp']).toMatchObject({ ready: false, required: false });
     expect(byId['site-url'].ready).toBe(false);
     expect(byId.shiprocket).toMatchObject({ ready: false, required: false });
   });

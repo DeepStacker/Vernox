@@ -7,6 +7,7 @@ import type { Order, Product } from '@/types/store';
 import { StatusBadge } from '../shared/badges';
 import { isCustomItem } from '../shared/itemSpec';
 import { OrderItemSpecs } from '../shared/OrderItemSpecs';
+import { CodConfirmPanel } from '../shared/CodConfirmPanel';
 import { HoldPanel } from '../shared/HoldPanel';
 import { OrderNotesPanel } from '../shared/OrderNotesPanel';
 
@@ -47,6 +48,7 @@ export function JobDetail({ order, products, onClose }: { order: Order | null; p
               </DialogTitle>
               <DialogDescription>Placed {new Date(order.placedAt).toLocaleString('en-IN')}</DialogDescription>
             </DialogHeader>
+            <CodConfirmPanel order={order} canWrite={Boolean(permissions?.canUpdateOrders)} />
             <HoldPanel order={order} canWrite={Boolean(permissions?.canUpdateOrders)} />
             <OrderItemSpecs order={order} products={products} />
             <section aria-label="Production files" className="space-y-2">

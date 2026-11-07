@@ -17,6 +17,9 @@
  * support inbox. The ticket id is its `orderId`, `orderNumber` is the ticket reference, `email` is the
  * support address (settings/store `supportEmail`) and `note` carries the sender and subject. `ticket_reply`
  * emails a staff reply to the customer (discriminator = message index); `note` is the reply text.
+ * `newsletter_confirm` is the double opt-in email of a newsletter signup (api/_lib/newsletter.ts): `orderId` is
+ * `nl_<emailHash>` and `payload.newsletter` carries the link parts. It is the one event that is HELD, not
+ * skipped, while the email channel is unconfigured (HELD_WITHOUT_CHANNEL in deliver.ts), so the signup is not lost.
  * `trade_enquiry` is internal too: a Trade page enquiry (api/_lib/tradeEnquiry.ts) alerts the same inbox,
  * with the enquiry id as `orderId` and its reference as `orderNumber`.
  */
@@ -37,6 +40,7 @@ export const NOTIFICATION_EVENTS = [
   'support_ticket',
   'ticket_reply',
   'trade_enquiry',
+  'newsletter_confirm',
 ] as const;
 
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
@@ -62,6 +66,8 @@ export interface NotificationPayload {
   creditCode?: string | null;
   creditPaise?: number;
   creditExpiresAt?: number | null;
+  /** newsletter_confirm: the confirmation link is `/newsletter/confirm?h=<emailHash>&t=<token>`. */
+  newsletter?: { emailHash: string; token: string };
 }
 
 export type ChannelName = 'email' | 'sms';
@@ -98,5 +104,7 @@ export interface RenderedMessage {
 /** One delivery channel. `send` throws on a failure worth retrying; returns 'skipped' when the channel cannot apply. */
 export interface NotificationChannel {
   readonly name: ChannelName;
+  /** False for the placeholder that stands in for an unconfigured provider. Absent means configured. */
+  readonly configured?: boolean;
   send(message: RenderedMessage, outbox: OutboxDoc): Promise<'sent' | 'skipped'>;
 }

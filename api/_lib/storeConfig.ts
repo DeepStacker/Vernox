@@ -61,6 +61,8 @@ export interface CodConfig {
   feePaise: number;
   maxOrderValuePaise: number;
   maxOpenOrdersPerPhone: number;
+  /** Ask for an SMS code before a COD order; takes effect only when MSG91 OTP is configured (api/_lib/codOtp.ts). */
+  otpRequired: boolean;
 }
 
 export interface FulfilmentConfig {
@@ -145,6 +147,7 @@ export function defaultStoreConfig(env: NodeJS.ProcessEnv = process.env): StoreC
       feePaise: rupeesToPaise(envNumber(env, 'STORE_COD_FEE_INR', 49)),
       maxOrderValuePaise: rupeesToPaise(envNumber(env, 'STORE_COD_MAX_ORDER_VALUE_INR', 10000)),
       maxOpenOrdersPerPhone: Math.floor(envNumber(env, 'STORE_COD_MAX_OPEN_ORDERS_PER_PHONE', 2)),
+      otpRequired: true,
     },
     fulfilment: {
       defaultLeadTimeDays: Math.floor(envNumber(env, 'STORE_DEFAULT_LEAD_TIME_DAYS', 3)),
@@ -197,6 +200,10 @@ export function mergeStoreConfig(defaults: StoreConfig, doc: DocData | null): St
   if (doc.codEnabled !== undefined) {
     if (typeof doc.codEnabled === 'boolean') config.cod.enabled = doc.codEnabled;
     else warn('codEnabled');
+  }
+  if (doc.codOtpRequired !== undefined) {
+    if (typeof doc.codOtpRequired === 'boolean') config.cod.otpRequired = doc.codOtpRequired;
+    else warn('codOtpRequired');
   }
   if (doc.codFee !== undefined) {
     if (isNonNegativeFinite(doc.codFee)) config.cod.feePaise = rupeesToPaise(doc.codFee);
@@ -277,6 +284,7 @@ export function defaultSettingsDoc(config: StoreConfig = defaultStoreConfig()): 
     codFee: paiseToRupees(config.cod.feePaise),
     codMaxOrderValue: paiseToRupees(config.cod.maxOrderValuePaise),
     codMaxOpenOrdersPerPhone: config.cod.maxOpenOrdersPerPhone,
+    codOtpRequired: config.cod.otpRequired,
     returnWindowDays: config.fulfilment.returnWindowDays,
     defaultLeadTimeDays: config.fulfilment.defaultLeadTimeDays,
     customLeadTimeDays: config.fulfilment.customLeadTimeDays,

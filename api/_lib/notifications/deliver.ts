@@ -11,7 +11,15 @@
 import type { DocStore } from '../store';
 import { OUTBOX_COLLECTION } from './outbox';
 import { renderNotification } from './templates';
-import type { ChannelName, ChannelState, NotificationChannel, OutboxDoc } from './types';
+import type { ChannelName, ChannelState, NotificationChannel, NotificationEvent, OutboxDoc } from './types';
+
+/**
+ * Events that must not be dropped while their channel is unconfigured: the customer asked for them and gets
+ * nothing otherwise (a newsletter signup stays pending until the email arrives). They stay `pending`, are
+ * re-checked every HOLD_RECHECK_MS without counting an attempt, and go out as soon as the provider is set.
+ */
+export const HELD_WITHOUT_CHANNEL: Partial<Record<NotificationEvent, ChannelName>> = { newsletter_confirm: 'email' };
+const HOLD_RECHECK_MS = 30 * 60_000;
 
 export const MAX_ATTEMPTS = 8;
 const BATCH_SIZE = 50;
@@ -42,6 +50,11 @@ export interface DeliveryRunResult {
 }
 
 export async function deliverOne(store: DocStore, doc: OutboxDoc, channels: NotificationChannel[], now: number) {
+  const held = HELD_WITHOUT_CHANNEL[doc.event];
+  if (held && doc.channels[held] === 'pending' && !channels.some(c => c.name === held && c.configured !== false)) {
+    await store.update(`${OUTBOX_COLLECTION}/${doc.id}`, { status: 'pending', nextAttemptAt: now + HOLD_RECHECK_MS, leaseUntil: 0, updatedAt: now });
+    return 'pending' as const;
+  }
   const message = renderNotification(doc.event, doc.payload);
   const states: Record<ChannelName, ChannelState> = { ...doc.channels };
   const errors: string[] = [];

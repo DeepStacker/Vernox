@@ -68,7 +68,9 @@ and no development payment bypasses — use Razorpay test keys locally.
   `INVALID_ITEM`, never a default stock.
 - Idempotency keys are claimed transactionally with the order (`idempotency/{key}`), bound to a hash of the request.
 - COD abuse: 3 COD checkouts per hour per mobile number and per email, at most `codMaxOpenOrdersPerPhone` undelivered COD orders
-  per number, `codMaxOrderValue` cap; no OTP yet (needs DLT-registered SMS) — see `api/_lib/cod.ts`.
+  per number, `codMaxOrderValue` cap; an SMS one-time code (hashed, 5-minute expiry, 5 attempts, 30 s resend cooldown, per-phone and
+  per-IP limits, single-use verification token) when MSG91 OTP is configured, otherwise the order is flagged `COD_UNVERIFIED` for a
+  confirmation call — see `api/_lib/codOtp.ts`.
 - New endpoints validate input with zod and are rate-limited per IP: serviceability 30/min, invoice 20/min, order-cancel and
   return-request 10/min.
 - Return photos: Cloud Storage `returns/{orderId}/…`, writable only by the order owner (uid or verified order email), images ≤ 5 MB,

@@ -35,7 +35,8 @@ describe('business settings form', () => {
     d.codFee = '49';
     const patch = toStorePatch(d);
     expect(patch.seller?.gstin).toBe('29ABCDE1234F1Z5');
-    expect(patch).toMatchObject({ codEnabled: true, codFee: 49, supportEmail: '' });
+    expect(patch).toMatchObject({ codEnabled: true, codOtpRequired: true, codFee: 49, supportEmail: '' });
+    expect(draftFromConfig({ codOtpRequired: false } as never).codOtpRequired).toBe(false);
     expect(patch).not.toHaveProperty('returnWindowDays');
   });
 
