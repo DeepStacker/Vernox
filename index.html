@@ -9,6 +9,10 @@
     <meta name="theme-color" content="#F4F2EE" />
     <link rel="icon" type="image/png" href="/favicon.png" />
 
+    <!-- Start the storefront's data (src/lib/data/publicCatalog.ts) with the HTML instead of after the app has
+         loaded. Same URL, mode and credentials as the app's fetch, so the browser reuses this response. -->
+    <link rel="preload" href="/api/catalog" as="fetch" crossorigin="anonymous" fetchpriority="low" />
+
     <!-- Fonts: Cormorant Garamond (display serif), Plus Jakarta Sans (UI/body), JetBrains Mono (technical specs) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

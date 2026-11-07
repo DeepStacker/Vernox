@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { WallPreview, type WallComposition } from '@/components/wall-preview';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Segmented, Field } from '@/components/admin/AdminUi';
-import { useCatalog } from '@/lib/catalogContext';
+import { useProducts } from '@/lib/data/products';
 import { listProjects } from '@/lib/projectStorage';
 import { newId, wallIsPreviewable } from '@/lib/spaces/spaceModel';
 import { usePhotoUrl } from '@/lib/spaces/usePhotoUrl';
@@ -36,7 +36,7 @@ async function loadCustomDesign(json: string): Promise<CustomDesign> {
 
 /** One proposal piece: choose a catalogue product or a studio design, then place it on a customer wall photo. */
 export function PieceDialog({ open, consultation, onClose, onAdd }: Props) {
-  const { products } = useCatalog();
+  const { data: products = [] } = useProducts();
   const walls = useMemo(() => consultation.walls.filter(wallIsPreviewable), [consultation.walls]);
   const [wallId, setWallId] = useState(walls[0]?.id ?? '');
   const wall = walls.find(w => w.id === wallId) ?? walls[0];

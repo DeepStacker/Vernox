@@ -1,24 +1,14 @@
 /** Products and categories: public reads, claim-gated admin writes (enforced by Firestore rules). */
 import { useQuery } from '@tanstack/react-query';
 import { collection, deleteDoc, doc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firestoreDb';
 import type { CategoryDoc, Product } from '@/types/store';
 import { logAudit } from './adminApi';
+import { toCategory, toProduct } from './catalogMappers';
 import { stripUndefined, useOptimisticMutation } from './optimistic';
 
 export const PRODUCTS_KEY = ['products'] as const;
 export const CATEGORIES_KEY = ['categories'] as const;
-
-function toProduct(id: string, raw: Record<string, unknown>): Product {
-  const p = raw as Partial<Product>;
-  return {
-    ...(p as Product),
-    id,
-    finishes: Array.isArray(p.finishes) ? p.finishes : [],
-    sizes: Array.isArray(p.sizes) ? p.sizes : [],
-    stock: typeof p.stock === 'number' ? p.stock : 0,
-  };
-}
 
 export async function fetchProducts(): Promise<Product[]> {
   const snap = await getDocs(collection(db, 'products'));
@@ -27,7 +17,7 @@ export async function fetchProducts(): Promise<Product[]> {
 
 export async function fetchCategories(): Promise<CategoryDoc[]> {
   const snap = await getDocs(collection(db, 'categories'));
-  return snap.docs.map(d => ({ ...(d.data() as CategoryDoc), id: d.id as CategoryDoc['id'] }));
+  return snap.docs.map(d => toCategory(d.id, d.data()));
 }
 
 export function useProducts() {

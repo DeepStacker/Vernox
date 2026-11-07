@@ -3,7 +3,7 @@ import { addDoc, collection } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { Building2, Gift, PenTool, Ruler } from 'lucide-react';
 import { ContentPage } from '@/components/shop/ContentPage';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firestoreDb';
 import { useSeo } from '@/lib/seo';
 import { isEmail } from '@/lib/storefront/contact';
 

@@ -1,6 +1,5 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, connectAuthEmulator } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
 // Per-environment web config (staging and production are separate projects). These values are public
 // identifiers, not secrets; access is enforced by firestore.rules and storage.rules. vite.config.ts fails
@@ -22,13 +21,11 @@ if (!firebaseConfig.projectId) {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-export const db = getFirestore(app);
 
 // Local emulators (`npm run dev:local`). Vite only substitutes the literal `import.meta.env.X`
 // form, so keep these reads plain (no optional chaining) or the flag is silently undefined.
 if (useEmulator) {
   const host = import.meta.env.VITE_FIREBASE_EMULATOR_HOST || '127.0.0.1';
   // Ports match firebase.json "emulators".
-  connectFirestoreEmulator(db, host, 8085);
   connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
 }

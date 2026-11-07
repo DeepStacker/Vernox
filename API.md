@@ -319,6 +319,16 @@ One function for the storefront's engagement writes (the deployment is near its 
   `SET_TICKET_STATUS { ticketId, status: open \| waiting \| resolved }` (permission `tickets.write`, audited). A `reply` on a ticket
   without an email returns 409 (answer on the customer's channel and log a `note`).
 
+## Public catalogue
+
+`GET /api/catalog` returns the storefront's public data as one JSON document
+`{ version, generatedAt, products[], categories[], topics[], store, homepage, reviews[] }` (api/_lib/publicCatalog.ts). Documents keep
+their Firestore fields plus `id`; Timestamps become epoch milliseconds. `store` is `settings/store` without `adminEmail`; `reviews` are
+the 500 newest published reviews with public fields only (no `userId`, `orderId` or `photoPaths`).
+`Cache-Control: public, max-age=60, s-maxage=60, stale-while-revalidate=600`: the CDN serves it, so Firestore sees about one rebuild per
+minute per region. Shoppers therefore see catalogue and settings edits within about a minute; admin screens read Firestore directly.
+`index.html` preloads it at low priority. Errors use the standard error body; only `GET`/`HEAD` are allowed.
+
 ## Link previews and sitemap
 
 ### `GET /api/seo?kind=product&slug=...` and `GET /api/seo?kind=sitemap`

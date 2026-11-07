@@ -40,9 +40,19 @@ npm is the only supported package manager (`package-lock.json` is the single loc
 ### Configuration
 Copy `.env.example` to `.env`. `VITE_SITE_URL` is the canonical public origin (default `https://vernox.in`); it feeds canonical and Open Graph URLs, `index.html` and the sitemap. Also update the `Sitemap:` line in `public/robots.txt` when the domain changes.
 
+### Performance check
+Measures cold loads of Home, Shop and a product page on a throttled mid-range phone (results and baseline: ROADMAP.md,
+"Performance and scale plan"). With the emulators running and seeded (`npm run emulators`, `npm run seed:local`):
+0. Once: `npx playwright install chromium` (or set `CHROMIUM_PATH` to an installed Chromium).
+1. `VITE_USE_FIREBASE_EMULATOR=true npx vite build --outDir /tmp/vernox-perf`
+2. API: `FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_PROJECT_ID=vernox-1b5d5 npx tsx server/index.ts`
+3. `node scripts/perf/serve.mjs /tmp/vernox-perf` then `RUNS=5 node scripts/perf/measure.mjs`
+Compare builds in interleaved runs on the same machine load; single runs vary by a few hundred milliseconds.
+
 ### Building for Production
 1. Run `npm run build` (needs the `VITE_FIREBASE_*` variables, see `.env.example`). `/sitemap.xml` and the link-preview head of
-   `/product/:slug` are served live by `api/seo.ts` from the products in Firestore, so new products need no rebuild.
+   `/product/:slug` are served live by `api/seo.ts` from the products in Firestore, so new products need no rebuild. The storefront
+   reads its catalogue from `GET /api/catalog` (CDN-cached for 60 s), so product and settings edits show to shoppers within a minute.
 2. The production-ready files will be in the `dist` directory.
 
 ### Images

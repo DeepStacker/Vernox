@@ -4,7 +4,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { collection, doc, getDocs, limit, query, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firestoreDb';
 import { logAudit } from './adminApi';
 import { useOptimisticMutation } from './optimistic';
 

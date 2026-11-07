@@ -1,12 +1,12 @@
 /**
  * Design consultation data access (browser). Reads go straight to Firestore under firestore.rules
  * (customers: their own; designers and admins: all); every change goes through the API, which owns
- * the workflow: /api/consultation for customers, /api/admin for staff.
+ * the workflow: /api/consultation for customers, /api/admin for staff. Firestore loads on first read
+ * (appFirestore): the cart and checkout use this module for every visitor, guests included.
  */
 import { useQuery } from '@tanstack/react-query';
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
+import { appFirestore } from '@/lib/appFirestore';
 import { postJson, openRazorpay, verifyPayment, type CheckoutIntent } from '@/lib/checkout/checkoutApi';
-import { db } from '@/lib/firebase';
 import { adminAction } from '@/lib/data/adminApi';
 import type { ConsultationDoc, ProposalDraft, ProposalItem } from '@/types/consultation';
 
@@ -26,6 +26,7 @@ export function useMyConsultations(uid: string | undefined) {
     enabled: !!uid,
     staleTime: 30_000,
     queryFn: async () => {
+      const { db, collection, getDocs, query, where } = await appFirestore();
       const snap = await getDocs(query(collection(db, 'consultations'), where('userId', '==', uid)));
       return snap.docs.map(d => normalizeConsultation(d.id, d.data())).sort((a, b) => b.createdAt - a.createdAt);
     },
@@ -39,6 +40,7 @@ export function useConsultation(id: string | undefined, enabled = true) {
     staleTime: 10_000,
     retry: false, // a consultation that is not yours reads as permission-denied; show that at once
     queryFn: async () => {
+      const { db, doc, getDoc } = await appFirestore();
       const snap = await getDoc(doc(db, 'consultations', id!));
       return snap.exists() ? normalizeConsultation(snap.id, snap.data()) : null;
     },
@@ -53,6 +55,7 @@ export function useAdminConsultations(enabled: boolean) {
     staleTime: 15_000,
     refetchInterval: 60_000,
     queryFn: async () => {
+      const { db, collection, getDocs, limit, orderBy, query } = await appFirestore();
       const snap = await getDocs(query(collection(db, 'consultations'), orderBy('createdAt', 'desc'), limit(200)));
       return snap.docs.map(d => normalizeConsultation(d.id, d.data()));
     },
@@ -65,6 +68,7 @@ export function useProposalDraft(id: string | undefined) {
     enabled: !!id,
     staleTime: 0,
     queryFn: async () => {
+      const { db, doc, getDoc } = await appFirestore();
       const snap = await getDoc(doc(db, 'consultations', id!, 'private', 'draft'));
       return snap.exists() ? (snap.data() as unknown as ProposalDraft) : null;
     },

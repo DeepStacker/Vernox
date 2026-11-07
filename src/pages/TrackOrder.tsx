@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/shop/PageHeader';
 import { OrderDetails } from '@/components/shop/OrderDetails';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { lookupOrder } from '@/lib/data/orderLookup';
-import { fetchPublicOrderStatus } from '@/lib/data/orders';
+import { fetchPublicOrderStatus } from '@/lib/data/orderModel';
 import { useSeo } from '@/lib/seo';
 import { safeSession } from '@/lib/safeStorage';
 import type { PublicOrderSummary } from '@/types/store';

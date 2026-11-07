@@ -2,7 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { CUSTOMER_CANCELLABLE_STATUSES } from '@/types/orderStatus';
 import type { Order, PublicOrderSummary } from '@/types/store';
-import { fetchPublicOrderStatus } from './orders';
+import { fetchPublicOrderStatus } from './orderModel';
 
 /**
  * Summary of an order already loaded from Firestore (the Account order list). Same shape as the

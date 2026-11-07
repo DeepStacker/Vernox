@@ -129,7 +129,10 @@ describe.skipIf(!emulator)('firestore.rules', () => {
   it('reviews: no client create (the API verifies the purchase); moderation by moderators only', async () => {
     const alice = as('alice');
     await assertFails(setDoc(doc(alice, 'reviews/r2'), { userId: 'alice', status: 'pending', rating: 4, comment: 'Lovely' }));
-    await assertSucceeds(getDoc(doc(guest(), 'reviews/r1')));
+    // Published reviews reach shoppers through /api/catalog without the author's ids; the document itself is private.
+    await assertFails(getDoc(doc(guest(), 'reviews/r1')));
+    await assertFails(getDoc(doc(alice, 'reviews/r1')));
+    await assertSucceeds(getDoc(doc(as('bob'), 'reviews/r1')));
     await assertFails(updateDoc(doc(alice, 'reviews/r1'), { status: 'archived' }));
     await assertSucceeds(updateDoc(doc(as('sup', { role: 'support' }), 'reviews/r1'), { status: 'archived' }));
   });

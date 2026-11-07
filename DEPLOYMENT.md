@@ -27,7 +27,8 @@ Required at build time (browser): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_D
    `RAZORPAY_WEBHOOK_SECRET` and events `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`.
 4. Vercel Cron runs `/api/cron/release-reservations` every 5 minutes and `/api/cron/send-notifications` every 2 minutes
    (`vercel.json`). **Vercel plan: Pro (decided 2026-11-06).** Hobby is for non-commercial use only, sub-daily crons need Pro, and the API is
-   16 serverless functions (Hobby allows 12; `api/engage.ts` serves contact, newsletter and reviews; `api/seo.ts` link previews and the sitemap). The Docker image
+   17 serverless functions (Hobby allows 12; `api/engage.ts` serves contact, newsletter and reviews; `api/seo.ts` link previews and the sitemap;
+   `api/catalog.ts` the CDN-cached storefront data). The Docker image
    (`server/index.ts` routes every endpoint) is the fallback host.
 4c. **Support alerts:** set `supportEmail` in Settings so new contact-form tickets alert that inbox (needs the Resend email channel); without it, or while it is the seeded placeholder, tickets are still saved and visible in Support > Tickets. The newsletter list is exported with `npm run export:newsletter` (see DATABASE.md).
 4a. **Shiprocket:** create an API user (Settings → API → Configure) and set `SHIPROCKET_EMAIL` / `SHIPROCKET_PASSWORD`; set

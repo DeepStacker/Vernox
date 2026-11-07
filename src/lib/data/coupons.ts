@@ -1,7 +1,7 @@
 /** Coupons (admin only). Reads are staff-gated by rules; writes go through the audited admin API. */
 import { useQuery } from '@tanstack/react-query';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firestoreDb';
 import type { Coupon, CouponUsage } from '@/types/coupon';
 import { adminAction } from './adminApi';
 import { stripUndefined, useOptimisticMutation } from './optimistic';

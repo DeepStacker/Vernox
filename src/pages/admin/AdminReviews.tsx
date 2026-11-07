@@ -6,7 +6,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { useCatalog } from '@/lib/catalogContext';
+import { useProducts } from '@/lib/data/products';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { useAllReviews, useReviewMutations } from '@/lib/data/reviews';
 import { ReviewPhotoStrip } from '@/components/shop/ReviewPhotoStrip';
@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { AtelierSelect } from '@/components/ui/select';
 
 export function AdminReviews() {
-  const { products } = useCatalog();
+  const { data: products = [] } = useProducts();
   const { permissions } = useAuth();
   const { data: reviews = [], isLoading, error: loadError } = useAllReviews(Boolean(permissions?.canModerateReviews));
   const { saveReview, deleteReview: removeReview } = useReviewMutations();

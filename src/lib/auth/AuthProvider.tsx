@@ -8,8 +8,8 @@ import {
   GoogleAuthProvider, createUserWithEmailAndPassword, getIdTokenResult, onAuthStateChanged,
   signInWithEmailAndPassword, signInWithPopup, signOut as firebaseSignOut, type User,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { auth, db, googleProvider } from '@/lib/firebase';
+import { appFirestore } from '@/lib/appFirestore';
+import { auth, googleProvider } from '@/lib/firebase';
 import type { CustomerAccount } from '@/types/store';
 import { ROLE_PERMISSIONS, isStaffRole, type RolePermissions, type StaffRole } from './permissions';
 
@@ -51,7 +51,10 @@ async function readStaffRole(user: User): Promise<StaffRole | null> {
   return isStaffRole(role) ? role : null;
 }
 
+// Profiles live in Firestore, which loads only once someone is signed in (appFirestore), so guests'
+// first page load never carries the Firestore SDK.
 async function loadProfile(user: User): Promise<CustomerAccount> {
+  const { db, doc, getDoc, setDoc } = await appFirestore();
   const ref = doc(db, 'users', user.uid);
   const snap = await getDoc(ref);
   if (snap.exists()) return { ...(snap.data() as CustomerAccount), uid: user.uid, email: user.email ?? '' };
@@ -109,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const email = input.email.trim().toLowerCase();
     const cred = await createUserWithEmailAndPassword(auth, email, input.password);
     const { password: _password, ...rest } = input;
+    const { db, doc, setDoc } = await appFirestore();
     const stored: CustomerAccount = { ...rest, email, country: input.country || 'India', isGoogleUser: false };
     await setDoc(doc(db, 'users', cred.user.uid), JSON.parse(JSON.stringify(stored)));
     setProfile({ ...stored, uid: cred.user.uid });
@@ -122,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const current = auth.currentUser;
     if (!current) throw new Error('You are signed out.');
     const { uid: _uid, email: _email, ...writable } = updates;
+    const { db, doc, updateDoc } = await appFirestore();
     await updateDoc(doc(db, 'users', current.uid), JSON.parse(JSON.stringify(writable)));
     setProfile(prev => (prev ? { ...prev, ...writable } : prev));
   }, []);

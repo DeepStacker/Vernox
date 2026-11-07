@@ -139,7 +139,9 @@ service cloud.firestore {
     // ---------- reviews ----------
 
     match /reviews/{reviewId} {
-      allow read: if resource.data.status == 'published' || canModerateReviews()
+      // No public read: a review document holds the author's uid, order id and private upload paths.
+      // Shoppers get published reviews, reduced to public fields, from GET /api/catalog.
+      allow read: if canModerateReviews()
         || (signedIn() && resource.data.userId == request.auth.uid);
       // Submissions go through POST /api/engage (SUBMIT_REVIEW), which verifies a delivered purchase.
       allow create: if false;

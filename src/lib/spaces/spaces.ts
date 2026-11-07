@@ -5,7 +5,7 @@
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { collection, deleteDoc, doc, getDocs, orderBy, query, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firestoreDb';
 import { stripUndefined } from '@/lib/data/optimistic';
 import type { SpaceDoc, SpaceWall } from '@/types/consultation';
 import { deleteImage, uploadImage } from './photoStorage';

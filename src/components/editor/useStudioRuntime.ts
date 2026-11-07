@@ -6,7 +6,7 @@
  *  - crash-safe autosave
  */
 import { useEffect, useMemo, useRef } from 'react';
-import { useStoreConfig } from '@/lib/data/settings';
+import { usePublicCatalog } from '@/lib/data/publicCatalog';
 import {
   CUSTOM_PIECE_LIMITS,
   DEFAULT_CUSTOM_LEAD_TIME_DAYS,
@@ -38,7 +38,7 @@ export interface StudioRuntimeContext extends StudioContext {
 }
 
 export function useStudioContext(): StudioRuntimeContext {
-  const { data } = useStoreConfig();
+  const data = usePublicCatalog().data?.storeConfig;
   const raw = data as (typeof data & StudioSettingsFields) | undefined;
   return useMemo(() => {
     const lead = raw?.customLeadTimeDays;

@@ -101,6 +101,10 @@ export default defineConfig(({ command, mode }) => {
               if (/@firebase\/storage|firebase\/storage/.test(id)) {
                 return 'vendor-firebase-storage';
               }
+              // Firestore is loaded on demand (firestoreDb.ts / appFirestore.ts): guests browse from /api/catalog.
+              if (/@firebase\/(firestore|webchannel-wrapper)|firebase\/firestore/.test(id)) {
+                return 'vendor-firebase-firestore';
+              }
               if (id.includes('firebase')) {
                 return 'vendor-firebase';
               }

@@ -2,7 +2,7 @@
  * Customer-side calls for the post-purchase APIs (API.md: order-status, order-cancel, return-request, invoice).
  * Access mirrors the server: a signed-in owner sends a bearer token; guests identify the order by its email.
  */
-import { fetchPublicOrderStatus } from '@/lib/data/orders';
+import { fetchPublicOrderStatus } from '@/lib/data/orderModel';
 import { appStorage } from '@/lib/appStorage';
 import { auth } from '@/lib/firebase';
 

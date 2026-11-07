@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Order } from '@/types/store';
 
-vi.mock('@/lib/firebase', () => ({ auth: { currentUser: null }, db: {}, app: {} }));
+vi.mock('@/lib/firebase', () => ({ auth: { currentUser: null }, app: {} }));
+vi.mock('@/lib/firestoreDb', () => ({ db: {} }));
 
 const { parsePublicOrder, normalizeOrder } = await import('../orders');
 const { toPublicSummary } = await import('../orderLookup');

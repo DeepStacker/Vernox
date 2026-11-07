@@ -206,7 +206,53 @@ Known limits: one order takes at most 50 lines and 700,000 design characters (`s
 large batch is added in several rounds (the screen says how many did not fit); too-long text is flagged, not shrunk;
 previews are the flat metal shape, not the wall preview.
 
-## Still needed from the owner
+## Performance and scale plan (2026-11-07)
+
+Measured, not assumed. Harness: production build served gzip-compressed, cold load at Lighthouse mobile settings (4x CPU, 150 ms RTT,
+1.6 Mbps), median of 3, local emulators (so real Firestore latency from India comes on top).
+
+| Baseline | First paint | LCP | Content ready | JS (gzip) | Firestore calls from the browser |
+|---|---|---|---|---|---|
+| Home | 2.1 s | 3.2 s | 2.9 s | 326 KB | 2 |
+| Shop | 2.1 s | 3.4 s | 3.4 s | 327 KB | 4 |
+| Product | 2.1 s | 2.9 s | 3.9 s | 344 KB | 4 |
+
+Findings:
+1. Every visitor's browser reads the whole `products` and `categories` collections, up to 500 published reviews, `settings/store`,
+   `settings/homepage` and `topics` from Firestore. Billed reads grow as catalogue size × visitors, and every visit waits for the
+   Firestore connection.
+2. The Firebase SDK (auth + Firestore, 177 KB gzip) is on the critical path of every page: `src/lib/firebase.ts` creates Firestore
+   eagerly and the storefront data layer imports it. First paint waits for ~330 KB of JS; a common mobile budget is ~170 KB.
+
+Plan, in order (each step is measured against the table above and keeps behaviour):
+- **S1 Cached public catalogue.** `GET /api/catalog` builds the public storefront data on the server (products, categories,
+  public settings, homepage, topics, published reviews) and Vercel's CDN caches it (`s-maxage=60, stale-while-revalidate`).
+  Firestore reads become about one rebuild per minute per CDN region instead of one set per visit, and traffic spikes are served
+  from the CDN. Admin screens keep reading Firestore directly, so staff see their own saves at once; shoppers see catalogue edits
+  within a minute.
+- **S2 Firestore off the storefront's critical path.** Load the Firestore SDK lazily (like `appStorage()`), so the storefront entry
+  carries only what first paint needs; account, orders, wishlist and admin load it on demand.
+- **S3 Re-measure, then decide** on the next lever (deferring Auth start-up, image priority, route prefetch) from the new numbers.
+
+Results (same harness, interleaved runs; done 2026-11-07):
+
+| After S1-S3 | First paint | LCP | Content ready | JS (gzip) | Firestore calls from the browser |
+|---|---|---|---|---|---|
+| Home | 1.6 s | 2.2 s | 2.4 s | 189 KB | 0 |
+| Shop | 1.6 s | 2.1 s | 2.4 s | 190 KB | 0 |
+| Product | 1.6 s | 2.6 s | 2.4 s | 207 KB | 0 |
+
+- S1 done: `GET /api/catalog` (API.md). Guests make no Firestore reads; published reviews no longer expose the author's uid, order id or
+  private upload paths (firestore.rules closes the public read).
+- S2 done: Firestore has its own chunk (174 KB gzip) loaded only by signed-in and staff screens (`firestoreDb.ts`, `appFirestore.ts`);
+  first-load JS fell from ~330 KB to ~190 KB. Pure mapping moved to `catalogMappers.ts` and `orderModel.ts` so guest pages stay SDK-free.
+- S3 tried and measured: preloading `/api/catalog` at low priority (kept: content 0.3 s sooner, Home LCP 3.1 → 2.2 s, first paint
+  +0.15 s); preloading the hero image (dropped: delayed first paint 0.4 s on a JS-rendered page for no consistent LCP gain).
+- Next levers, by expected value: Trade enquiry form through the API (it alone still loads Firestore for guests); self-host the three
+  Google Fonts families (one less origin before text renders); a smaller hero variant (98 KB at 1200 px); prerendered HTML for Home
+  and product pages if LCP must drop below ~2 s.
+
+
 
 - Firebase projects for staging and production, created in `asia-south1` (Mumbai), plus a service account for the server.
 - A Vercel Pro team (Hobby does not allow commercial use); the API runs in `bom1`.

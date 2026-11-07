@@ -6,7 +6,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firestoreDb';
 import { adminAction } from './adminApi';
 import { TICKET_CHANNELS, TICKET_STATUSES, type StaffTicketChannel, type TicketChannel, type TicketStatus, type TicketTopic } from '@/types/tickets';
 import { useOptimisticMutation } from './optimistic';

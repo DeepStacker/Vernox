@@ -165,9 +165,12 @@ Earlier collections:
 - `staff/{uid}` — `StaffMember` mirror of the role claim; readable by the member and `staff.read` roles.
 
 ### Client collections
+- Storefront reads of `products`, `categories`, `topics`, `settings/store` (without `adminEmail`), `settings/homepage` and published
+  `reviews` go through `GET /api/catalog` (CDN-cached, API.md), not the browser SDK; admin screens read them live from Firestore.
 - `users/{uid}` — owner read/write; `role`/`isAdmin` cannot be set by clients (roles are claims). Readable by `customers.read`.
 - `wishlists/{uid}` — owner only.
-- `reviews/{id}` — public read when `status == 'published'` (authors also read their own); **no client create**: customers submit through
+- `reviews/{id}` — **no public read** (the document holds the author's uid, order id and private upload paths): moderators and the
+  author read it; shoppers get published reviews reduced to public fields from `GET /api/catalog`. **No client create**: customers submit through
   `POST /api/engage` `SUBMIT_REVIEW`, which needs a Delivered order containing the product (matched by `userId`, or by the verified account
   email for guest checkouts) and writes `{ id: rv_<hash(uid:productId)>, productId, userId, orderId, customerName ("Asha R."), location?,
   rating, comment, verified: true, status: 'pending', placedAt, createdAt, updatedAt }`. One review per customer and product (the id is
