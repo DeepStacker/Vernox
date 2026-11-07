@@ -103,7 +103,7 @@ track-order page; no corporate/bulk page; strict, vague returns; contradictory f
      (Resend email, MSG91 SMS) with cron delivery; customer cancellation, staff refunds with webhook reconciliation, returns and
      replacements; one shared order state machine (`src/types/orderStatus.ts`).
    - Remaining: wire `DeliveryEstimate` into the PDP (storefront agent); customer UI for cancel / return / invoice download on
-     Account and Track Order; staff UIs for the new admin actions (Phase 3 consoles); WhatsApp channel; COD OTP confirmation;
+     Account and Track Order; staff UIs for the new admin actions (Phase 3 consoles); WhatsApp channel;
      storage-rules tests; real catalogue and prices; owner inputs below.
 3. **Operations consoles:** production queue with real DXF, QC/packing, shipping, finance,
    support, B2B, with an enforced order state machine.
@@ -276,7 +276,8 @@ Results (same harness, interleaved runs; done 2026-11-07):
 - Light theme only (the old `.dark` block duplicated the light values). Legacy colour tokens remain as aliases for account, checkout and admin screens.
 - Built after this pass: contact form to support tickets, newsletter signup (list kept in Firestore, no ESP), and review submission by verified buyers (all through `POST /api/engage`).
   Product cards crossfade to `lifestyleImage` on hover when a product has one; the cart drawer settles with a soft spring (`--ease-spring-soft`); shop filter changes already re-run the staggered reveal.
-- Not built: EMI messaging, save-for-later, a welcome or double opt-in newsletter email and campaign sending (needs an ESP).
+- Not built: EMI messaging, save-for-later, a welcome newsletter email and campaign sending (needs an ESP).
+- Done (2026-11-07): COD order confirmation. MSG91 OTP code at checkout when `MSG91_OTP_TEMPLATE_ID` is set (`api/_lib/codOtp.ts`, engage actions `COD_OTP_*`), automatic fallback otherwise: orders flagged `COD_UNVERIFIED` with a "Confirm by phone" prompt (Orders, Production) and the audited `CONFIRM_COD_ORDER`. Newsletter double opt-in: sign-ups are `pending` until the emailed link (`/newsletter/confirm`) is opened; export is confirmed-only; confirmation emails wait in the outbox while Resend is unset. Owner inputs: a DLT-approved MSG91 OTP template (`MSG91_OTP_TEMPLATE_ID`); live MSG91/Resend not yet exercised with real keys.
 - Done (2026-11-07): staff log email, WhatsApp and phone requests as tickets (`CREATE_TICKET`), linked to the order when the number
   matches; replies are emailed only when the ticket has an email. Automatic WhatsApp intake needs a WhatsApp Business API provider.
 

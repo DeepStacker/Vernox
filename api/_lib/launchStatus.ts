@@ -78,6 +78,12 @@ export function environmentItems(env: NodeJS.ProcessEnv = process.env): LaunchIt
       help: `SMS updates. Indian SMS needs DLT-registered templates: register them, create MSG91 Flows, then set MSG91_AUTH_KEY and MSG91_TEMPLATES (JSON of event to template id, see .env.example) in ${vercel}.`,
     },
     {
+      id: 'cod-otp', group: 'messages', required: false,
+      label: 'COD confirmation SMS code (MSG91 OTP)',
+      ready: set(env, 'MSG91_AUTH_KEY', 'MSG91_OTP_TEMPLATE_ID'),
+      help: `Asks the customer for a one-time code before a cash on delivery order, which cuts fake COD orders and returns. Needs a DLT-registered OTP template: create it in MSG91 > OTP, then set MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID in ${vercel}. Until then COD orders are flagged "Confirm by phone" for your team. Switch it off any time in Settings > Cash on delivery.`,
+    },
+    {
       id: 'cron', group: 'platform', required: true,
       label: 'Scheduled jobs secret',
       ready: set(env, 'CRON_SECRET'),

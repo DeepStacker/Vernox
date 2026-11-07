@@ -163,6 +163,16 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     await assertFails(setDoc(doc(as('s', { role: 'super_admin' }), 'tickets/t2'), { status: 'open' }));
   });
 
+  it('COD OTP documents hold hashed codes and verification tokens: closed to every client', async () => {
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'cod_otps/9876543210'), { codeHash: 'h', tokenHash: null });
+    });
+    for (const ctx of [guest(), as('alice'), as('boss', { role: 'super_admin' })]) {
+      await assertFails(getDoc(doc(ctx, 'cod_otps/9876543210')));
+      await assertFails(setDoc(doc(ctx, 'cod_otps/9123456780'), { codeHash: 'x' }));
+    }
+  });
+
   it('newsletter subscribers hold emails and tokens: closed to every client', async () => {
     await env.withSecurityRulesDisabled(async ctx => {
       await setDoc(doc(ctx.firestore(), 'newsletter_subscribers/h1'), { email: 'a@b.in', unsubscribeToken: 't' });

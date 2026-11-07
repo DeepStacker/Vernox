@@ -93,6 +93,13 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
           <input type="checkbox" checked={draft.codEnabled} onChange={e => set('codEnabled', e.target.checked)} className="h-5 w-5 accent-primary" />
           <span className="font-semibold">Offer cash on delivery</span>
         </label>
+        <label className="flex min-h-11 items-start gap-3 text-sm sm:col-span-2">
+          <input type="checkbox" checked={draft.codOtpRequired} onChange={e => set('codOtpRequired', e.target.checked)} className="mt-0.5 h-5 w-5 accent-primary" />
+          <span>
+            <span className="font-semibold">Confirm COD orders with an SMS code</span>
+            <span className="block text-muted-foreground">Customers must enter a one-time code sent to their mobile. Works once MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID are set (see Launch setup); until then COD orders are flagged for you to confirm by phone.</span>
+          </span>
+        </label>
         <Field label="COD fee (₹)" error={errors.codFee}><input inputMode="decimal" value={draft.codFee} onChange={e => set('codFee', e.target.value)} className="field font-mono" /></Field>
         <Field label="Largest COD order (₹)" error={errors.codMaxOrderValue}><input inputMode="decimal" value={draft.codMaxOrderValue} onChange={e => set('codMaxOrderValue', e.target.value)} className="field font-mono" /></Field>
       </Section>

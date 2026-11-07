@@ -33,6 +33,7 @@ import {
 import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/AdminUi';
 import { StatusBadge } from './shared/badges';
+import { CodConfirmPanel } from './shared/CodConfirmPanel';
 import { HoldPanel } from './shared/HoldPanel';
 
 export interface AdminOrdersProps {
@@ -609,6 +610,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
               
+              <CodConfirmPanel order={orders.find(o => o.id === inspectingOrder.id) ?? inspectingOrder} canWrite={canEdit} />
               <HoldPanel order={orders.find(o => o.id === inspectingOrder.id) ?? inspectingOrder} canWrite={canEdit} />
 
               {/* Status update: only transitions the state machine allows for this role */}

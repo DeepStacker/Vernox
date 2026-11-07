@@ -78,6 +78,8 @@ export interface StoreSettingsDoc {
   codFee: number;
   codMaxOrderValue: number;
   codMaxOpenOrdersPerPhone: number;
+  /** Ask for an SMS code before a COD order (default true); only effective once MSG91 OTP is configured. */
+  codOtpRequired: boolean;
   returnWindowDays: number;
   defaultLeadTimeDays: number;
   customLeadTimeDays: number;

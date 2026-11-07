@@ -4,8 +4,8 @@
  *
  * State model: a COD order is created directly as `Confirmed_COD` with its stock
  * committed (not held) and its coupon redeemed — there is no payment step to wait
- * for. No OTP confirmation yet (Indian SMS OTP needs DLT registration); abuse is
- * bounded instead by:
+ * for. The mobile number is confirmed by SMS code when MSG91 OTP is configured (codOtp.ts);
+ * otherwise the order is flagged COD_UNVERIFIED for a staff call. Abuse is also bounded by:
  *  - a per-mobile and per-email rate limit on COD checkouts (RATE_LIMITS.codCheckout*);
  *  - at most `codMaxOpenOrdersPerPhone` undelivered COD orders per mobile number;
  *  - `codMaxOrderValue` on the order total.

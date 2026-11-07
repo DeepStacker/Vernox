@@ -25,7 +25,7 @@ export function NewsletterForm() {
     }
   };
 
-  if (state === 'done') return <p role="status" className="text-sm">Thank you. You are on the list.</p>;
+  if (state === 'done') return <p role="status" className="text-sm">Almost done: we have emailed you a link. Open it to confirm your subscription.</p>;
   return (
     <form onSubmit={e => void submit(e)} aria-label="Newsletter" className="space-y-2">
       <p className="eyebrow font-sans">Stay in the loop</p>

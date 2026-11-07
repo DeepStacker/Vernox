@@ -1,7 +1,7 @@
 // @vitest-environment node
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { emailHash } from '../../api/_lib/newsletter';
+import { emailHash, type SubscriberDoc } from '../../api/_lib/newsletter';
 import { reviewId } from '../../api/_lib/reviewSubmission';
 import { OUTBOX_COLLECTION } from '../../api/_lib/notifications/outbox';
 import { PLACEHOLDER_CONTACT } from '../types/settings';
@@ -156,43 +156,84 @@ describe('CONTACT', () => {
   });
 });
 
-describe('newsletter', () => {
+describe('newsletter double opt-in', () => {
   const subscribeBody = { action: 'NEWSLETTER_SUBSCRIBE', email: ' Reader@Example.com ', source: 'footer', website: '' };
   const hash = emailHash('reader@example.com');
+  const doc = () => store.read(`newsletter_subscribers/${hash}`)! as unknown as SubscriberDoc;
+  const outbox = () => store.collection(OUTBOX_COLLECTION).map(e => e.data as unknown as OutboxDoc);
 
-  it('stores consent, source and a token keyed by the email hash, and never returns the token', async () => {
+  it('stores a pending subscriber, queues one confirmation email and never returns a token', async () => {
     const res = await call(subscribeBody);
     expect(res.body).toEqual({ success: true });
-    const doc = store.read(`newsletter_subscribers/${hash}`)!;
-    expect(doc).toMatchObject({ email: 'reader@example.com', status: 'subscribed', source: 'footer' });
-    expect(typeof doc.consentAt).toBe('number');
-    expect(doc.unsubscribeToken).toMatch(/^[0-9a-f]{48}$/);
+    expect(doc()).toMatchObject({ email: 'reader@example.com', status: 'pending', source: 'footer', confirmedAt: null });
+    expect(doc().unsubscribeToken).toMatch(/^[0-9a-f]{48}$/);
+    expect(doc().confirmToken).toMatch(/^[0-9a-f]{48}$/);
+    const [mail] = outbox();
+    expect(mail).toMatchObject({ event: 'newsletter_confirm', channels: { email: 'pending', sms: 'skipped' } });
+    const rendered = renderNotification(mail.event, mail.payload, { VITE_SITE_URL: 'https://vernox.in' } as NodeJS.ProcessEnv);
+    expect(rendered.text).toContain(`https://vernox.in/newsletter/confirm?h=${hash}&t=${doc().confirmToken}`);
+    expect(rendered.subject).toBe('Please confirm your Vernox subscription');
   });
 
-  it('is idempotent: a repeat keeps the original consent record', async () => {
+  it('gives the same answer for a pending address and sends at most one confirmation an hour', async () => {
     await call(subscribeBody);
-    const first = store.read(`newsletter_subscribers/${hash}`)!;
-    await call({ ...subscribeBody, source: 'checkout' });
-    expect(store.read(`newsletter_subscribers/${hash}`)).toEqual(first);
-    expect(store.collection('newsletter_subscribers')).toHaveLength(1);
+    const first = doc();
+    expect((await call(subscribeBody)).body).toEqual({ success: true });
+    expect(doc()).toEqual(first);
+    expect(outbox()).toHaveLength(1);
   });
 
-  it('unsubscribes with the token, idempotently, and resubscribing keeps the same token', async () => {
+  it('confirms with the token, records consent evidence, and is idempotent', async () => {
     await call(subscribeBody);
-    const { unsubscribeToken } = store.read(`newsletter_subscribers/${hash}`)! as { unsubscribeToken: string };
+    const bad = { action: 'NEWSLETTER_CONFIRM', emailHash: hash, token: 'a'.repeat(48) };
+    expect((await call(bad)).status).toBe(404);
+    expect(doc().status).toBe('pending');
+
+    const confirm = { action: 'NEWSLETTER_CONFIRM', emailHash: hash, token: doc().confirmToken };
+    expect((await call(confirm)).status).toBe(200);
+    const confirmed = doc();
+    expect(confirmed).toMatchObject({ status: 'subscribed', source: 'footer' });
+    expect(typeof confirmed.confirmedAt).toBe('number');
+    expect(confirmed.confirmedIpHash).toMatch(/^[0-9a-f]{64}$/);
+    expect((await call(confirm)).status).toBe(200);
+    expect(doc().confirmedAt).toBe(confirmed.confirmedAt);
+
+    // A confirmed subscriber signing up again changes nothing and gets no second email.
+    expect((await call(subscribeBody)).body).toEqual({ success: true });
+    expect(outbox()).toHaveLength(1);
+  });
+
+  it('answers an unknown hash like a wrong token', async () => {
+    expect((await call({ action: 'NEWSLETTER_CONFIRM', emailHash: 'f'.repeat(64), token: 'a'.repeat(48) })).status).toBe(404);
+  });
+
+  it('keeps subscribers from before double opt-in subscribed (no confirmedAt needed)', async () => {
+    store.seed(`newsletter_subscribers/${hash}`, { email: 'reader@example.com', status: 'subscribed', source: 'footer', consentAt: 1, unsubscribedAt: null, unsubscribeToken: 't'.repeat(48), updatedAt: 1 });
+    await call(subscribeBody);
+    expect(doc().status).toBe('subscribed');
+    expect(outbox()).toHaveLength(0);
+  });
+
+  it('unsubscribes with the token, idempotently; a stale confirm link cannot resubscribe; signing up again starts over', async () => {
+    await call(subscribeBody);
+    const { unsubscribeToken, confirmToken } = doc();
     expect((await call({ action: 'NEWSLETTER_UNSUBSCRIBE', emailHash: hash, token: 'a'.repeat(48) })).status).toBe(404);
-    expect(store.read(`newsletter_subscribers/${hash}`)!.status).toBe('subscribed');
+    expect(doc().status).toBe('pending');
 
     const unsub = { action: 'NEWSLETTER_UNSUBSCRIBE', emailHash: hash, token: unsubscribeToken };
     expect((await call(unsub)).status).toBe(200);
     expect((await call(unsub)).status).toBe(200);
-    expect(store.read(`newsletter_subscribers/${hash}`)).toMatchObject({ status: 'unsubscribed' });
+    expect(doc().status).toBe('unsubscribed');
+    expect((await call({ action: 'NEWSLETTER_CONFIRM', emailHash: hash, token: confirmToken })).status).toBe(404);
+    expect(doc().status).toBe('unsubscribed');
 
     await call(subscribeBody);
-    expect(store.read(`newsletter_subscribers/${hash}`)).toMatchObject({ status: 'subscribed', unsubscribeToken, unsubscribedAt: null });
+    expect(doc()).toMatchObject({ status: 'pending', unsubscribeToken, unsubscribedAt: null });
+    expect(doc().confirmToken).not.toBe(confirmToken);
+    expect(outbox()).toHaveLength(2);
   });
 
-  it('answers an unknown hash like a wrong token', async () => {
+  it('answers an unknown unsubscribe hash like a wrong token', async () => {
     expect((await call({ action: 'NEWSLETTER_UNSUBSCRIBE', emailHash: 'f'.repeat(64), token: 'a'.repeat(48) })).status).toBe(404);
   });
 
@@ -200,6 +241,7 @@ describe('newsletter', () => {
     await call({ ...subscribeBody, website: 'x' });
     expect((await call({ ...subscribeBody, email: 'bad' })).status).toBe(400);
     expect(store.collection('newsletter_subscribers')).toHaveLength(0);
+    expect(outbox()).toHaveLength(0);
     limited = true;
     expect((await call(subscribeBody)).status).toBe(429);
   });

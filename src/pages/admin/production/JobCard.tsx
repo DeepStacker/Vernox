@@ -2,6 +2,7 @@ import { Printer, UserCheck } from 'lucide-react';
 import { ORDER_STATUS_LABELS, type OrderStatus } from '@/lib/orders/orderStateMachine';
 import { isAssignedTo, type SlaState } from '@/lib/orders/productionQueue';
 import type { Order } from '@/types/store';
+import { CodConfirmPanel } from '../shared/CodConfirmPanel';
 import { SlaBadge } from '../shared/badges';
 import { isCustomItem, itemSizeText } from '../shared/itemSpec';
 
@@ -42,6 +43,7 @@ export function JobCard({ order, sla, who, nextStage, canWrite, busy, onOpen, on
           ))}
         </ul>
       </button>
+      <CodConfirmPanel order={order} canWrite={canWrite} compact />
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span>{order.assignedTo ? (mine ? 'Assigned to you' : `Assigned: ${order.assignedTo}`) : 'Unassigned'}</span>
         <span>{sla.ageDays}d old</span>

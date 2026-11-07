@@ -15,6 +15,7 @@ import { STAFF_ROLES, isStaffRole, roleHasPermission, type Permission, type Staf
 import { auditInTransaction, buildAuditEntry, recordAudit } from './_lib/audit';
 import { requireStaff, type StaffUser } from './_lib/auth';
 import { cancelOrder } from './_lib/cancellation';
+import { COD_UNVERIFIED_FLAG } from './_lib/codOtp';
 import { normaliseCouponCode } from './_lib/coupons';
 import { ApiError, badRequest, sendError } from './_lib/errors';
 import { getAdminAuth, getPhotoStorage, getStore } from './_lib/firebaseAdmin';
@@ -235,6 +236,32 @@ const ACTIONS: Record<string, ActionDefinition> = {
         auditInTransaction(ctx.store, tx, audit(ctx, 'ORDER_STATUS_UPDATED', 'order', order.id, { from: order.status, to: p.status }));
       });
       return { orderId: p.orderId, status: p.status };
+    },
+  },
+
+  /**
+   * A COD order created without SMS confirmation carries the COD_UNVERIFIED flag until staff have phoned the
+   * customer (api/_lib/codOtp.ts). This records that they did; "customer unreachable" is CANCEL_ORDER.
+   */
+  CONFIRM_COD_ORDER: {
+    method: 'POST',
+    permission: 'orders.update_status',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: orderIdField, note: z.string().trim().max(300).optional() }), ctx.params);
+      const now = Date.now();
+      await ctx.store.runTransaction(async tx => {
+        const order = asOrder(await tx.get(orderPath(p.orderId)));
+        if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
+        if (!order.flags.includes(COD_UNVERIFIED_FLAG)) throw new ApiError(409, 'CONFLICT', 'This order does not need phone confirmation.');
+        tx.update(orderPath(order.id), {
+          flags: order.flags.filter(f => f !== COD_UNVERIFIED_FLAG),
+          codConfirmedAt: now,
+          codConfirmedBy: ctx.actor.email ?? ctx.actor.uid,
+          updatedAt: now,
+        });
+        auditInTransaction(ctx.store, tx, audit(ctx, 'COD_ORDER_CONFIRMED', 'order', order.id, { note: p.note ?? null }));
+      });
+      return { orderId: p.orderId };
     },
   },
 

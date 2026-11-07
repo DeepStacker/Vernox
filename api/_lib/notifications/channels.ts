@@ -84,6 +84,7 @@ export function createMsg91Channel(
 export function createLoggingChannel(name: ChannelName): NotificationChannel {
   return {
     name,
+    configured: false,
     async send(message: RenderedMessage, outbox: OutboxDoc) {
       // No PII in logs: event and order only.
       console.info(`[notifications] ${name} not configured; skipped ${outbox.event} for order ${outbox.orderId}`);

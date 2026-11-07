@@ -6,6 +6,7 @@ import { Phone, Tag, ShieldCheck, Truck } from 'lucide-react';
 import { SiteHeader } from '@/components/shop/SiteHeader';
 import { PageHeader } from '@/components/shop/PageHeader';
 import { SiteFooter } from '@/components/shop/SiteFooter';
+import { CodOtpStep, type CodOtpState } from '@/components/shop/CodOtpStep';
 import { ShapeThumb } from '@/components/shop/ShapeThumb';
 import { useCart } from '@/lib/cartContext';
 import { useCatalog } from '@/lib/catalogContext';
@@ -118,6 +119,11 @@ export default function Checkout() {
     if (codBlockedReason && paymentMethod === 'cod' && !delivery.isLoading) setPaymentMethod('prepaid');
   }, [codBlockedReason, paymentMethod, delivery.isLoading]);
   const codFee = storeConfig.codFee ?? 0;
+  // SMS confirmation of the mobile number for COD; `required` stays true until the step says otherwise.
+  const [codOtp, setCodOtp] = useState<CodOtpState>({ required: true, token: null });
+  const [codOtpEpoch, setCodOtpEpoch] = useState(0);
+  const codPhone = normalizeIndianMobile(form.phone);
+  const awaitingCodOtp = paymentMethod === 'cod' && codOtp.required && !codOtp.token;
 
   const [phase, setPhase] = useState<Phase>('details');
   const [intent, setIntent] = useState<CheckoutIntent | null>(null);
@@ -158,7 +164,9 @@ export default function Checkout() {
         case 'INSUFFICIENT_STOCK': return `Some items are no longer available in the requested quantity. ${err.message}`;
         case 'INVALID_ITEM': return `An item in your cart is no longer available. ${err.message}`;
         case 'INVALID_COUPON': return `Coupon problem: ${err.message}`;
-        case 'COD_NOT_AVAILABLE': return err.message;
+        case 'COD_NOT_AVAILABLE':
+        case 'COD_OTP_REQUIRED':
+        case 'COD_OTP_INVALID': return err.message;
         default: return err.message;
       }
     }
@@ -179,7 +187,7 @@ export default function Checkout() {
 
     setPhase('creating');
     try {
-      const created = await createCheckoutIntent({ items, couponCode, idempotencyKey: idempotencyKey.current, customer, paymentMethod });
+      const created = await createCheckoutIntent({ items, couponCode, idempotencyKey: idempotencyKey.current, customer, paymentMethod, codVerificationToken: codOtp.token ?? undefined });
       if (created.paymentMethod === 'cod') {
         // Confirmed at creation: there is no payment step.
         trackStoreEvent('purchase', { orderId: created.orderId, orderTotal: created.pricing.total });
@@ -197,6 +205,11 @@ export default function Checkout() {
       toast.error(describeError(err));
       if (err instanceof CheckoutError && err.code === 'INVALID_COUPON') cartRemoveCoupon();
       if (err instanceof CheckoutError && err.code === 'COD_NOT_AVAILABLE') setPaymentMethod('prepaid');
+      if (err instanceof CheckoutError && (err.code === 'COD_OTP_REQUIRED' || err.code === 'COD_OTP_INVALID')) {
+        // The code was used up or expired: ask for a fresh one.
+        setCodOtp({ required: true, token: null });
+        setCodOtpEpoch(n => n + 1);
+      }
     }
   };
 
@@ -334,12 +347,15 @@ export default function Checkout() {
                 </span>
               </span>
             </label>
+            {paymentMethod === 'cod' && !codBlockedReason && (
+              <CodOtpStep key={codOtpEpoch} phone={codPhone} onChange={setCodOtp} />
+            )}
           </fieldset>
 
           {!activeIntent ? (
             <button
               type="submit"
-              disabled={busy || items.length === 0}
+              disabled={busy || items.length === 0 || awaitingCodOtp}
               className="btn-primary w-full py-4"
             >
               {phase === 'creating'

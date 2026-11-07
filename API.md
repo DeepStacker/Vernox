@@ -144,6 +144,15 @@ undelivered COD orders. Extra rate limits: 3 COD checkouts per hour per mobile n
 The COD fee (`settings/store.codFee`) is its own line and is taxable at the goods' GST rate (composite supply), as is shipping.
 A COD order is created as `Confirmed_COD` with stock committed and its coupon redeemed; no Razorpay order is created.
 
+**Mobile confirmation (reduces fake COD orders).** When MSG91 OTP is configured (`MSG91_AUTH_KEY` + `MSG91_OTP_TEMPLATE_ID`) and
+`settings/store.codOtpRequired` is not `false` (default `true`), a customer COD request must carry
+`"codVerificationToken"` from `COD_OTP_VERIFY` (see `POST /api/engage`). Without a valid one the answer is `400 COD_OTP_REQUIRED`
+("Please confirm your mobile number with the code we send you ..."). The token is bound to the order's mobile number, valid 30 minutes and
+spent only when the order is created (a failure such as out-of-stock keeps it; repeating the same `idempotencyKey` returns the
+existing order without a token). When OTP is not configured or switched off, COD orders are created as before but carry the order flag
+`COD_UNVERIFIED`; staff phone the customer and clear it with `CONFIRM_COD_ORDER` (or cancel with `CANCEL_ORDER`). The flag never blocks
+the state machine. Staff-entered orders (`CREATE_STAFF_ORDER`) are not subject to either.
+
 `200` (COD): `{ "success": true, "orderId", "orderNumber", "paymentMethod": "cod",
 "pricing": { subtotal, discount, shipping, codFee, tax, total, items } }`. `pricing.codFee` is 0 for prepaid orders.
 
@@ -202,7 +211,10 @@ RTO DELIVERED / ACKNOWLEDGED → `RTO_Delivered`; anything else is recorded only
 ### `GET /api/cron/send-notifications`
 
 Vercel Cron, every 2 minutes, `Authorization: Bearer $CRON_SECRET`. Delivers up to 50 due outbox documents (plus expired leases)
-by email (Resend) and SMS (MSG91); backoff 1, 2, 4 … min (max 6 h), `dead` after 8 attempts.
+by email (Resend) and SMS (MSG91); backoff 1, 2, 4 … min (max 6 h), `dead` after 8 attempts. An event whose channel is not
+configured is normally `skipped` (the order is never blocked); `newsletter_confirm` is the exception (`HELD_WITHOUT_CHANNEL` in
+`deliver.ts`): while Resend is not configured it stays `pending`, is re-checked every 30 minutes without using up attempts, and
+is sent as soon as `RESEND_API_KEY` and `NOTIFY_FROM_EMAIL` are set.
 `200`: `{ success, scanned, sent, retrying, dead }`.
 
 ### New `/api/admin` actions
@@ -218,6 +230,7 @@ amounts in responses ending in `Paise` are paise. `orderId` is the Firestore ord
 | `BULK_SHIPMENT_DOCUMENTS` | POST | `orders.tracking` | `orderIds` (1 to 200) | `{ batches: [{ orderIds, labelUrl, manifestUrl, error }], skipped: [{ orderId, reason }] }`: one merged label PDF and one merged manifest PDF per chunk of 50 shipments; a failed chunk carries `error` and does not stop the others. Manual, unbooked and unknown orders are `skipped`. `400` when Shiprocket is not configured. Audited as `SHIPMENT_DOCUMENTS_BULK` |
 | `GET_LABEL` | GET | `orders.tracking` | `orderId` | `{ labelUrl, manifestUrl }` (null for manual shipments) |
 | `UPDATE_DELIVERY_STATUS` | POST | `orders.tracking` | `orderId, status: 'Shipped' \| 'Out_For_Delivery' \| 'Delivered' \| 'RTO_Initiated' \| 'RTO_Delivered', note? (≤ 200)` | `{ orderId, status }` — same path as the courier webhook; for manual shipments |
+| `CONFIRM_COD_ORDER` | POST | `orders.update_status` | `orderId, note? (≤300)` | `{ orderId }`; clears the `COD_UNVERIFIED` flag, stores `codConfirmedAt/By`, audit `COD_ORDER_CONFIRMED`. `409` when the order has no such flag. "Customer unreachable" is `CANCEL_ORDER` with `refund: false` |
 | `CANCEL_ORDER` | POST | `orders.update_status` (+ `orders.refund` when `refund` is true) | `orderId, reason (3–300), refund?: boolean = true` | `{ orderId, status: 'Cancelled', refund: RefundDoc \| null, refundError: string \| null }` |
 | `CREATE_REFUND` | POST | `orders.refund` | `orderId, amount (₹ > 0), reason (3–300), method?: 'razorpay' \| 'manual' = 'razorpay', reference? (4–80, required for manual: bank/UPI ref), idempotencyKey? ([A-Za-z0-9_-]{8,64})` | `{ refund: RefundDoc }` (`status` `pending` until Razorpay confirms, `processed` for manual) |
 | `GET_ORDER_DOCUMENTS` | GET | `orders.read` | `orderId` | `{ invoice: { id, number, issuedAt, supplyType, totals } \| null, creditNotes: [{ id, number, issuedAt, refundId, totals }], refunds: RefundDoc[], return: ReturnDoc \| null, refundablePaise, shipment }` |
@@ -345,8 +358,12 @@ One function for the storefront's engagement writes (the deployment is near its 
 |---|---|---|---|---|
 | `CONTACT` | none | `name, email, phone?, topic (Order help \| Custom or bulk order \| Product question \| Something else), orderNumber?, message (5–4000), website` | 5 / hour | `{ success: true, ref }`; creates `tickets/{id}` and queues a `support_ticket` alert |
 | `TRADE_ENQUIRY` | none | `name, email, company?, phone?, projectType, volume, alloyPreference, timeline, notes? (≤4000), website`; the choice lists are `src/types/trade.ts` | 5 / hour | `{ success: true, ref }` (`VNX-B2B-XXXXXX`); creates `b2b_inquiries/{id}` and queues a `trade_enquiry` alert to the support inbox |
-| `NEWSLETTER_SUBSCRIBE` | none | `email, source? (footer \| checkout \| account), website` | 10 / hour | `{ success: true }` (same answer for new and existing subscribers) |
+| `NEWSLETTER_SUBSCRIBE` | none | `email, source? (footer \| checkout \| account), website` | 10 / hour | `{ success: true }` (same answer for new, pending and confirmed addresses). A new or returning address becomes `pending` and a `newsletter_confirm` email with the link `/newsletter/confirm?h=<emailHash>&t=<token>` is queued in the outbox (at most one an hour per address); a confirmed subscriber changes nothing |
+| `NEWSLETTER_CONFIRM` | none | `emailHash, token` | 10 / hour | `{ success: true }` and the subscriber becomes `subscribed` (`confirmedAt`, hash of the IP stored as consent evidence); repeating it is fine; `404` for an unknown hash, a wrong token, or an address that has since unsubscribed |
 | `NEWSLETTER_UNSUBSCRIBE` | none | `emailHash, token` | 10 / hour | `{ success: true }`; `404` for an unknown hash or wrong token |
+| `COD_OTP_STATUS` | none | none | 30 / hour | `{ success: true, required, resendSeconds }`; `required` is true only when MSG91 OTP is configured and `codOtpRequired` is on |
+| `COD_OTP_SEND` | none | `phone` (10-digit Indian mobile) | 15 / hour per IP, 5 / hour per mobile number, 30 s between codes for one number (`429`) | `{ success: true, required: true, resendSeconds }`; `{ success: true, required: false }` and nothing sent when OTP is off. Texts a 6-digit code (MSG91 `POST /api/v5/otp`, DLT template `MSG91_OTP_TEMPLATE_ID`); only a salted hash is stored (`cod_otps/{phone}`), valid 5 minutes. `502` if MSG91 rejects it |
+| `COD_OTP_VERIFY` | none | `phone, code` | 30 / hour per IP | `{ success: true, verificationToken }` for `checkout-intent`; `400 COD_OTP_INVALID` with a friendly message for a wrong, expired or used code. 5 wrong attempts lock the code (request a new one) |
 | `REVIEW_STATUS` | Bearer ID token | `productId` | 30 / minute | `{ success: true, eligible, reason?: not_purchased \| already_reviewed, reviewStatus? }` |
 | `SUBMIT_REVIEW` | Bearer ID token | `productId, rating (1–5), comment (10–2000)` | 30 / minute | `{ success: true }`; `403` without a Delivered order containing the product, `409` if already reviewed |
 

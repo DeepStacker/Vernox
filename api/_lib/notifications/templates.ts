@@ -92,6 +92,18 @@ function copyFor(event: NotificationEvent, p: NotificationPayload, base: string)
         smsValue: 'reply sent',
         link: { label: 'Contact us', url: `${base}/contact` },
       };
+    case 'newsletter_confirm': {
+      const { emailHash, token } = p.newsletter ?? { emailHash: '', token: '' };
+      return {
+        subject: 'Please confirm your Vernox subscription',
+        lines: [
+          'Someone, hopefully you, asked to receive the Vernox newsletter at this address.',
+          'Confirm to start receiving occasional news about new pieces and offers. If it was not you, ignore this email and you will not be subscribed.',
+        ],
+        smsValue: 'confirm',
+        link: { label: 'Confirm my subscription', url: `${base}/newsletter/confirm?h=${encodeURIComponent(emailHash)}&t=${encodeURIComponent(token)}` },
+      };
+    }
     case 'in_production':
       return {
         subject: `Order ${p.orderNumber} is in production`,
@@ -183,8 +195,9 @@ export function renderNotification(event: NotificationEvent, payload: Notificati
   const copy = copyFor(event, payload, base);
   const firstName = payload.customerName.trim().split(/\s+/)[0] || 'there';
   const internal = event === 'support_ticket' || event === 'trade_enquiry';
-  const greeting = internal ? 'Hello team,' : `Hello ${firstName},`;
-  const reference = `${event === 'trade_enquiry' ? 'Enquiry' : internal || event === 'ticket_reply' ? 'Ticket' : 'Order'} ${payload.orderNumber}`;
+  const newsletter = event === 'newsletter_confirm';
+  const greeting = internal ? 'Hello team,' : newsletter ? 'Hello,' : `Hello ${firstName},`;
+  const reference = newsletter ? 'Vernox newsletter' : `${event === 'trade_enquiry' ? 'Enquiry' : internal || event === 'ticket_reply' ? 'Ticket' : 'Order'} ${payload.orderNumber}`;
   const sign = 'Vernox, made in India';
   const text = [greeting, '', ...copy.lines, ...(copy.link ? ['', `${copy.link.label}: ${copy.link.url}`] : []), '', reference, sign].join('\n');
   const html = [

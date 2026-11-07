@@ -25,6 +25,7 @@ export interface BusinessDraft {
   grievanceOfficerName: string;
   grievanceOfficerEmail: string;
   codEnabled: boolean;
+  codOtpRequired: boolean;
   codFee: string;
   codMaxOrderValue: string;
   defaultLeadTimeDays: string;
@@ -49,6 +50,7 @@ export function draftFromConfig(config: StoreConfig): BusinessDraft {
     grievanceOfficerName: str(config.grievanceOfficerName),
     grievanceOfficerEmail: str(config.grievanceOfficerEmail),
     codEnabled: config.codEnabled === true,
+    codOtpRequired: config.codOtpRequired !== false,
     codFee: str(config.codFee),
     codMaxOrderValue: str(config.codMaxOrderValue),
     defaultLeadTimeDays: str(config.defaultLeadTimeDays),
@@ -136,6 +138,7 @@ export function toStorePatch(d: BusinessDraft): Partial<StoreConfig> {
     grievanceOfficerName: d.grievanceOfficerName.trim(),
     grievanceOfficerEmail: d.grievanceOfficerEmail.trim(),
     codEnabled: d.codEnabled,
+    codOtpRequired: d.codOtpRequired,
     consultation: {
       enabled: d.consultation.enabled,
       priceInr: Number(d.consultation.priceInr),

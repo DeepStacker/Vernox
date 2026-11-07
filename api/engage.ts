@@ -7,6 +7,10 @@
  *                                                                                         -> b2b enquiry (public)
  *   NEWSLETTER_SUBSCRIBE   { email, source?, website }                                     -> subscriber (public)
  *   NEWSLETTER_UNSUBSCRIBE { emailHash, token }                                            -> unsubscribe link (public)
+ *   NEWSLETTER_CONFIRM     { emailHash, token }                                            -> double opt-in link (public)
+ *   COD_OTP_STATUS         {}                                                              -> { required } is an SMS code needed for COD? (public)
+ *   COD_OTP_SEND           { phone }                                                       -> texts a 6-digit code (public)
+ *   COD_OTP_VERIFY         { phone, code }                                                 -> { verificationToken } for checkout-intent (public)
  *   REVIEW_STATUS          { productId }                          -> may this customer review it? (signed in)
  *   SUBMIT_REVIEW          { productId, rating, comment, photoPaths? } -> pending review, needs a Delivered order (signed in)
  * `website` is a honeypot: a non-empty value is answered with success and nothing is stored.
@@ -17,13 +21,15 @@ import type { ZodType, ZodTypeDef } from 'zod';
 import { requireUser } from './_lib/auth';
 import { badRequest, sendError } from './_lib/errors';
 import { getAdminAuth, getPhotoStorage, getStore } from './_lib/firebaseAdmin';
-import { assertMethod, parseBody } from './_lib/http';
-import { subscribe, subscribeRequestSchema, unsubscribe, unsubscribeRequestSchema } from './_lib/newsletter';
-import { enforceRateLimit, RATE_LIMITS, type RateLimitRule } from './_lib/rateLimit';
+import { assertMethod, clientIp, parseBody } from './_lib/http';
+import { COD_OTP_RESEND_COOLDOWN_MS, codOtpEnabled, codOtpSendSchema, codOtpStatusSchema, codOtpVerifySchema, createOtpSender, sendCodOtp, verifyCodOtp } from './_lib/codOtp';
+import { confirmSubscription, confirmSubscriptionRequestSchema, subscribe, subscribeRequestSchema, unsubscribe, unsubscribeRequestSchema } from './_lib/newsletter';
+import { enforceRateLimit, enforceRateLimitKey, RATE_LIMITS, type RateLimitRule } from './_lib/rateLimit';
 import { reviewEligibility, reviewStatusRequestSchema, submitReview, submitReviewRequestSchema } from './_lib/reviewSubmission';
 import { contactRequestSchema, createTicket } from './_lib/tickets';
 import { createTradeEnquiry, tradeEnquiryRequestSchema } from './_lib/tradeEnquiry';
 import type { DocStore } from './_lib/store';
+import { loadStoreConfig } from './_lib/storeConfig';
 
 interface ActionContext {
   req: VercelRequest;
@@ -76,6 +82,43 @@ const ACTIONS: Record<string, EngageAction<unknown>> = {
     async run({ store }, input) {
       await unsubscribe(store, input);
       return { success: true };
+    },
+  }),
+
+  NEWSLETTER_CONFIRM: action({
+    schema: confirmSubscriptionRequestSchema,
+    limit: RATE_LIMITS.newsletter,
+    async run({ req, store }, input) {
+      await confirmSubscription(store, input, clientIp(req));
+      return { success: true };
+    },
+  }),
+
+  COD_OTP_STATUS: action({
+    schema: codOtpStatusSchema,
+    limit: RATE_LIMITS.codOtpVerifyIp,
+    async run({ store }) {
+      return { success: true, required: codOtpEnabled(await loadStoreConfig(store)), resendSeconds: COD_OTP_RESEND_COOLDOWN_MS / 1000 };
+    },
+  }),
+
+  COD_OTP_SEND: action({
+    schema: codOtpSendSchema,
+    limit: RATE_LIMITS.codOtpIp,
+    async run({ store }, input) {
+      const sender = createOtpSender();
+      if (!sender || !codOtpEnabled(await loadStoreConfig(store))) return { success: true, required: false };
+      await enforceRateLimitKey(store, RATE_LIMITS.codOtpPhone, input.phone);
+      const { retryAfterSeconds } = await sendCodOtp(store, sender, input.phone);
+      return { success: true, required: true, resendSeconds: retryAfterSeconds };
+    },
+  }),
+
+  COD_OTP_VERIFY: action({
+    schema: codOtpVerifySchema,
+    limit: RATE_LIMITS.codOtpVerifyIp,
+    async run({ store }, input) {
+      return { success: true, verificationToken: await verifyCodOtp(store, input.phone, input.code) };
     },
   }),
 

@@ -24,6 +24,7 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { ORDER_LIMITS } from '../../src/lib/pricing/orderLimits';
 import { assertCodOrderAllowed, codRejection, countOpenCodOrders } from './cod';
+import { COD_UNVERIFIED_FLAG, consumeVerification, verificationTokenSchema } from './codOtp';
 import {
   couponFromDoc,
   couponPath,
@@ -109,6 +110,8 @@ const checkoutRequestObject = z
     idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/, 'must be 8-128 characters of [A-Za-z0-9_-]'),
     customer: customerSchema,
     paymentMethod: z.enum(['prepaid', 'cod']).default('prepaid'),
+    /** From COD_OTP_VERIFY; required for COD when SMS confirmation is enabled (see codOtp.ts). */
+    codVerificationToken: verificationTokenSchema.optional(),
   })
   .superRefine((body, ctx) => {
     const total = body.items.reduce((sum, i) => sum + (i.customDesignRef?.length ?? 0), 0);
@@ -126,6 +129,7 @@ export interface CheckoutRequest {
   idempotencyKey: string;
   customer: CustomerDetails;
   paymentMethod: Exclude<PaymentMethod, 'replacement'>;
+  codVerificationToken?: string;
 }
 
 // Explicit output type: the app tsconfig is non-strict, where z.infer would make every field optional.
@@ -174,6 +178,8 @@ export interface CheckoutDeps {
   config: StoreConfig;
   /** Needed for COD PIN eligibility. */
   shipping?: ShippingProvider;
+  /** Customer COD orders need a verification token (codOtpEnabled in codOtp.ts); otherwise they are flagged COD_UNVERIFIED. */
+  codOtpEnabled?: boolean;
   /** Needed for staff orders paid by payment link. */
   paymentLinks?: PaymentLinkGateway;
   now?: () => number;
@@ -314,6 +320,10 @@ export async function createCheckoutIntent(
     if (existing) return { duplicateOf: existing.orderId as string, existingHash: existing.requestHash as string };
 
     // ---- reads ----
+    const customerCod = cod && !staff;
+    const spendVerification = customerCod && deps.codOtpEnabled
+      ? await consumeVerification(tx, phoneKey(req.customer.phone), req.codVerificationToken, now)
+      : null;
     const productDocs = await Promise.all(catalogIds.map(id => tx.get(`products/${id}`)));
     const couponDoc = couponId ? await tx.get(couponPath(couponId)) : null;
     const usageDoc = couponId ? await tx.get(customerUsagePath(couponId, req.customer.email)) : null;
@@ -385,6 +395,8 @@ export async function createCheckoutIntent(
       reservationTtlMs: viaPaymentLink ? PAYMENT_LINK_TTL_HOURS * 3600_000 : config.reservationTtlMs,
     });
     if (staff?.note) order = { ...order, notes: staff.note };
+    // Nobody confirmed this COD order with the customer: staff must phone before production (CONFIRM_COD_ORDER).
+    if (customerCod && !deps.codOtpEnabled) order = { ...order, flags: [...order.flags, COD_UNVERIFIED_FLAG] };
     if (staff?.handover) {
       order = {
         ...order,
@@ -397,6 +409,7 @@ export async function createCheckoutIntent(
     const invoicePlan = staff?.handover ? await planInvoice(tx, order, config.seller, now) : null;
 
     // ---- writes ----
+    spendVerification?.();
     for (const r of reserved) tx.update(`products/${r.productId}`, { stock: increment(-r.quantity), updatedAt: now });
     if (invoicePlan) order = { ...order, ...applyInvoice(tx, invoicePlan, order, config.seller, now) };
     tx.create(orderPath(orderId), order as unknown as Record<string, unknown>);

@@ -1,10 +1,12 @@
 /**
  * POST /api/checkout-intent — prices the cart on the server, reserves stock and
  * creates the order: with its Razorpay order (prepaid, default) or confirmed as
- * cash on delivery (`paymentMethod: 'cod'`). Contract: API.md.
+ * cash on delivery (`paymentMethod: 'cod'`; needs a verification token when SMS confirmation is enabled,
+ * otherwise the order is flagged COD_UNVERIFIED, see api/_lib/codOtp.ts). Contract: API.md.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { optionalUser } from './_lib/auth';
+import { codOtpEnabled } from './_lib/codOtp';
 import { checkoutRequestSchema, createCheckoutIntent } from './_lib/checkout';
 import { getRazorpayCredentials } from './_lib/config';
 import { sendError } from './_lib/errors';
@@ -36,6 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         store,
         gateway: createRazorpayGateway(),
         razorpayKeyId: keyId,
+        codOtpEnabled: codOtpEnabled(config),
         config,
         shipping: createShippingProvider(store, config),
       },

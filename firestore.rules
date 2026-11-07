@@ -247,6 +247,10 @@ service cloud.firestore {
     match /webhook_events/{eventId} {
       allow read, write: if false;
     }
+    // COD SMS confirmation: hashed one-time codes and single-use verification tokens, server-only.
+    match /cod_otps/{phone} {
+      allow read, write: if false;
+    }
     match /rate_limits/{key} {
       allow read, write: if false;
     }
