@@ -14,10 +14,11 @@ import { loadCustomerOrder, optionalEmailSchema, orderIdSchema } from './_lib/or
 import { publicOrderSummary } from './_lib/orders';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
 import { loadStoreConfig } from './_lib/storeConfig';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 const querySchema = z.object({ orderId: orderIdSchema, email: optionalEmailSchema });
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['GET']);
     const parsed = querySchema.safeParse({
@@ -38,3 +39,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'order-status');
   }
 }
+
+export default withStoredIntegrations(handler);

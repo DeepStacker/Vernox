@@ -10,6 +10,7 @@ import { sendError } from './_lib/errors';
 import { getStore } from './_lib/firebaseAdmin';
 import { assertMethod } from './_lib/http';
 import { injectProductMeta, siteOrigin } from './_lib/seo';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 let template: { html: string; at: number } | null = null;
 const TEMPLATE_TTL_MS = 5 * 60_000;
@@ -34,7 +35,7 @@ function sendBody(res: VercelResponse, body: string) {
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['GET', 'HEAD']);
     const store = getStore();
@@ -70,3 +71,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'seo');
   }
 }
+
+export default withStoredIntegrations(handler);

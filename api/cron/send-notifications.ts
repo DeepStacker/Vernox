@@ -11,8 +11,9 @@ import { getStore } from '../_lib/firebaseAdmin';
 import { assertMethod } from '../_lib/http';
 import { createChannels } from '../_lib/notifications/channels';
 import { deliverPendingNotifications } from '../_lib/notifications/deliver';
+import { withStoredIntegrations } from '../_lib/withIntegrations';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['GET', 'POST']);
     requireCron(req);
@@ -22,3 +23,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'cron/send-notifications');
   }
 }
+
+export default withStoredIntegrations(handler);

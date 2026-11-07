@@ -14,6 +14,7 @@ import { getStore } from './_lib/firebaseAdmin';
 import { assertMethod, getHeader, readRawBody } from './_lib/http';
 import { verifyMetaSignature } from './_lib/whatsapp';
 import { processWhatsAppWebhook, type WhatsAppWebhookPayload } from './_lib/whatsappInbound';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 export const config = { api: { bodyParser: false } };
 
@@ -23,7 +24,7 @@ function safeEqualText(a: string, b: string): boolean {
   return crypto.timingSafeEqual(x, y);
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['GET', 'POST']);
 
@@ -56,3 +57,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'whatsapp-webhook');
   }
 }
+
+export default withStoredIntegrations(handler);

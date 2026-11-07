@@ -13,8 +13,9 @@ import { assertMethod, parseBody } from './_lib/http';
 import { paiseToRupees } from './_lib/money';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
 import { loadStoreConfig } from './_lib/storeConfig';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['POST']);
     const body = parseBody(req, couponPreviewSchema);
@@ -50,3 +51,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'validate-coupon');
   }
 }
+
+export default withStoredIntegrations(handler);

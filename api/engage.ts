@@ -30,6 +30,7 @@ import { contactRequestSchema, createTicket } from './_lib/tickets';
 import { createTradeEnquiry, tradeEnquiryRequestSchema } from './_lib/tradeEnquiry';
 import type { DocStore } from './_lib/store';
 import { loadStoreConfig } from './_lib/storeConfig';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 interface ActionContext {
   req: VercelRequest;
@@ -142,7 +143,7 @@ const ACTIONS: Record<string, EngageAction<unknown>> = {
   }),
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['POST']);
     const name = typeof req.body?.action === 'string' ? req.body.action : '';
@@ -157,3 +158,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'engage');
   }
 }
+
+export default withStoredIntegrations(handler);

@@ -11,10 +11,11 @@ import { getStore } from './_lib/firebaseAdmin';
 import { assertMethod, getHeader, readRawBody } from './_lib/http';
 import { verifyWebhookSignature } from './_lib/razorpay';
 import { processWebhookEvent, type RazorpayWebhookEvent } from './_lib/webhook';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 export const config = { api: { bodyParser: false } };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['POST']);
     const secret = getRazorpayWebhookSecret();
@@ -41,3 +42,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'razorpay-webhook');
   }
 }
+
+export default withStoredIntegrations(handler);

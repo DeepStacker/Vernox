@@ -13,13 +13,14 @@ import { CUSTOM_PRODUCT_ID, productFromDoc } from './_lib/pricing';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
 import { buildDeliveryEstimate, createShippingProvider, itemLeadTimeDays, serviceabilityFor } from './_lib/shipping';
 import { loadStoreConfig } from './_lib/storeConfig';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 const querySchema = z.object({
   pincode: z.string().trim().regex(/^[1-9][0-9]{5}$/, 'must be a 6-digit Indian PIN code'),
   productId: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/).optional(),
 });
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['GET']);
     const parsed = querySchema.safeParse({
@@ -45,3 +46,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'serviceability');
   }
 }
+
+export default withStoredIntegrations(handler);

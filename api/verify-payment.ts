@@ -13,6 +13,7 @@ import { getPhotoStorage, getStore } from './_lib/firebaseAdmin';
 import { assertMethod, parseBody } from './_lib/http';
 import { confirmPayment, findOrderIdByRazorpayOrderId } from './_lib/payments';
 import { verifyPaymentSignature } from './_lib/razorpay';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 const bodySchema = z.object({
   razorpay_order_id: z.string().trim().min(1).max(64),
@@ -20,7 +21,7 @@ const bodySchema = z.object({
   razorpay_signature: z.string().trim().min(1).max(256),
 });
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['POST']);
     const body = parseBody(req, bodySchema);
@@ -63,3 +64,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'verify-payment');
   }
 }
+
+export default withStoredIntegrations(handler);

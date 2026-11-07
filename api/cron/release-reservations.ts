@@ -10,8 +10,9 @@ import { sendError } from '../_lib/errors';
 import { getStore } from '../_lib/firebaseAdmin';
 import { assertMethod } from '../_lib/http';
 import { releaseExpiredReservations } from '../_lib/reservations';
+import { withStoredIntegrations } from '../_lib/withIntegrations';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['GET', 'POST']);
     requireCron(req);
@@ -22,3 +23,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'cron/release-reservations');
   }
 }
+
+export default withStoredIntegrations(handler);

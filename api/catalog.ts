@@ -12,6 +12,7 @@ import { sendError } from './_lib/errors';
 import { getStore } from './_lib/firebaseAdmin';
 import { assertMethod } from './_lib/http';
 import { buildPublicCatalog, type PublicCatalog } from './_lib/publicCatalog';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 const MEMO_MS = 15_000;
 let memo: { at: number; body: string } | null = null;
@@ -33,7 +34,7 @@ export function resetCatalogMemo() {
   memo = null;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['GET', 'HEAD']);
     const body = await catalogBody();
@@ -45,3 +46,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'catalog');
   }
 }
+
+export default withStoredIntegrations(handler);

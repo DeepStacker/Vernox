@@ -14,8 +14,9 @@ import { ApiError, sendError } from './_lib/errors';
 import { getStore } from './_lib/firebaseAdmin';
 import { assertMethod } from './_lib/http';
 import { processCourierEvent, verifyCourierWebhookToken, type ShiprocketTrackingEvent } from './_lib/shipping/trackingWebhook';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['POST']);
     if (!verifyCourierWebhookToken(req, requireEnv('SHIPROCKET_WEBHOOK_TOKEN'))) {
@@ -29,3 +30,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'courier-webhook');
   }
 }
+
+export default withStoredIntegrations(handler);

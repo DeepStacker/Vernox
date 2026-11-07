@@ -14,6 +14,7 @@ import { assertMethod, clientIp, parseBody } from './_lib/http';
 import { loadCustomerOrder, optionalEmailSchema, orderIdSchema } from './_lib/orderAccess';
 import { createRazorpayRefundGateway } from './_lib/razorpay';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 const bodySchema = z.object({
   orderId: orderIdSchema,
@@ -21,7 +22,7 @@ const bodySchema = z.object({
   reason: z.string().trim().max(300).optional(),
 }) as unknown as z.ZodType<{ orderId: string; email?: string; reason?: string }, z.ZodTypeDef, unknown>;
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['POST']);
     const body = parseBody(req, bodySchema);
@@ -48,3 +49,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'order-cancel');
   }
 }
+
+export default withStoredIntegrations(handler);

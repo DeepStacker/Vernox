@@ -43,6 +43,7 @@ import type { DocStore } from './_lib/store';
 import { createStaffOrder, customerLookupSchema, findCustomerByPhone, quoteStaffOrder, staffOrderSchema, staffQuoteSchema } from './_lib/staffOrders';
 import { launchStatus } from './_lib/launchStatus';
 import { loadStoreConfig } from './_lib/storeConfig';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 interface ActionContext {
   store: DocStore;
@@ -795,7 +796,7 @@ const ACTIONS: Record<string, ActionDefinition> = {
   },
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const params = (req.method === 'GET' ? req.query : req.body) as Record<string, unknown> | undefined;
     const actionName = typeof params?.action === 'string' ? params.action : '';
@@ -817,3 +818,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'admin');
   }
 }
+
+export default withStoredIntegrations(handler);

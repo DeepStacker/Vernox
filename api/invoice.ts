@@ -18,6 +18,7 @@ import { assertMethod } from './_lib/http';
 import { canAccessOrder, optionalEmailSchema, orderIdSchema } from './_lib/orderAccess';
 import { asOrder, orderPath } from './_lib/orders';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 const querySchema = z.object({
   orderId: orderIdSchema,
@@ -35,7 +36,7 @@ const summary = (d: TaxDocument) => ({
   againstInvoice: d.againstInvoice?.number ?? null,
 });
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['GET']);
     const q = (key: string) => (typeof req.query[key] === 'string' && req.query[key] ? (req.query[key] as string) : undefined);
@@ -77,3 +78,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'invoice');
   }
 }
+
+export default withStoredIntegrations(handler);

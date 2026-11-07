@@ -15,6 +15,7 @@ import { loadCustomerOrder, optionalEmailSchema, orderIdSchema } from './_lib/or
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
 import { RETURN_REASONS, requestReturn, type ReturnReason } from './_lib/returns';
 import { loadStoreConfig } from './_lib/storeConfig';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 interface ReturnRequestBody {
   orderId: string;
@@ -32,7 +33,7 @@ const bodySchema = z.object({
   photoPaths: z.array(z.string().trim().regex(/^returns\/[A-Za-z0-9]{10,40}\/[A-Za-z0-9_.-]{1,120}$/)).max(6).default([]),
 }) as unknown as z.ZodType<ReturnRequestBody, z.ZodTypeDef, unknown>;
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['POST']);
     const body = parseBody(req, bodySchema);
@@ -53,3 +54,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'return-request');
   }
 }
+
+export default withStoredIntegrations(handler);

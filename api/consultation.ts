@@ -19,6 +19,7 @@ import { closeConsultation, requestRevision } from './_lib/proposals';
 import { createRazorpayGateway } from './_lib/razorpay';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
 import { loadStoreConfig } from './_lib/storeConfig';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
 const consultationId = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
 
@@ -33,7 +34,7 @@ const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('CLOSE'), consultationId, outcome: z.enum(['accepted', 'declined']) }),
 ]) as unknown as z.ZodType<Body, z.ZodTypeDef, unknown>;
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['POST']);
     const body = parseBody(req, bodySchema);
@@ -61,3 +62,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'consultation');
   }
 }
+
+export default withStoredIntegrations(handler);

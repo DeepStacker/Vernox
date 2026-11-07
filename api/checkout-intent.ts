@@ -17,8 +17,9 @@ import { createRazorpayGateway } from './_lib/razorpay';
 import { enforceRateLimit, enforceRateLimitKey, RATE_LIMITS } from './_lib/rateLimit';
 import { createShippingProvider } from './_lib/shipping';
 import { loadStoreConfig } from './_lib/storeConfig';
+import { withStoredIntegrations } from './_lib/withIntegrations';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['POST']);
     const body = parseBody(req, checkoutRequestSchema);
@@ -50,3 +51,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return sendError(res, err, 'checkout-intent');
   }
 }
+
+export default withStoredIntegrations(handler);
