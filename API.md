@@ -212,8 +212,10 @@ amounts in responses ending in `Paise` are paise. `orderId` is the Firestore ord
 
 | Action | Method | Permission | Params | Result |
 |---|---|---|---|---|
-| `CREATE_SHIPMENT` | POST | `orders.tracking` | `orderId`; **Shiprocket:** `package: { lengthCm, breadthCm, heightCm, weightKg }` (each > 0; ≤ 300 cm, ≤ 100 kg); **manual:** `manual: { courier (2–80), awb ([A-Za-z0-9-]{4,40}), trackingUrl? }` | `{ shipment: ShipmentRecord, status, invoiceNumber }` |
+| `CREATE_SHIPMENT` | POST | `orders.tracking` | `orderId`; **Shiprocket:** `package: { lengthCm, breadthCm, heightCm, weightKg }` (each > 0; ≤ 300 cm, ≤ 100 kg), `courierId?` (a `courierId` from `GET_COURIER_RATES`; omitted, Shiprocket auto-assigns its recommendation); **manual:** `manual: { courier (2–80), awb ([A-Za-z0-9-]{4,40}), trackingUrl? }` | `{ shipment: ShipmentRecord, status, invoiceNumber }` |
 | `CANCEL_SHIPMENT` | POST | `orders.tracking` | `orderId, reason (3–300)` | `{ orderId }` |
+| `GET_COURIER_RATES` | GET | `orders.tracking` | `orderId` (a `Packed` order), `lengthCm, breadthCm, heightCm, weightKg` (each > 0; ≤ 300 cm, ≤ 100 kg; sent as query strings) | `{ automated, rates: [{ courierId, name, freightCharge, codCharge, totalCharge, estimatedDays, etd, codAvailable, rating, recommended }] }` (rupees; recommended first, then cheapest; COD parcels list only COD couriers). `automated: false` with no rates when Shiprocket is not configured. Nothing is booked or stored |
+| `BULK_SHIPMENT_DOCUMENTS` | POST | `orders.tracking` | `orderIds` (1 to 200) | `{ batches: [{ orderIds, labelUrl, manifestUrl, error }], skipped: [{ orderId, reason }] }`: one merged label PDF and one merged manifest PDF per chunk of 50 shipments; a failed chunk carries `error` and does not stop the others. Manual, unbooked and unknown orders are `skipped`. `400` when Shiprocket is not configured. Audited as `SHIPMENT_DOCUMENTS_BULK` |
 | `GET_LABEL` | GET | `orders.tracking` | `orderId` | `{ labelUrl, manifestUrl }` (null for manual shipments) |
 | `UPDATE_DELIVERY_STATUS` | POST | `orders.tracking` | `orderId, status: 'Shipped' \| 'Out_For_Delivery' \| 'Delivered' \| 'RTO_Initiated' \| 'RTO_Delivered', note? (≤ 200)` | `{ orderId, status }` — same path as the courier webhook; for manual shipments |
 | `CANCEL_ORDER` | POST | `orders.update_status` (+ `orders.refund` when `refund` is true) | `orderId, reason (3–300), refund?: boolean = true` | `{ orderId, status: 'Cancelled', refund: RefundDoc \| null, refundError: string \| null }` |
@@ -229,6 +231,16 @@ Rules and side effects:
   create order → assign AWB → pickup → label → manifest; the order stays `Packed` with `shipment.status: 'awb_assigned'` until the
   pickup scan arrives by webhook. A failed step returns `502 SHIPPING_PROVIDER_ERROR` and stores the progress; calling again
   resumes. Manual: the order moves to `Shipped` at once. Calling it for an order with an active shipment returns that shipment.
+- Courier choice and bulk documents (Shiprocket): `GET_COURIER_RATES` calls `GET /courier/serviceability/` with the configured pickup PIN,
+  the order's delivery PIN, the parcel size and weight, the COD flag and the order total as declared value; the chosen `courierId` is
+  sent to `POST /courier/assign/awb` as `courier_id`. `BULK_SHIPMENT_DOCUMENTS` calls `POST /courier/generate/label`
+  (`shipment_id: []`), `POST /manifests/generate` (only for shipments without a manifest) and `POST /manifests/print`
+  (`order_ids: []`), each chunk of 50 shipments returning one merged PDF URL. Shiprocket documents no per-request cap, so 50 is a
+  conservative choice (`BULK_CHUNK_SIZE` in `api/_lib/shipping/shiprocket.ts`). Manual shipments have no courier PDFs: the console
+  prints a combined label sheet in the browser. Docs relied on: https://apidocs.shiprocket.in/ (client-rendered, so field names were
+  cross-checked with the support helpsheet
+  https://support.shiprocket.in/support/solutions/articles/43000337456-shiprocket-api-document-helpsheet and the SDK
+  https://github.com/ajitdas123/laravel-shiprocket); not yet verified against the live API.
 - `CANCEL_SHIPMENT` only while `Packed` (not picked up); cancels at Shiprocket.
 - `CANCEL_ORDER` from any status the state machine allows (`Paid`, `Confirmed_COD`, workshop stages, `RTO_Delivered`); returns
   committed stock; prepaid orders get a full refund of the refundable balance; an invoiced COD order gets a credit note.

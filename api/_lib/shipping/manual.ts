@@ -5,7 +5,7 @@
  * with `manual: { courier, awb, trackingUrl }`).
  */
 import { ApiError } from '../errors';
-import type { ServiceabilityQuery, ServiceabilityResult, ShipmentUpdate, ShippingProvider } from './types';
+import type { BulkDocumentBatch, CourierRate, ServiceabilityQuery, ServiceabilityResult, ShipmentUpdate, ShippingProvider } from './types';
 
 export const INDIAN_PINCODE = /^[1-9][0-9]{5}$/;
 
@@ -31,6 +31,14 @@ export class ManualShippingProvider implements ShippingProvider {
 
   async cancelShipment(): Promise<void> {
     // Nothing booked through us; staff cancel with the courier directly.
+  }
+
+  async getCourierRates(): Promise<CourierRate[]> {
+    return [];
+  }
+
+  async getBulkDocuments(): Promise<BulkDocumentBatch[]> {
+    return [];
   }
 
   async getLabel(): Promise<string | null> {

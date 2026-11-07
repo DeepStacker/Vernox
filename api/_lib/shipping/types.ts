@@ -27,9 +27,46 @@ export interface PackageDetails {
   weightKg: number;
 }
 
+/** One courier option for a parcel, as listed by the provider at booking. Amounts are rupees. */
+export interface CourierRate {
+  courierId: number;
+  name: string;
+  /** Freight only; null when the provider gave no breakdown. */
+  freightCharge: number | null;
+  /** Courier COD handling fee; 0 for prepaid. */
+  codCharge: number | null;
+  /** What the provider bills in total (freight + COD fee + surcharges), when given. */
+  totalCharge: number | null;
+  estimatedDays: number | null;
+  /** Provider's estimated delivery date label (e.g. "Nov 10, 2026"), when given. */
+  etd: string | null;
+  codAvailable: boolean;
+  rating: number | null;
+  /** The provider's own recommendation (what auto-assignment would pick). */
+  recommended: boolean;
+}
+
+export interface CourierRateQuery {
+  deliveryPincode: string;
+  package: PackageDetails;
+  cod: boolean;
+  /** Declared (insured) value in rupees. */
+  declaredValue: number;
+}
+
+/** Documents for one provider request; a large selection is split into several of these. */
+export interface BulkDocumentBatch {
+  shipmentIds: string[];
+  labelUrl: string | null;
+  manifestUrl: string | null;
+  error: string | null;
+}
+
 export interface CreateShipmentRequest {
   order: OrderDoc;
   package: PackageDetails;
+  /** Courier chosen from the rate list; omitted lets the provider auto-assign its recommended courier. */
+  courierId?: number;
   invoiceNumber: string | null;
   /** A previous partial attempt (e.g. order created, AWB failed) to resume instead of duplicating. */
   existing: ShipmentRecord | null;
@@ -48,6 +85,10 @@ export interface ShippingProvider {
    */
   createShipment(request: CreateShipmentRequest): Promise<ShipmentUpdate>;
   cancelShipment(shipment: ShipmentRecord): Promise<void>;
+  /** Courier options with charges and ETA; empty when the provider cannot list them (manual). */
+  getCourierRates(query: CourierRateQuery): Promise<CourierRate[]>;
+  /** One combined label PDF and manifest PDF per chunk of shipments; manual provider returns no batches. */
+  getBulkDocuments(shipments: ShipmentRecord[]): Promise<BulkDocumentBatch[]>;
   /** Fresh label URL (provider URLs can expire). */
   getLabel(shipment: ShipmentRecord): Promise<string | null>;
 }

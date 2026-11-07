@@ -33,7 +33,7 @@ import { createRefund, refundCeilingPaise } from './_lib/refunds';
 import { decideReturn, markReturnReceived, returnPath } from './_lib/returns';
 import { addTicketMessage, createStaffTicket, setTicketStatus, staffTicketSchema, ticketIdSchema, TICKET_STATUSES } from './_lib/tickets';
 import { createShippingProvider } from './_lib/shipping';
-import { applyCourierStatus, cancelShipment, createShipment, getLabel, type ManualShipmentDetails } from './_lib/shipping/shipments';
+import { applyCourierStatus, bulkShipmentDocuments, cancelShipment, courierRatesFor, createShipment, getLabel, type ManualShipmentDetails } from './_lib/shipping/shipments';
 import type { PackageDetails } from './_lib/shipping/types';
 import type { DocStore } from './_lib/store';
 import { createStaffOrder, quoteStaffOrder, staffOrderSchema, staffQuoteSchema } from './_lib/staffOrders';
@@ -105,6 +105,19 @@ const orderIdField = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
 const consultationIdField = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
 const reasonField = z.string().trim().min(3).max(300);
 const MAX_NOTES_LENGTH = 20_000;
+const MAX_BULK_DOCUMENT_ORDERS = 200;
+const packageSchema = z.object({
+  lengthCm: z.number().positive().max(300),
+  breadthCm: z.number().positive().max(300),
+  heightCm: z.number().positive().max(300),
+  weightKg: z.number().positive().max(100),
+});
+const packageQuerySchema = {
+  lengthCm: z.coerce.number().positive().max(300),
+  breadthCm: z.coerce.number().positive().max(300),
+  heightCm: z.coerce.number().positive().max(300),
+  weightKg: z.coerce.number().positive().max(100),
+};
 
 // ---------- actions ----------
 
@@ -403,6 +416,30 @@ const ACTIONS: Record<string, ActionDefinition> = {
 
   // ---------- shipping (permission orders.tracking) ----------
 
+  GET_COURIER_RATES: {
+    method: 'GET',
+    permission: 'orders.tracking',
+    async run(ctx) {
+      // GET params arrive as strings, hence coerce.
+      const p = parse(z.object({ orderId: orderIdField, ...packageQuerySchema }), ctx.params);
+      const config = await loadStoreConfig(ctx.store);
+      return courierRatesFor(ctx.store, createShippingProvider(ctx.store, config), {
+        orderId: p.orderId,
+        package: { lengthCm: p.lengthCm, breadthCm: p.breadthCm, heightCm: p.heightCm, weightKg: p.weightKg },
+      });
+    },
+  },
+
+  BULK_SHIPMENT_DOCUMENTS: {
+    method: 'POST',
+    permission: 'orders.tracking',
+    async run(ctx) {
+      const p = parse(z.object({ orderIds: z.array(orderIdField).min(1).max(MAX_BULK_DOCUMENT_ORDERS) }), ctx.params);
+      const config = await loadStoreConfig(ctx.store);
+      return bulkShipmentDocuments(ctx.store, createShippingProvider(ctx.store, config), { orderIds: p.orderIds, actor: ctx.actor });
+    },
+  },
+
   CREATE_SHIPMENT: {
     method: 'POST',
     permission: 'orders.tracking',
@@ -410,14 +447,8 @@ const ACTIONS: Record<string, ActionDefinition> = {
       const p = parse(
         z.object({
           orderId: orderIdField,
-          package: z
-            .object({
-              lengthCm: z.number().positive().max(300),
-              breadthCm: z.number().positive().max(300),
-              heightCm: z.number().positive().max(300),
-              weightKg: z.number().positive().max(100),
-            })
-            .optional(),
+          package: packageSchema.optional(),
+          courierId: z.number().int().positive().optional(),
           manual: z
             .object({
               courier: z.string().trim().min(2).max(80),
@@ -431,6 +462,7 @@ const ACTIONS: Record<string, ActionDefinition> = {
       const config = await loadStoreConfig(ctx.store);
       const shipment = await createShipment(ctx.store, createShippingProvider(ctx.store, config), config, {
         orderId: p.orderId,
+        courierId: p.courierId,
         package: p.package as PackageDetails | undefined, // cast: the app tsconfig (non-strict) also type-checks this file via tests
         manual: p.manual as ManualShipmentDetails | undefined,
         actor: ctx.actor,
