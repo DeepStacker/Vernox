@@ -13,10 +13,7 @@
          loaded. Same URL, mode and credentials as the app's fetch, so the browser reuses this response. -->
     <link rel="preload" href="/api/catalog" as="fetch" crossorigin="anonymous" fetchpriority="low" />
 
-    <!-- Fonts: Cormorant Garamond (display serif), Plus Jakarta Sans (UI/body), JetBrains Mono (technical specs) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Fonts are self-hosted (src/index.css, public/fonts). Deliberately not preloaded: a preload measurably delayed first paint (README "Fonts"). -->
 
     <!-- Fallback tags for crawlers that do not run JS; the app overrides them per page (src/lib/seo).
          %VITE_SITE_URL% is replaced at build time; set it in the environment (see .env.example). -->

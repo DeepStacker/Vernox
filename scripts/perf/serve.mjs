@@ -8,7 +8,7 @@ import http from 'node:http'; import fs from 'node:fs'; import path from 'node:p
 const [distArg, port = '4173', api = 'http://127.0.0.1:3001'] = process.argv.slice(2);
 if (!distArg) throw new Error('Usage: node scripts/perf/serve.mjs <dist dir> [port] [api origin]');
 const dist = path.resolve(distArg);
-const types = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.xml': 'application/xml' };
+const types = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.avif': 'image/avif', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.xml': 'application/xml' };
 http.createServer((req, res) => {
   if (req.url.startsWith('/api/')) {
     const u = new URL(req.url, api);

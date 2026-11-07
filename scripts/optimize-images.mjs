@@ -1,7 +1,9 @@
 /**
  * Generates .webp siblings (and downsized .jpg fallbacks) for public/images.
  *
- * Usage: npm run optimize-images
+ * Usage: npm run optimize-images            (everything)
+ *        node scripts/optimize-images.mjs --responsive-only   (only the responsive LCP variants below;
+ *        the full run recompresses every JPG again, so prefer this for an already-optimised folder)
  * - Never upscales; images wider than MAX_WIDTH are resized down.
  * - Writes <name>.webp next to each source and rewrites the .jpg in place only
  *   when the recompressed file is smaller. Safe to re-run (idempotent).
@@ -17,7 +19,8 @@ const MAX_WIDTH = 1920;
 const JPG_QUALITY = 78;
 const WEBP_QUALITY = 74;
 
-const files = (await readdir(IMAGE_DIR)).filter((f) => [".jpg", ".jpeg"].includes(extname(f).toLowerCase()));
+const responsiveOnly = process.argv.includes("--responsive-only");
+const files = responsiveOnly ? [] : (await readdir(IMAGE_DIR)).filter((f) => [".jpg", ".jpeg"].includes(extname(f).toLowerCase()));
 let before = 0;
 let after = 0;
 
@@ -38,6 +41,19 @@ for (const file of files) {
   before += original;
   after += webp.length;
   console.log(`${file}: ${(original / 1024).toFixed(0)} KB -> jpg ${((keepJpg ?? { length: original }).length / 1024).toFixed(0)} KB, webp ${(webp.length / 1024).toFixed(0)} KB`);
+}
+
+// Responsive variants for the images that are the LCP element (see Picture `widths`). Written as
+// <name>-<width>.webp and <name>-<width>.avif; never upscaled beyond the source.
+const RESPONSIVE = { "hero-art-lounge": [640, 960] };
+for (const [base, widths] of Object.entries(RESPONSIVE)) {
+  const src = join(IMAGE_DIR, `${base}.jpg`);
+  for (const w of widths) {
+    const resized = () => sharp(src).rotate().resize({ width: w, withoutEnlargement: true });
+    await writeFile(join(IMAGE_DIR, `${base}-${w}.webp`), await resized().webp({ quality: WEBP_QUALITY }).toBuffer());
+    await writeFile(join(IMAGE_DIR, `${base}-${w}.avif`), await resized().avif({ quality: 50, effort: 6 }).toBuffer());
+  }
+  await writeFile(join(IMAGE_DIR, `${base}.avif`), await sharp(src).rotate().resize({ width: MAX_WIDTH, withoutEnlargement: true }).avif({ quality: 50, effort: 6 }).toBuffer());
 }
 
 console.log(`Total: ${(before / 1048576).toFixed(1)} MB originals -> ${(after / 1048576).toFixed(1)} MB webp`);

@@ -65,6 +65,9 @@ export interface DeliveryEstimate {
   estimatedDispatchDays: number;
   estimatedDeliveryDate: string | null;
   courierName: string | null;
+  /** Delivery city/state when the courier names them; the storefront uses them to prefill addresses. */
+  city: string | null;
+  state: string | null;
 }
 
 /**
@@ -88,5 +91,7 @@ export function buildDeliveryEstimate(params: {
     estimatedDispatchDays: leadTimeDays,
     estimatedDeliveryDate: s.serviceable ? istDatePlusDays(now, leadTimeDays + transit) : null,
     courierName: s.courierName,
+    city: s.city ?? null,
+    state: s.state ?? null,
   };
 }

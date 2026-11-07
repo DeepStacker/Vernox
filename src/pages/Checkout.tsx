@@ -19,6 +19,7 @@ import {
 } from '@/lib/checkout/checkoutApi';
 import { formatDeliveryDate } from '@/lib/shipping/deliveryEstimate';
 import { useDeliveryEstimate } from '@/lib/shipping/useDeliveryEstimate';
+import { usePincodeAutofill } from '@/lib/shipping/usePincodeAutofill';
 import { CUSTOM_PRODUCT_ID } from '@/types/products';
 import { isCreditCode } from '@/lib/consultations/consultationModel';
 import { useAutoApplyConsultationCredit } from '@/lib/consultations/useCreditAutoApply';
@@ -107,7 +108,10 @@ export default function Checkout() {
   // One checkout attempt = one idempotency key + one server order. Any change to what is being
   // bought or where it ships invalidates the attempt and starts a new one.
   // Delivery check for the entered PIN code; COD needs a COD-serviceable PIN and a catalogue-only cart.
-  const delivery = useDeliveryEstimate(form.pincode, cartHasCustomItem(items) ? CUSTOM_PRODUCT_ID : undefined);
+  const deliveryProductId = cartHasCustomItem(items) ? CUSTOM_PRODUCT_ID : undefined;
+  const delivery = useDeliveryEstimate(form.pincode, deliveryProductId);
+  // Typing the PIN fills an empty city/state (never overwrites typed values).
+  usePincodeAutofill(form.pincode, form, patch => setForm(prev => ({ ...prev, ...patch })), deliveryProductId);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('prepaid');
   const codBlockedReason: string | null =
     storeConfig.codEnabled === false ? 'Cash on delivery is not available right now.'
@@ -289,22 +293,6 @@ export default function Checkout() {
 
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <label className={labelClass} htmlFor="co-city">City</label>
-                <input id="co-city" autoComplete="address-level2" value={form.city} onChange={set('city')} className={inputClass} />
-                <FieldError message={errors.city} />
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="co-state">State / UT</label>
-                <select id="co-state" autoComplete="address-level1" value={form.state} onChange={set('state')} className={inputClass}>
-                  <option value="">Select state</option>
-                  {INDIAN_STATES_AND_UTS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <FieldError message={errors.state} />
-              </div>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
                 <label className={labelClass} htmlFor="co-pincode">Pincode</label>
                 <input id="co-pincode" inputMode="numeric" maxLength={6} autoComplete="postal-code" value={form.pincode} onChange={set('pincode')} className={inputClass} />
                 <FieldError message={errors.pincode} />
@@ -321,6 +309,22 @@ export default function Checkout() {
               <div>
                 <label className={labelClass} htmlFor="co-country">Country</label>
                 <input id="co-country" value="India" readOnly className={`${inputClass} bg-muted/40`} />
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass} htmlFor="co-city">City</label>
+                <input id="co-city" autoComplete="address-level2" value={form.city} onChange={set('city')} className={inputClass} />
+                <FieldError message={errors.city} />
+              </div>
+              <div>
+                <label className={labelClass} htmlFor="co-state">State / UT</label>
+                <select id="co-state" autoComplete="address-level1" value={form.state} onChange={set('state')} className={inputClass}>
+                  <option value="">Select state</option>
+                  {INDIAN_STATES_AND_UTS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <FieldError message={errors.state} />
               </div>
             </div>
           </div>

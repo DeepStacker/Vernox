@@ -18,6 +18,9 @@ export interface ServiceabilityResult {
   /** Courier transit days, or null when the provider gave no estimate. */
   transitDays: number | null;
   courierName: string | null;
+  /** Delivery city and state as the provider names them (display only); absent when it gives none. Cached results may predate these fields. */
+  city?: string | null;
+  state?: string | null;
 }
 
 export interface PackageDetails {

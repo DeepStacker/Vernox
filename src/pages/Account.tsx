@@ -1,3 +1,4 @@
+import { usePincodeAutofill } from '@/lib/shipping/usePincodeAutofill';
 import { useSeo } from '@/lib/seo';
 import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -72,6 +73,8 @@ export default function Account() {
     state: '',
     pincode: '',
   });
+  // Typing the PIN fills an empty city/state (never overwrites typed values).
+  usePincodeAutofill(profileForm.pincode, profileForm, patch => setProfileForm(prev => ({ ...prev, ...patch })));
 
   // Password Update form states
   const [passwordForm, setPasswordForm] = useState({
@@ -684,16 +687,6 @@ export default function Account() {
                   </div>
 
                   <div className="space-y-1">
-                    <label htmlFor="profile-city" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">City</label>
-                    <input id="profile-city" autoComplete="address-level2" 
-                      type="text" 
-                      value={profileForm.city}
-                      onChange={e => setProfileForm({ ...profileForm, city: e.target.value })}
-                      className="w-full bg-background border border-border rounded px-3 py-2 text-sm outline-none focus:border-oxblood"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
                     <label htmlFor="profile-pincode" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Pincode</label>
                     <input id="profile-pincode" autoComplete="postal-code" 
                       type="text" 
@@ -702,6 +695,16 @@ export default function Account() {
                       value={profileForm.pincode}
                       onChange={e => setProfileForm({ ...profileForm, pincode: e.target.value })}
                       className="w-full bg-background border border-border rounded px-3 py-2 text-sm outline-none focus:border-oxblood font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label htmlFor="profile-city" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">City</label>
+                    <input id="profile-city" autoComplete="address-level2" 
+                      type="text" 
+                      value={profileForm.city}
+                      onChange={e => setProfileForm({ ...profileForm, city: e.target.value })}
+                      className="w-full bg-background border border-border rounded px-3 py-2 text-sm outline-none focus:border-oxblood"
                     />
                   </div>
 

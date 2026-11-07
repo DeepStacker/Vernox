@@ -110,7 +110,7 @@ describe('Shiprocket provider', () => {
       { match: /courier\/serviceability/, status: 404, body: { message: 'not serviceable' } },
     ]);
     const provider = new ShiprocketProvider(SR_CONFIG, store, sr.impl, () => NOW);
-    expect(await provider.checkServiceability({ deliveryPincode: '560001' })).toEqual({ serviceable: true, codAvailable: true, transitDays: 3, courierName: 'Fast' });
+    expect(await provider.checkServiceability({ deliveryPincode: '560001' })).toEqual({ serviceable: true, codAvailable: true, transitDays: 3, courierName: 'Fast', city: null, state: null });
     expect(await provider.checkServiceability({ deliveryPincode: '799999' })).toMatchObject({ serviceable: false });
     expect(sr.calls.filter(c => c.url.includes('auth/login'))).toHaveLength(1);
     expect(sr.calls[1].init.headers.Authorization).toBe('Bearer tok_1');
@@ -198,12 +198,17 @@ describe('manual shipping and delivery estimate', () => {
     const s = await serviceabilityFor(store, manual, '560001', NOW);
     expect(store.read('serviceability_cache/manual_560001')).toBeTruthy();
     const estimate = buildDeliveryEstimate({ serviceability: s, leadTimeDays: 7, codAllowedForItem: false, config: SELLER_CONFIG, now: NOW });
-    expect(estimate).toEqual({ serviceable: true, codAvailable: false, estimatedDispatchDays: 7, estimatedDeliveryDate: istDatePlusDays(NOW, 12), courierName: null });
+    expect(estimate).toEqual({ serviceable: true, codAvailable: false, estimatedDispatchDays: 7, estimatedDeliveryDate: istDatePlusDays(NOW, 12), courierName: null, city: null, state: null });
     expect(istDatePlusDays(Date.parse('2026-11-05T23:30:00+05:30'), 0)).toBe('2026-11-05');
   });
 
   it('parses an empty serviceability answer as not serviceable', () => {
     expect(parseServiceability({ data: { available_courier_companies: [] } })).toMatchObject({ serviceable: false });
+    // City and state of the delivery PIN come from the courier entries, tidied to title case.
+    expect(parseServiceability({ data: { available_courier_companies: [{ courier_company_id: 1, courier_name: 'A', city: 'NAVI MUMBAI', state: ' maharashtra ' }] } }))
+      .toMatchObject({ city: 'Navi Mumbai', state: 'Maharashtra' });
+    expect(parseServiceability({ data: { available_courier_companies: [{ courier_company_id: 1, courier_name: 'A' }] } }))
+      .toMatchObject({ city: null, state: null });
   });
 });
 

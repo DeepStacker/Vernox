@@ -1,3 +1,4 @@
+import { EmiWidget } from '@/components/shop/EmiWidget';
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Heart, Minus, Plus } from 'lucide-react';
@@ -144,6 +145,7 @@ export default function ProductDetail() {
             <div className="space-y-1">
               <PriceTag product={product} size={size} large />
               <p className="text-sm text-muted-foreground">+ {gstRate}% GST · {formatINR(inclusive)} incl. GST</p>
+              <EmiWidget amountRupees={inclusive} className="pt-1" />
               <DeliveryEstimate productId={product.id} className="pt-2" />
             </div>
 
