@@ -22,7 +22,7 @@ function StockBadge({ p }: { p: Product }) {
 
 export function AdminProducts() {
   const { products, storeConfig } = useAdminData();
-  const { saveProduct, deleteProduct, setStock } = useProductMutations();
+  const { saveProduct, deleteProduct, adjustStock } = useProductMutations();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<ProductFilter>('all');
   const [form, setForm] = useState<{ open: boolean; product: Product | null; template: Product | null }>({ open: false, product: null, template: null });
@@ -33,8 +33,12 @@ export function AdminProducts() {
 
   const save = async (product: Product) => {
     const ok = await saveProduct(product);
-    if (ok) toast.success(`${product.name} saved`);
-    return ok;
+    if (!ok) return false;
+    // Saving never writes stock; an edited stock figure is applied as a change from what the form opened with.
+    const delta = form.product ? product.stock - form.product.stock : 0;
+    if (delta !== 0) await adjustStock({ id: product.id, delta, reason: 'Edited in product form' });
+    toast.success(`${product.name} saved`);
+    return true;
   };
   const remove = async (p: Product) => {
     if (!window.confirm(`Permanently remove "${p.name}" from the catalog?`)) return;
@@ -106,9 +110,9 @@ export function AdminProducts() {
                 <td className="whitespace-nowrap p-3 font-mono text-xs">{currency}{p.price.toLocaleString('en-IN')}{p.mrp ? <span className="ml-1 text-muted-foreground line-through">{currency}{p.mrp.toLocaleString('en-IN')}</span> : null}</td>
                 <td className="p-3">
                   <div className="flex items-center gap-2">
-                    <button type="button" aria-label={`Decrease stock of ${p.name}`} onClick={() => void setStock({ id: p.id, stock: Math.max(0, p.stock - 1) })} className="min-h-11 min-w-11 rounded-lg border border-border font-bold">-</button>
+                    <button type="button" aria-label={`Decrease stock of ${p.name}`} onClick={() => void adjustStock({ id: p.id, delta: -1 })} className="min-h-11 min-w-11 rounded-lg border border-border font-bold">-</button>
                     <span className="w-8 text-center font-mono font-bold">{p.stock}</span>
-                    <button type="button" aria-label={`Increase stock of ${p.name}`} onClick={() => void setStock({ id: p.id, stock: p.stock + 1 })} className="min-h-11 min-w-11 rounded-lg border border-border font-bold">+</button>
+                    <button type="button" aria-label={`Increase stock of ${p.name}`} onClick={() => void adjustStock({ id: p.id, delta: 1 })} className="min-h-11 min-w-11 rounded-lg border border-border font-bold">+</button>
                   </div>
                 </td>
                 <td className="p-3"><StockBadge p={p} /></td>

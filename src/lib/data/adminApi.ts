@@ -5,7 +5,7 @@
 import { auth } from '@/lib/firebase';
 
 export type AdminAction =
-  | 'SAVE_COUPON' | 'DELETE_COUPON'
+  | 'SAVE_COUPON' | 'DELETE_COUPON' | 'ADJUST_STOCK'
   | 'SAVE_REVIEW' | 'DELETE_REVIEW'
   | 'SET_STAFF_ROLE' | 'LIST_STAFF'
   | 'GET_AUDIT_LOGS' | 'LOG_AUDIT'

@@ -25,7 +25,7 @@ import { isCreditCode } from '@/lib/consultations/consultationModel';
 import { useAutoApplyConsultationCredit } from '@/lib/consultations/useCreditAutoApply';
 import { trackSpaceEvent } from '@/lib/spaces/analytics';
 import {
-  INDIAN_STATES_AND_UTS, normalizeIndianMobile, validateAddress, type AddressErrors, type AddressForm,
+  ADDRESS_LIMITS, INDIAN_STATES_AND_UTS, normalizeIndianMobile, validateAddress, type AddressErrors, type AddressForm,
 } from '@/lib/checkout/validation';
 
 const inputClass =
@@ -269,7 +269,7 @@ export default function Checkout() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass} htmlFor="co-name">Full name</label>
-                <input id="co-name" autoComplete="name" value={form.name} onChange={set('name')} className={inputClass} />
+                <input id="co-name" autoComplete="name" maxLength={ADDRESS_LIMITS.name} value={form.name} onChange={set('name')} className={inputClass} />
                 <FieldError message={errors.name} />
               </div>
               <div>
@@ -286,13 +286,13 @@ export default function Checkout() {
 
             <div>
               <label className={labelClass} htmlFor="co-email">Email (order updates and tracking)</label>
-              <input id="co-email" type="email" autoComplete="email" value={form.email} onChange={set('email')} className={inputClass} />
+              <input id="co-email" type="email" autoComplete="email" maxLength={ADDRESS_LIMITS.email} value={form.email} onChange={set('email')} className={inputClass} />
               <FieldError message={errors.email} />
             </div>
 
             <div>
               <label className={labelClass} htmlFor="co-address">Address (house, street, area)</label>
-              <input id="co-address" autoComplete="street-address" value={form.address} onChange={set('address')} className={inputClass} />
+              <input id="co-address" autoComplete="street-address" maxLength={ADDRESS_LIMITS.address} value={form.address} onChange={set('address')} className={inputClass} />
               <FieldError message={errors.address} />
             </div>
 
@@ -320,7 +320,7 @@ export default function Checkout() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass} htmlFor="co-city">City</label>
-                <input id="co-city" autoComplete="address-level2" value={form.city} onChange={set('city')} className={inputClass} />
+                <input id="co-city" autoComplete="address-level2" maxLength={ADDRESS_LIMITS.city} value={form.city} onChange={set('city')} className={inputClass} />
                 <FieldError message={errors.city} />
               </div>
               <div>

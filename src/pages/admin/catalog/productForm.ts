@@ -72,6 +72,7 @@ export function draftFromProduct(p: Product): ProductDraft {
 const optionalText = z.string().trim().transform(v => v || undefined);
 const num = (label: string) => z.string().trim().transform(v => (v === '' ? NaN : Number(v)))
   .pipe(z.number({ invalid_type_error: `${label} must be a number` }).finite(`${label} must be a number`));
+const twoDecimals = (v: number) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6;
 const optionalNum = (schema: z.ZodNumber) => z.string().trim().transform(v => (v === '' ? undefined : Number(v))).pipe(schema.optional());
 const imageUrl = z.string().trim().refine(v => v === '' || v.startsWith('/') || /^https?:\/\/\S+$/.test(v), 'Use an https:// URL or a /path on this site')
   .transform(v => v || undefined);
@@ -80,7 +81,7 @@ const sizeSchema = z.object({
   label: z.string().trim().min(1, 'Size label is required').max(60),
   widthMm: num('Width').pipe(z.number().int('Width must be whole millimetres').min(50, 'Width must be at least 50 mm').max(3000)),
   heightMm: num('Height').pipe(z.number().int('Height must be whole millimetres').min(50, 'Height must be at least 50 mm').max(3000)),
-  priceDelta: num('Price difference').pipe(z.number().min(-100000).max(1000000)),
+  priceDelta: num('Price difference').pipe(z.number().min(-100000).max(1000000).refine(twoDecimals, 'Price difference can have at most 2 decimal places')),
 });
 
 export const productFormSchema = z.object({
@@ -90,7 +91,7 @@ export const productFormSchema = z.object({
   description: z.string().trim().max(4000),
   category: z.string().refine(v => ACCEPTED_CATEGORY_IDS.includes(v), 'Pick a category').transform(v => v as ProductCategory),
   shapeId: z.string().trim().min(1, 'Pick a base shape'),
-  price: num('Price').pipe(z.number().positive('Price must be greater than zero').max(1000000)),
+  price: num('Price').pipe(z.number().positive('Price must be greater than zero').max(1000000).refine(twoDecimals, 'Price can have at most 2 decimal places')),
   mrp: optionalNum(z.number().positive('MRP must be greater than zero').max(10000000)),
   hsnCode: z.string().trim().refine(v => v === '' || /^\d{4,8}$/.test(v), 'HSN code is 4 to 8 digits').transform(v => v || undefined),
   finishes: z.array(z.enum(ACCEPTED_FINISH_IDS)).min(1, 'Choose at least one finish'),

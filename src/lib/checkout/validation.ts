@@ -19,6 +19,17 @@ export function isValidPincode(input: string): boolean {
   return /^[1-9]\d{5}$/.test(input.trim());
 }
 
+/** Field limits mirror customerSchema in api/_lib/checkout.ts; keep the two in step. */
+export const ADDRESS_LIMITS = { name: 120, email: 254, address: 500, city: 100 } as const;
+
+// Dot-atom local part and dotted DNS labels: rejects double @, spaces, empty labels and leading/trailing dots.
+const EMAIL = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+
+export function isValidEmail(input: string): boolean {
+  const value = input.trim();
+  return value.length <= ADDRESS_LIMITS.email && EMAIL.test(value);
+}
+
 export interface AddressForm {
   name: string;
   email: string;
@@ -35,10 +46,13 @@ export type AddressErrors = Partial<Record<keyof AddressForm, string>>;
 export function validateAddress(form: AddressForm): AddressErrors {
   const errors: AddressErrors = {};
   if (form.name.trim().length < 2) errors.name = 'Enter the recipient name.';
-  if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) errors.email = 'Enter a valid email address.';
+  else if (form.name.trim().length > ADDRESS_LIMITS.name) errors.name = `Name can be at most ${ADDRESS_LIMITS.name} characters.`;
+  if (!isValidEmail(form.email)) errors.email = 'Enter a valid email address.';
   if (!normalizeIndianMobile(form.phone)) errors.phone = 'Enter a valid 10-digit Indian mobile number.';
   if (form.address.trim().length < 5) errors.address = 'Enter the full street address.';
+  else if (form.address.trim().length > ADDRESS_LIMITS.address) errors.address = `Address can be at most ${ADDRESS_LIMITS.address} characters.`;
   if (form.city.trim().length < 2) errors.city = 'Enter the city.';
+  else if (form.city.trim().length > ADDRESS_LIMITS.city) errors.city = `City can be at most ${ADDRESS_LIMITS.city} characters.`;
   if (!(INDIAN_STATES_AND_UTS as readonly string[]).includes(form.state)) errors.state = 'Select a state or union territory.';
   if (!isValidPincode(form.pincode)) errors.pincode = 'Enter a valid 6-digit pincode.';
   return errors;

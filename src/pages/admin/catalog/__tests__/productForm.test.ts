@@ -30,6 +30,13 @@ describe('product form', () => {
     });
   });
 
+  it('rejects more than two decimals on price and size price difference', () => {
+    const base = valid();
+    const r = parseDraft(valid({ price: '99.999', sizes: [{ ...base.sizes[0], priceDelta: '-1.234' }] }));
+    expect('errors' in r && r.errors).toMatchObject({ price: expect.stringContaining('2 decimal'), 'sizes.0.priceDelta': expect.stringContaining('2 decimal') });
+    expect(parseDraft(valid({ price: '99.5' })).ok).toBe(true);
+  });
+
   it('rejects MRP not above price, unknown finishes, bad sizes and duplicate labels', () => {
     expect('errors' in parseDraft(valid({ mrp: '2999' }))).toBe(true);
     expect('errors' in parseDraft({ ...valid(), finishes: ['rainbow' as never] })).toBe(true);

@@ -60,9 +60,13 @@ service cloud.firestore {
 
     // ---------- public catalog ----------
 
+    // `stock` is moved by order reservations on the server, so a client save (a stale absolute value)
+    // must never change it: staff adjust stock with the ADJUST_STOCK admin action. Creating a product
+    // may still set its initial stock.
     match /products/{productId} {
       allow read: if true;
-      allow write: if canWriteCatalog();
+      allow create, delete: if canWriteCatalog();
+      allow update: if canWriteCatalog() && !('stock' in changedKeys());
     }
 
     match /categories/{categoryId} {

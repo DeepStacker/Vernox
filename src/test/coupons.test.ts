@@ -30,6 +30,13 @@ const coupon = (overrides: Record<string, unknown> = {}) =>
 
 const ctx = { now: NOW, customerUsageCount: 0 };
 
+describe('cleared coupon limits', () => {
+  it('treats null limits as no limit', () => {
+    const c = couponFromDoc('c', { code: 'X', discountType: 'fixed', discountValue: 5, maxUsageCount: null, maxUsagePerCustomer: null, minOrderValue: null, maxDiscountLimit: null, expiryDate: null, startDate: null })!;
+    expect(c).toMatchObject({ maxUsageCount: null, maxUsagePerCustomer: null, minOrderPaise: null, maxDiscountPaise: null, startsAt: null, expiresAt: null });
+  });
+});
+
 describe('coupon evaluation', () => {
   it('applies a percentage discount to server-priced lines', () => {
     const result = evaluateCoupon(coupon(), lines, ctx);
@@ -65,7 +72,11 @@ describe('coupon evaluation', () => {
   });
 
   it('enforces the minimum order on the merchandise subtotal', () => {
-    expect(evaluateCoupon(coupon({ minOrderValue: 1000 }), lines, ctx)).toMatchObject({ ok: false, errorCode: 'MIN_ORDER_NOT_MET' });
+    expect(evaluateCoupon(coupon({ minOrderValue: 1000 }), lines, ctx)).toMatchObject({
+      ok: false,
+      errorCode: 'MIN_ORDER_NOT_MET',
+      message: 'A minimum order of ₹1,000.00 is required for this coupon.',
+    });
   });
 
   it('treats YYYY-MM-DD dates as whole days in IST', () => {

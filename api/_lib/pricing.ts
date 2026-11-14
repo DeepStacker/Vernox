@@ -136,12 +136,17 @@ export function productFromDoc(id: string, data: DocData | null): ProductRecord 
   const sizes: ProductSize[] = [];
   if (Array.isArray(data.sizes)) {
     for (const s of data.sizes as Array<Record<string, unknown>>) {
-      if (typeof s?.label !== 'string' || !isNonNegativeFinite(s.priceDelta ?? 0)) return null;
+      // Staff may enter a negative difference (a smaller, cheaper size). A size that is malformed or
+      // would not price above zero is dropped on its own so it cannot make the whole product unbuyable.
+      const delta = s?.priceDelta ?? 0;
+      if (typeof s?.label !== 'string' || typeof delta !== 'number' || !Number.isFinite(delta)) continue;
+      const priceDeltaPaise = rupeesToPaise(delta);
+      if (rupeesToPaise(data.price) + priceDeltaPaise <= 0) continue;
       sizes.push({
         label: s.label,
         widthMm: Number(s.widthMm) || 0,
         heightMm: Number(s.heightMm) || 0,
-        priceDeltaPaise: rupeesToPaise(Number(s.priceDelta ?? 0)),
+        priceDeltaPaise,
       });
     }
   }

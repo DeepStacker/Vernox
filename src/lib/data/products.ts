@@ -1,9 +1,9 @@
 /** Products and categories: public reads, claim-gated admin writes (enforced by Firestore rules). */
 import { useQuery } from '@tanstack/react-query';
-import { collection, deleteDoc, doc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firestoreDb';
 import type { CategoryDoc, Product } from '@/types/store';
-import { logAudit } from './adminApi';
+import { adminAction, logAudit } from './adminApi';
 import { toCategory, toProduct } from './catalogMappers';
 import { stripUndefined, useOptimisticMutation } from './optimistic';
 
@@ -32,7 +32,15 @@ export function useProductMutations() {
   const save = useOptimisticMutation<Product[], Product>({
     queryKey: PRODUCTS_KEY,
     mutationFn: async product => {
-      await setDoc(doc(db, 'products', product.id), stripUndefined(product));
+      const ref = doc(db, 'products', product.id);
+      if (!(await getDoc(ref)).exists()) {
+        await setDoc(ref, stripUndefined(product)); // creating: the initial stock is part of the document
+      } else {
+        // `stock` is also moved by order reservations, so a save must never write it back (rules refuse it);
+        // staff stock edits go through ADJUST_STOCK. Cleared optional fields are removed, not left behind.
+        const { stock: _stock, ...fields } = product;
+        await updateDoc(ref, Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v === undefined ? deleteField() : v])));
+      }
       logAudit('PRODUCT_SAVED', 'product', product.id, { name: product.name });
     },
     apply: (cur = [], product) =>
@@ -50,13 +58,10 @@ export function useProductMutations() {
     failureMessage: 'Could not delete product',
   });
 
-  const setStock = useOptimisticMutation<Product[], { id: string; stock: number }>({
+  const adjustStock = useOptimisticMutation<Product[], { id: string; delta: number; reason?: string }>({
     queryKey: PRODUCTS_KEY,
-    mutationFn: async ({ id, stock }) => {
-      await updateDoc(doc(db, 'products', id), { stock, updatedAt: Date.now() });
-      logAudit('STOCK_UPDATED', 'inventory', id, { stock });
-    },
-    apply: (cur = [], { id, stock }) => cur.map(p => (p.id === id ? { ...p, stock } : p)),
+    mutationFn: ({ id, delta, reason }) => adminAction('ADJUST_STOCK', { productId: id, delta, reason }),
+    apply: (cur = [], { id, delta }) => cur.map(p => (p.id === id ? { ...p, stock: Math.max(0, p.stock + delta) } : p)),
     failureMessage: 'Could not update stock',
   });
 
@@ -84,7 +89,7 @@ export function useProductMutations() {
   return {
     saveProduct: save.run,
     deleteProduct: remove.run,
-    setStock: setStock.run,
+    adjustStock: adjustStock.run,
     saveCategory: saveCategory.run,
     deleteCategory: removeCategory.run,
   };
