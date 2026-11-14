@@ -35,7 +35,7 @@ function dosDateTime(date: Date): { time: number; day: number } {
   };
 }
 
-export function createZip(entries: readonly ZipEntry[], modified: Date = new Date()): Uint8Array {
+export function createZip(entries: readonly ZipEntry[], modified: Date = new Date()): Uint8Array<ArrayBuffer> {
   if (entries.length > 0xffff) throw new Error('Too many files for one zip.');
   const encoder = new TextEncoder();
   const { time, day } = dosDateTime(modified);

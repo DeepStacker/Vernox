@@ -340,8 +340,9 @@ phase1-foundation with tests. Highlights:
 
 - Dependencies: `npm audit fix` and moving `@vercel/node` (types only) to devDependencies took production advisories from 45 to 18;
   firebase-admin 14 (image on Node 24: Node 20 reached end of life in April 2026; `engines` is now >=22) and React Router 7 took them
-  to 8. zod 3 → 4 (with @hookform/resolvers 5) is done. Left: the firebase
-  web SDK (gRPC advisories; gRPC is not used in the browser) and glob/minimatch via sucrase, each a separate change with a full test pass.
+  to 8. zod 3 → 4 (with @hookform/resolvers 5) is done. 2026-11-15: in-range
+  updates, `npm audit fix` and an `overrides` pin of `@grpc/grpc-js` ^1.14.7 under `@firebase/firestore` (the Node build the rules tests
+  use) leave `npm audit` at 0. Not done, each its own migration: React 19, Vite 8, Tailwind 4, firebase 13, eslint 10, TypeScript 7.
 - Content-Security-Policy: pages enforce `frame-ancestors 'self'; base-uri 'self'; object-src 'none'` and send the full allow-list
   (Razorpay, Google sign-in, Firebase) as report-only, with violations logged by `/api/csp-report` (SECURITY.md). Enforce it after a
   browser pass with live test payments leaves no `[csp]` log lines.

@@ -32,7 +32,7 @@ const MIME: Record<CamFormat, string> = { svg: 'image/svg+xml', dxf: 'applicatio
 
 export interface ProductionFile {
   filename: string;
-  data: Uint8Array;
+  data: Uint8Array<ArrayBuffer>;
   source: CamSource;
 }
 

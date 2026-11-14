@@ -80,10 +80,11 @@ export async function exportGlb(request: ModelRequest): Promise<ArrayBuffer> {
   return result;
 }
 
-export async function exportUsdz(request: ModelRequest): Promise<Uint8Array> {
+export async function exportUsdz(request: ModelRequest): Promise<Uint8Array<ArrayBuffer>> {
   const group = buildPieceGroup(request);
   const exporter = new USDZExporter();
-  return exporter.parseAsync(group);
+  // three types the result over any ArrayBufferLike; Blob needs a plain ArrayBuffer, so copy into one.
+  return new Uint8Array(await exporter.parseAsync(group));
 }
 
 export interface BuiltModels {
