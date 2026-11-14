@@ -62,14 +62,17 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     await assertFails(updateDoc(doc(db, 'products/p-01'), { price: 1 }));
   });
 
-  it('orders: owner/staff read, no client create, staff may change status only', async () => {
+  it('orders: owner/staff read, no client create, staff may only assign and annotate', async () => {
     await assertSucceeds(getDoc(doc(as('alice'), 'orders/o1')));
     await assertFails(getDoc(doc(as('mallory'), 'orders/o1')));
     await assertFails(setDoc(doc(guest(), 'orders/o2'), { status: 'Paid', total: 1 }));
     await assertFails(setDoc(doc(as('alice'), 'orders/o2'), { userId: 'alice', status: 'Paid' }));
     const shipping = as('s', { role: 'shipping' });
-    await assertSucceeds(updateDoc(doc(shipping, 'orders/o1'), { status: 'In_Design', updatedAt: 1 }));
-    // Skipping stages, shipping and cancelling are API-only (invoice, stock, refunds, notifications).
+    // Every status change, tracking included, is API-only (history, hold and balance checks, notifications).
+    await assertFails(updateDoc(doc(shipping, 'orders/o1'), { status: 'In_Design', updatedAt: 1 }));
+    await assertFails(updateDoc(doc(shipping, 'orders/o1'), { statusHistory: [], updatedAt: 1 }));
+    await assertFails(updateDoc(doc(shipping, 'orders/o1'), { tracking: { url: 'javascript:alert(1)' }, updatedAt: 1 }));
+    await assertSucceeds(updateDoc(doc(shipping, 'orders/o1'), { assignedTo: 's@vernox.in', updatedAt: 1 }));
     await assertFails(updateDoc(doc(shipping, 'orders/o1'), { status: 'Packed', updatedAt: 1 }));
     await assertFails(updateDoc(doc(shipping, 'orders/o1'), { status: 'Cancelled', updatedAt: 1 }));
     // QC / packing notes: a string of at most 20 000 characters.
@@ -218,6 +221,10 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'b2b_inquiries/b1'), inquiry));
     await assertFails(getDoc(doc(guest(), 'b2b_inquiries/b1')));
     await assertSucceeds(getDoc(doc(as('sup', { role: 'support' }), 'b2b_inquiries/b1')));
+    // The pipeline moves the status only; details are not editable and enquiries are never deleted.
+    await assertSucceeds(updateDoc(doc(as('sup', { role: 'support' }), 'b2b_inquiries/b1'), { status: 'contacted' }));
+    await assertFails(updateDoc(doc(as('sup', { role: 'support' }), 'b2b_inquiries/b1'), { email: 'x@y.in' }));
+    await assertFails(deleteDoc(doc(as('sup', { role: 'support' }), 'b2b_inquiries/b1')));
   });
 
   const space = { id: 's2', name: 'Bedroom', roomType: 'bedroom', budgetBand: null, notes: '', walls: [], createdAt: 1, updatedAt: 1 };

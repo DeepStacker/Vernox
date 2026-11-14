@@ -8,7 +8,6 @@ import { useAuth } from '@/lib/auth/AuthProvider';
 import { opsApi } from '@/lib/data/orderOps';
 import { useOrderMutations } from '@/lib/data/orders';
 import { errorMessage } from '@/lib/data/optimistic';
-import { appendNote } from '@/lib/orders/orderNotes';
 import { ORDER_STATUS_LABELS, type OrderStatus } from '@/lib/orders/orderStateMachine';
 import type { Order } from '@/types/store';
 
@@ -30,8 +29,8 @@ export function useOrderActions() {
     who,
     permissions,
     canWrite: Boolean(permissions?.canUpdateOrders),
-    /** Roles that may write orders add notes directly; support (customers.read) goes through ADD_ORDER_NOTE. */
-    canAddNote: Boolean(permissions?.canUpdateOrders || permissions?.canManageSupport),
+    /** Free-text notes go through ADD_ORDER_NOTE (append-only, any staff who can read orders). */
+    canAddNote: Boolean(permissions?.canReadOrders),
     claim: (order: Order) => write(order, { assignedTo: who }),
     release: (order: Order) => write(order, { assignedTo: '' }),
     moveTo: async (order: Order, status: OrderStatus, notes?: string) => {
@@ -40,7 +39,6 @@ export function useOrderActions() {
       return ok;
     },
     addNote: async (order: Order, text: string): Promise<boolean> => {
-      if (permissions?.canUpdateOrders) return write(order, { notes: appendNote(order.adminNotes, text, who, Date.now()) });
       try {
         await opsApi.addOrderNote(order.id, text);
         await qc.invalidateQueries({ queryKey: ['admin', 'orders'] });

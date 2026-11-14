@@ -25,9 +25,11 @@ and no development payment bypasses — use Razorpay test keys locally.
   the same transaction that marks the order `Paid`.
 - The Razorpay order amount is set by the server; `/api/verify-payment` accepts only the three Razorpay fields and verifies
   the signature with `timingSafeEqual`. Webhook captures are also checked against the order's amount and currency.
-- Orders cannot be created, deleted, or have money fields changed by any client (rules). Staff browsers may write only workshop
-  stage moves (`staffWorkshopMoves()` in the rules, mirrored from `src/types/orderStatus.ts`); shipping, delivery, cancellation,
-  returns and refunds go through the API.
+- Orders cannot be created, deleted, or have money fields changed by any client (rules). Staff browsers may write only
+  `assignedTo` and `notes` (the QC/packing records); every status change goes through `UPDATE_ORDER_STATUS` (history, hold and
+  balance checks, customer notification, audit) and tracking through `SET_ORDER_TRACKING` (`orders.tracking`, http(s) links only).
+  Shipping, delivery, cancellation, returns and refunds also go through the API. Trade enquiries: staff change only `status`, never
+  delete. The orders CSV export needs `reports.export`.
 - COD eligibility, the COD fee, GST and refund ceilings are decided only by the server. Refund amounts are capped at
   collected − refunded − pending inside a transaction; Razorpay refunds carry our refund id so the webhook cannot double count.
 - GST invoices and credit notes are server-generated, immutable and sequentially numbered in a transaction.

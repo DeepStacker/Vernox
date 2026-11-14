@@ -150,40 +150,14 @@ service cloud.firestore {
 
     // ---------- orders (created and paid only by the API) ----------
 
-    // Workshop moves staff may write directly. MIRRORS STAFF_WORKSHOP_MOVES in
-    // src/types/orderStatus.ts (ORDER_TRANSITIONS restricted to STAFF_SETTABLE_STATUSES);
-    // src/test/orderLifecycle.test.ts parses this map and fails if they differ.
-    // Legacy Phase 1 statuses (Designing, Finished) move like In_Design / Finishing.
-    // Shipping, delivery, cancellation, returns and refunds are API-only (invoice,
-    // stock, refunds, notifications). Prefer UPDATE_ORDER_STATUS, which also notifies.
-    function staffWorkshopMoves() {
-      return {
-        'Paid': ['In_Design'],
-        'Confirmed_COD': ['In_Design'],
-        'In_Design': ['Cutting'],
-        'Cutting': ['Finishing', 'In_Design'],
-        'Finishing': ['Quality_Check', 'Cutting'],
-        'Quality_Check': ['Packed', 'Finishing', 'Cutting'],
-        'Packed': ['Quality_Check'],
-        'Partially_Refunded': ['In_Design', 'Cutting', 'Finishing', 'Quality_Check', 'Packed'],
-        'Designing': ['Cutting'],
-        'Finished': ['Quality_Check', 'Cutting']
-      };
-    }
-
     match /orders/{orderId} {
       allow read: if (signedIn() && resource.data.userId == request.auth.uid) || canReadOrders();
       allow create, delete: if false;
-      // Staff may move workshop stages and annotate; money, items, customer,
-      // payment, shipment and invoice fields are immutable from clients.
+      // Staff may only assign and annotate here. Status (with its history, notification, hold and balance
+      // checks) and tracking change through the API (UPDATE_ORDER_STATUS, SET_ORDER_TRACKING); money, items,
+      // customer, payment, shipment and invoice fields are immutable from clients.
       allow update: if canUpdateOrders()
-        && changedKeys().hasOnly(['status', 'statusHistory', 'assignedTo', 'tracking', 'notes', 'updatedAt'])
-        && (
-          request.resource.data.status == resource.data.status
-          || (request.resource.data.status in staffWorkshopMoves().get(resource.data.status, [])
-              // A held order (hold set by the API) keeps its stage until the hold is released.
-              && resource.data.get('hold', null) == null)
-        )
+        && changedKeys().hasOnly(['assignedTo', 'notes', 'updatedAt'])
         // QC / packing records are stored in `notes` by the staff consoles.
         && request.resource.data.get('notes', '') is string
         && request.resource.data.get('notes', '').size() <= 20000;
@@ -194,7 +168,10 @@ service cloud.firestore {
     match /b2b_inquiries/{inquiryId} {
       // Created only by the API (POST /api/engage TRADE_ENQUIRY), which validates and rate-limits it.
       allow create: if false;
-      allow read, update, delete: if canReadB2b();
+      allow read: if canReadB2b();
+      // The pipeline only moves the status; contact details stay as the customer sent them.
+      allow update: if canReadB2b() && changedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if false;
     }
 
     // ---------- support tickets (contact form; created and changed only by the API) ----------

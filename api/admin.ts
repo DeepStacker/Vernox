@@ -40,7 +40,7 @@ import { createShippingProvider } from './_lib/shipping';
 import { applyCourierStatus, bulkShipmentDocuments, cancelShipment, courierRatesFor, createShipment, getLabel, type ManualShipmentDetails } from './_lib/shipping/shipments';
 import type { PackageDetails } from './_lib/shipping/types';
 import type { DocStore } from './_lib/store';
-import { recordOfflineBalancePayment, sendBalanceLink } from './_lib/orderBalance';
+import { recordOfflineBalancePayment, sendBalanceLink, type RecordPaymentInput } from './_lib/orderBalance';
 import { OFFLINE_PAYMENT_MODES } from '../src/types/staffOrders';
 import { createStaffOrder, customerLookupSchema, findCustomerByPhone, quoteStaffOrder, staffOrderSchema, staffQuoteSchema } from './_lib/staffOrders';
 import { checkIntegration } from './_lib/integrationChecks';
@@ -112,6 +112,14 @@ const reviewSchema = z.object({
 const idSchema = (key: string) => z.object({ [key]: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/) });
 
 const orderIdField = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
+/** Links shown to customers and staff as <a href>: http(s) only, so a `javascript:` URL can never be stored. */
+const webUrlField = z.string().trim().url().max(500).refine(v => /^https?:\/\//i.test(v), 'must start with https:// or http://');
+const trackingSchema = z.object({
+  carrier: z.string().trim().max(80).optional(),
+  trackingNumber: z.string().trim().max(80).optional(),
+  url: webUrlField.optional(),
+  estimatedDelivery: z.string().trim().max(40).optional(),
+});
 const consultationIdField = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
 const reasonField = z.string().trim().min(3).max(300);
 const MAX_NOTES_LENGTH = 20_000;
@@ -224,11 +232,7 @@ const ACTIONS: Record<string, ActionDefinition> = {
           orderId: z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/),
           status: z.enum(STAFF_SETTABLE_STATUSES as [OrderStatus, ...OrderStatus[]]),
           note: z.string().trim().max(500).optional(),
-          tracking: z.object({
-            carrier: z.string().trim().max(80).optional(),
-            trackingNumber: z.string().trim().max(80).optional(),
-            url: z.string().trim().url().max(500).optional(),
-          }).optional(),
+          tracking: trackingSchema.optional(),
         }),
         ctx.params,
       );
@@ -239,11 +243,28 @@ const ACTIONS: Record<string, ActionDefinition> = {
       await ctx.store.runTransaction(async tx => {
         const order = asOrder(await tx.get(orderPath(p.orderId)));
         if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
-        const plan = await planStatusChange(tx, order, { to: p.status, by: ctx.actor.uid, note: p.note });
+        const plan = await planStatusChange(tx, order, { to: p.status, by: ctx.actor.email ?? ctx.actor.uid, note: p.note });
         applyStatusChange(tx, plan, order, now, p.tracking ? { tracking: p.tracking } : {});
         auditInTransaction(ctx.store, tx, audit(ctx, 'ORDER_STATUS_UPDATED', 'order', order.id, { from: order.status, to: p.status }));
       });
       return { orderId: p.orderId, status: p.status };
+    },
+  },
+
+  /** Staff-entered carrier details (orders without a courier booking); the customer sees them until a shipment exists. */
+  SET_ORDER_TRACKING: {
+    method: 'POST',
+    permission: 'orders.tracking',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: orderIdField, tracking: trackingSchema }), ctx.params);
+      const now = Date.now();
+      await ctx.store.runTransaction(async tx => {
+        const order = asOrder(await tx.get(orderPath(p.orderId)));
+        if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
+        tx.update(orderPath(order.id), { tracking: p.tracking, updatedAt: now });
+        auditInTransaction(ctx.store, tx, audit(ctx, 'ORDER_TRACKING_SET', 'order', order.id, { carrier: p.tracking.carrier ?? null }));
+      });
+      return { orderId: p.orderId, tracking: p.tracking };
     },
   },
 
@@ -316,9 +337,10 @@ const ACTIONS: Record<string, ActionDefinition> = {
    * appended server-side inside a transaction, so concurrent notes never overwrite each other
    * and the structured `#vernox:v1` block (QC, package) is preserved by appendNote().
    */
+  // Append-only in a transaction, so two staff adding notes at once never overwrite each other.
   ADD_ORDER_NOTE: {
     method: 'POST',
-    permission: 'customers.read',
+    permission: 'orders.read',
     async run(ctx) {
       const p = parse(z.object({ orderId: orderIdField, note: z.string().trim().min(1).max(500) }), ctx.params);
       const now = Date.now();
@@ -445,7 +467,7 @@ const ACTIONS: Record<string, ActionDefinition> = {
         }),
         ctx.params,
       );
-      return recordOfflineBalancePayment(ctx.store, createRazorpayPaymentLinkGateway(), p, ctx.actor);
+      return recordOfflineBalancePayment(ctx.store, createRazorpayPaymentLinkGateway(), p as RecordPaymentInput, ctx.actor);
     },
   },
 
@@ -583,7 +605,7 @@ const ACTIONS: Record<string, ActionDefinition> = {
             .object({
               courier: z.string().trim().min(2).max(80),
               awb: z.string().trim().regex(/^[A-Za-z0-9-]{4,40}$/),
-              trackingUrl: z.string().trim().url().max(500).optional(),
+              trackingUrl: webUrlField.optional(),
             })
             .optional(),
         }),

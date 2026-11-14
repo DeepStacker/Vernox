@@ -15,8 +15,8 @@ import { toast } from 'sonner';
 import { db } from '@/lib/firestoreDb';
 import { ROLE_PERMISSIONS, type StaffRole } from '@/lib/auth/permissions';
 import { assertClientTransition, type OrderStatus } from '@/lib/orders/orderStateMachine';
-import type { CustomerAccount, Order, OrderTracking, StatusHistoryEntry } from '@/types/store';
-import { logAudit } from './adminApi';
+import type { CustomerAccount, Order, OrderTracking } from '@/types/store';
+import { adminAction, logAudit } from './adminApi';
 import { errorMessage, stripUndefined } from './optimistic';
 import { normalizeOrder } from './orderModel';
 
@@ -194,20 +194,23 @@ export function useOrderMutations() {
 
   const mutation = useMutation({
     mutationFn: async ({ order, update, actor }: UpdateOrderVars) => {
-      const now = Date.now();
-      const fields: Record<string, unknown> = { updatedAt: now };
+      // Status and tracking go through the API (history, hold and balance checks, customer notification, audit);
+      // only assignment and the consoles' notes are written directly (firestore.rules).
       if (update.status && update.status !== order.status) {
         assertClientTransition(order.status, update.status, ROLE_PERMISSIONS[actor.role]);
-        const entry: StatusHistoryEntry = { status: update.status, at: now, by: actor.email };
-        fields.status = update.status;
-        fields.statusHistory = [...order.statusHistory, entry];
+        await adminAction('UPDATE_ORDER_STATUS', { orderId: order.id, status: update.status });
       }
+      if (update.tracking !== undefined) {
+        await adminAction('SET_ORDER_TRACKING', { orderId: order.id, tracking: stripUndefined({ ...update.tracking }) });
+      }
+      const fields: Record<string, unknown> = {};
       if (update.assignedTo !== undefined) fields.assignedTo = update.assignedTo;
-      if (update.tracking !== undefined) fields.tracking = update.tracking;
       if (update.notes !== undefined) fields.notes = update.notes;
-      await updateDoc(doc(db, 'orders', order.id), stripUndefined(fields));
-      logAudit('ORDER_UPDATED', 'order', order.id, { from: order.status, to: update.status, tracking: Boolean(update.tracking) });
-      return { orderId: order.id, fields };
+      if (Object.keys(fields).length > 0) {
+        await updateDoc(doc(db, 'orders', order.id), stripUndefined({ ...fields, updatedAt: Date.now() }));
+        logAudit('ORDER_UPDATED', 'order', order.id, { assignedTo: update.assignedTo !== undefined, notes: update.notes !== undefined });
+      }
+      return { orderId: order.id };
     },
     onMutate: async ({ order, update, actor }) => {
       await qc.cancelQueries({ queryKey: ['admin', 'orders'] });

@@ -48,6 +48,9 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
   const { updateOrder: saveOrderUpdate } = useOrderMutations();
   const actor = { email: user?.email ?? 'unknown', role: staffRole ?? 'support' };
   const canEdit = Boolean(permissions && (permissions.canManageOrders || permissions.canManageProduction || permissions.canManageShipping));
+  const canSetTracking = Boolean(permissions?.canTrackShipments);
+  // The CSV carries customer names, emails and cities: reports.export only.
+  const canExport = Boolean(permissions?.canExportReports);
   const navigate = useNavigate();
 
   // Active Tab Filter (Matching Image 1)
@@ -427,14 +430,14 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
             </div>
 
             {/* Download CSV Button */}
-            <button 
+            {canExport && <button 
               onClick={() => handleExportCSV()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-medium text-foreground transition"
               title="Download Orders CSV"
             >
               <Download className="w-3.5 h-3.5 text-brass" />
               <span>Download</span>
-            </button>
+            </button>}
 
             {/* Pagination Controls (< Page 1 of 2 >) */}
             <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-1 text-xs bg-background">
@@ -467,12 +470,12 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
               <span>{selectedOrderIds.size} orders selected</span>
             </div>
             <div className="flex items-center gap-2">
-              <button
+              {canExport && <button
                 onClick={() => handleExportCSV(orders.filter(o => selectedOrderIds.has(o.id)))}
                 className="bg-toolbar-foreground/10 border border-toolbar-foreground/20 text-toolbar-foreground px-3 py-1 rounded-md text-xs font-semibold transition"
               >
                 Export Selected
-              </button>
+              </button>}
               <button
                 onClick={() => setSelectedOrderIds(new Set())}
                 className="text-toolbar-foreground/70 hover:text-toolbar-foreground text-xs underline ml-1"
@@ -780,7 +783,8 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
                 <span className="text-[11px] font-bold text-foreground uppercase tracking-wider block font-display">
                   Atelier Logistics & Global Tracking
                 </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {!canSetTracking && <p className="text-[11px] text-muted-foreground">Tracking is set by shipping or order managers.</p>}
+                <fieldset disabled={!canSetTracking} className="grid grid-cols-1 sm:grid-cols-2 gap-3 disabled:opacity-60">
                   <div>
                     <label className="text-[10px] text-muted-foreground uppercase font-semibold block mb-1">
                       Carrier
@@ -806,7 +810,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
                       className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-xs outline-none focus:border-oxblood focus:ring-1 focus:ring-oxblood font-mono"
                     />
                   </div>
-                </div>
+                </fieldset>
 
                 <div>
                   <label className="text-[10px] text-muted-foreground uppercase font-semibold block mb-1">
@@ -825,8 +829,14 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
                   <button
                     disabled={!canEdit}
                     onClick={async () => {
+                      const tracking = { carrier: trackingCarrier, trackingNumber, estimatedDelivery };
+                      const trackingChanged = JSON.stringify(tracking) !== JSON.stringify({
+                        carrier: inspectingOrder.tracking?.carrier ?? '', trackingNumber: inspectingOrder.tracking?.trackingNumber ?? '',
+                        estimatedDelivery: inspectingOrder.tracking?.estimatedDelivery ?? '',
+                      });
                       const saved = await persist(inspectingOrder, {
-                        tracking: { carrier: trackingCarrier, trackingNumber, estimatedDelivery },
+                        // Tracking is set through SET_ORDER_TRACKING (orders.tracking); other roles save notes only.
+                        ...(canSetTracking && trackingChanged ? { tracking } : {}),
                         assignedTo,
                         notes: withFreeText(inspectingOrder.adminNotes, adminNotes),
                       });
@@ -847,14 +857,14 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
                 Total: {currency}{inspectingOrder.total.toFixed(2)}
               </div>
               <div className="flex items-center gap-2">
-                <button
+                {canExport && <button
                   onClick={() => {
                     handleExportCSV([inspectingOrder]);
                   }}
                   className="bg-background border border-border text-foreground hover:bg-muted px-3 py-1.5 rounded-lg text-xs font-medium transition"
                 >
                   Export Order CSV
-                </button>
+                </button>}
                 <button
                   onClick={() => setInspectingOrder(null)}
                   className="bg-foreground text-background px-4 py-1.5 rounded-lg text-xs font-semibold hover:opacity-90 transition"

@@ -35,6 +35,8 @@ export interface RolePermissions {
   canManageSupport: boolean;
   /** May write order status, assignment and notes (orders.update_status). Support is read-only. */
   canUpdateOrders: boolean;
+  /** orders.read: see orders and add internal notes (ADD_ORDER_NOTE). */
+  canReadOrders: boolean;
   canReadB2b: boolean;
   /** tickets.read / tickets.write: the Tickets view in Support. */
   canReadTickets: boolean;
@@ -68,6 +70,7 @@ function derivePermissions(role: StaffRole): RolePermissions {
     canManageSettings: has('settings.write'),
     canManageSupport: seesCustomers,
     canUpdateOrders: updatesStatus,
+    canReadOrders: has('orders.read'),
     canReadB2b: has('b2b.read'),
     canReadTickets: has('tickets.read'),
     canWriteTickets: has('tickets.write'),

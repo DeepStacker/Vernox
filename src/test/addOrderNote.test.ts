@@ -54,9 +54,35 @@ describe('ADD_ORDER_NOTE', () => {
     expect(parseNotes(store.read(`orders/${orderId}`)!.notes as string).text.split('\n')).toHaveLength(2);
   });
 
-  it('refuses roles without customers.read and unknown orders', async () => {
-    expect((await call('finance', { action: 'ADD_ORDER_NOTE', orderId, note: 'x' })).status).toBe(403);
+  it('refuses roles without orders.read and unknown orders', async () => {
+    expect((await call('designer', { action: 'ADD_ORDER_NOTE', orderId, note: 'x' })).status).toBe(403);
     expect((await call('support', { action: 'ADD_ORDER_NOTE', orderId: 'doesnotexist1', note: 'x' })).status).toBe(404);
     expect((await call('support', { action: 'ADD_ORDER_NOTE', orderId, note: '   ' })).status).toBe(400);
+  });
+});
+
+describe('SET_ORDER_TRACKING and UPDATE_ORDER_STATUS (the only ways staff change status or tracking)', () => {
+  let orderId: string;
+  beforeEach(async () => {
+    store = seededStore();
+    orderId = (await paidOrder(store)).orderId;
+  });
+
+  it('sets http(s) tracking for roles with orders.tracking only', async () => {
+    const tracking = { carrier: 'Delhivery', trackingNumber: 'DL123', url: 'https://track.example.in/DL123' };
+    expect((await call('production', { action: 'SET_ORDER_TRACKING', orderId, tracking })).status).toBe(403);
+    expect((await call('shipping', { action: 'SET_ORDER_TRACKING', orderId, tracking: { url: 'javascript:alert(1)' } })).status).toBe(400);
+    expect((await call('shipping', { action: 'SET_ORDER_TRACKING', orderId, tracking })).status).toBe(200);
+    expect(store.read(`orders/${orderId}`)!.tracking).toEqual(tracking);
+  });
+
+  it('moves a workshop stage with history, notification and the actor email', async () => {
+    const res = await call('production', { action: 'UPDATE_ORDER_STATUS', orderId, status: 'In_Design' });
+    expect(res.status).toBe(200);
+    const order = store.read(`orders/${orderId}`)! as { status: string; statusHistory: Array<{ status: string; by: string }> };
+    expect(order.status).toBe('In_Design');
+    expect(order.statusHistory.at(-1)).toMatchObject({ status: 'In_Design', by: 'production@vernox.in' });
+    expect(store.collection('notifications_outbox').some(d => d.data.event === 'in_production')).toBe(true);
+    expect((await call('production', { action: 'UPDATE_ORDER_STATUS', orderId, status: 'Packed' })).status).toBe(409);
   });
 });

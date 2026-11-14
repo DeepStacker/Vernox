@@ -136,8 +136,9 @@ POST body / GET query: `{ "action": "...", ... }` → `200 { "success": true, ..
 | `LOG_AUDIT` | POST | any staff | `eventAction, targetType, targetId?, details?` (stored with `source: 'client_reported'`) |
 | `LIST_STAFF` | GET | `staff.read` | → `{ staff: StaffMember[] }` |
 | `SET_STAFF_ROLE` | POST | `staff.manage` | `email` or `uid`, `role: StaffRole \| null` → `{ staff }`; cannot change own role |
-| `ADD_ORDER_NOTE` | POST | `customers.read` | `orderId, note (1–500)` | `{ orderId, notes }` — appends `[YYYY-MM-DD HH:mm UTC <email>] note` to `orders.notes` in a transaction and keeps the `#vernox:v1` block; for roles that cannot write orders (support). 400 when `notes` would exceed 20 000 characters |
+| `ADD_ORDER_NOTE` | POST | `orders.read` | `orderId, note (1–500)` | `{ orderId, notes }` — appends `[YYYY-MM-DD HH:mm IST <email>] note` to `orders.notes` in a transaction and keeps the `#vernox:v1` block; every free-text staff note goes through it, so concurrent notes never overwrite each other. 400 when `notes` would exceed 20 000 characters |
 | `UPDATE_ORDER_STATUS` | POST | `orders.update_status` (+ `orders.tracking` for `tracking`) | `orderId, status` (workshop stage: `In_Design`, `Cutting`, `Finishing`, `Quality_Check`, `Packed`), `note?, tracking?` |
+| `SET_ORDER_TRACKING` | POST | `orders.tracking` | `orderId, tracking{ carrier?, trackingNumber?, url? (http/https only), estimatedDelivery? }` → `{ orderId, tracking }`; audited `ORDER_TRACKING_SET`. Staff browsers can no longer write `status`, `statusHistory` or `tracking` directly (firestore.rules): workshop moves use `UPDATE_ORDER_STATUS`, which records history, applies the hold and balance checks and notifies the customer |
 | `SAVE_COUPON` | POST | `coupons.write` | `coupon` (code unique, upper-cased; `usedCount` is server-maintained) |
 | `DELETE_COUPON` | POST | `coupons.write` | `couponId` |
 | `SAVE_REVIEW` | POST | `reviews.moderate` | `review` |
