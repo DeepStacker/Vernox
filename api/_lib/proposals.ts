@@ -65,14 +65,14 @@ export const proposalDraftSchema = z
     const ids = new Set<string>();
     let designChars = 0;
     for (const [i, item] of draft.items.entries()) {
-      if (ids.has(item.id)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', i, 'id'], message: 'duplicate item id' });
+      if (ids.has(item.id)) ctx.addIssue({ code: "custom", path: ['items', i, 'id'], message: 'duplicate item id' });
       ids.add(item.id);
       designChars += item.designRef?.length ?? 0;
-      if (item.kind === 'catalogue' && !item.productId) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', i, 'productId'], message: 'required for a catalogue item' });
-      if (item.kind === 'custom' && !item.designRef) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', i, 'designRef'], message: 'required for a custom design' });
+      if (item.kind === 'catalogue' && !item.productId) ctx.addIssue({ code: "custom", path: ['items', i, 'productId'], message: 'required for a catalogue item' });
+      if (item.kind === 'custom' && !item.designRef) ctx.addIssue({ code: "custom", path: ['items', i, 'designRef'], message: 'required for a custom design' });
     }
-    if (designChars > MAX_TOTAL_DESIGN_CHARS) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items'], message: 'custom design data is too large' });
-  }) as unknown as z.ZodType<{ items: ProposalItem[]; note: string }, z.ZodTypeDef, unknown>;
+    if (designChars > MAX_TOTAL_DESIGN_CHARS) ctx.addIssue({ code: "custom", path: ['items'], message: 'custom design data is too large' });
+  }) as unknown as z.ZodType<{ items: ProposalItem[]; note: string }>;
 
 type Actor = Pick<StaffUser, 'uid' | 'email' | 'role'>;
 

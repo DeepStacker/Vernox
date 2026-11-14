@@ -64,8 +64,8 @@ interface ActionDefinition {
   run(ctx: ActionContext): Promise<Record<string, unknown>>;
 }
 
-function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, params: unknown): T {
-  const result = schema.safeParse(params);
+function parse<T>(schema: z.ZodType<T>, params: unknown): T {
+  const result = schema.safeParse(params, { reportInput: true });
   if (!result.success) {
     throw badRequest(friendlyIssueMessage(result.error.issues[0], 'request'));
   }
@@ -177,7 +177,7 @@ const ACTIONS: Record<string, ActionDefinition> = {
           eventAction: z.enum(Object.keys(CLIENT_AUDIT_EVENTS) as [ClientAuditEvent, ...ClientAuditEvent[]]),
           targetType: z.enum(['coupon', 'order', 'product', 'category', 'customer', 'settings', 'auth', 'admin', 'staff', 'review', 'inventory', 'config']),
           targetId: z.string().trim().max(128).default('global'),
-          details: z.record(z.unknown()).optional(),
+          details: z.record(z.string(), z.unknown()).optional(),
         }),
         ctx.params,
       );

@@ -164,7 +164,7 @@ export const studioDocumentSchema = z.object({
   mounting: mountingSchema,
   manufacturing: manufacturingSchema,
   objects: z.array(studioObjectSchema).max(2000),
-  template: z.object({ id: z.string(), fields: z.record(z.string()) }).optional(),
+  template: z.object({ id: z.string(), fields: z.record(z.string(), z.string()) }).optional(),
   production: productionSchema.optional(),
 });
 export type StudioDocument = z.infer<typeof studioDocumentSchema>;
