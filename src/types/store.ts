@@ -145,6 +145,8 @@ export interface StatusHistoryEntry {
   status: OrderStatus;
   at: number;
   by: string;
+  /** Free-text note written with the change (staff views only). */
+  note?: string;
 }
 
 export interface OrderTracking {
@@ -191,7 +193,10 @@ export interface Order {
   offlinePayment?: { mode: OfflinePaymentMode; reference: string };
   /** Partial payments (OrderDoc.balanceDuePaise / payments): amount still owed (absent or 0 = fully paid) and the payments taken. */
   balanceDuePaise?: number;
-  payments?: Array<{ id: string; kind: 'advance' | 'balance'; amountPaise: number; mode: string; reference: string; at: number }>;
+  payments?: Array<{ id: string; kind: 'advance' | 'balance'; amountPaise: number; mode: string; reference: string; at: number; by?: string }>;
+  /** Advance asked for on a staff order, and the open Razorpay link for the balance (absent once paid or replaced). */
+  advancePaise?: number;
+  balanceLink?: { url: string; expiresAt: number; amountPaise: number };
   /** Channel of a staff-entered order; absent for storefront checkouts. */
   channel?: StaffOrderChannel;
 }

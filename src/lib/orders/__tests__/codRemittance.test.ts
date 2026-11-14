@@ -9,6 +9,14 @@ const cod = (id: string, awb: string | null, totalPaise: number, status = 'Deliv
 
 const FILE = ['AWB Code,Order ID,COD Amount,UTR No,Remitted On', 'awb1,VX-1,2675.40,UTR9,06-11-2026', 'AWB2,VX-2,"1,000",UTR9,06-11-2026', 'AWB9,VX-9,500,UTR9,06-11-2026'].join('\n');
 
+describe('remittance file row errors', () => {
+  it('reports a row whose amount is not a number instead of reading it as 0', () => {
+    const { lines, rowErrors } = parseRemittanceCsv('AWB Code,COD Amount\nAWB1,abc\nAWB2,100');
+    expect(lines.map(l => l.awb)).toEqual(['AWB2']);
+    expect(rowErrors).toEqual(['Row 2 (AWB AWB1): the amount is not a number.']);
+  });
+});
+
 describe('COD remittance reconciliation', () => {
   it('matches by AWB, flags amount differences, unknown AWBs and delivered orders not yet remitted', () => {
     const { lines } = parseRemittanceCsv(FILE);

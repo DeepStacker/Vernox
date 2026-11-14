@@ -12,11 +12,14 @@ import { CsvUpload, OrderLinks } from './reconFile';
 export function SettlementPanel({ orders, onSelect }: { orders: readonly Order[]; onSelect: (id: string) => void }) {
   const [report, setReport] = useState<SettlementReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rowErrors, setRowErrors] = useState<string[]>([]);
 
   const load = async (file: File) => {
     setError(null);
+    setRowErrors([]);
     try {
-      const { lines, truncated } = parseSettlementCsv(await file.text());
+      const { lines, truncated, rowErrors: skipped } = parseSettlementCsv(await file.text());
+      setRowErrors(skipped);
       setReport(reconcileSettlement(lines, orders, truncated));
     } catch (err) {
       setReport(null);
@@ -30,6 +33,7 @@ export function SettlementPanel({ orders, onSelect }: { orders: readonly Order[]
         <CsvUpload label="Upload settlement CSV" onFile={f => void load(f)} />
         <p className="text-xs text-muted-foreground">Razorpay Dashboard → Reports → Settlement recon. Compared with the {orders.length} loaded orders; load older orders to widen it.</p>
         {error && <AdminError>{error}</AdminError>}
+        {rowErrors.length > 0 && <AdminError>{rowErrors.length} row(s) skipped and not counted below: {rowErrors.slice(0, 3).join(' ')}{rowErrors.length > 3 ? ' …' : ''}</AdminError>}
         {report && (
           <>
             {report.truncated && <AdminError>Only the first rows of this file were read; split it by date.</AdminError>}

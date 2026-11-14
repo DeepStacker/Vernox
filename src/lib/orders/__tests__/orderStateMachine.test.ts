@@ -11,7 +11,16 @@ describe('order state machine', () => {
     expect(normalizeOrderStatus('Finished')).toBe('Finishing');
     expect(normalizeOrderStatus('Shipped')).toBe('Shipped');
     expect(normalizeOrderStatus('Confirmed_COD')).toBe('Confirmed_COD');
-    expect(normalizeOrderStatus('nonsense')).toBe('Pending_Payment');
+    expect(normalizeOrderStatus('Pending')).toBe('Pending_Payment');
+  });
+
+  it('reads an unknown status as under review, never as unpaid or revenue', () => {
+    for (const raw of ['nonsense', undefined, 42]) {
+      const status = normalizeOrderStatus(raw);
+      expect(status).toBe('Payment_Discrepancy');
+      expect(status).not.toBe('Pending_Payment');
+      expect(isRevenueStatus(status)).toBe(false);
+    }
   });
 
   it('only references known statuses in the transition map', () => {

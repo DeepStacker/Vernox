@@ -15,7 +15,7 @@ import { useB2bInquiries } from '@/lib/data/b2b';
 import { downloadTaxDocument } from '@/lib/data/orderOps';
 import { useProducts } from '@/lib/data/products';
 import { findCustomerByPhone, quoteStaffOrder, useCreateStaffOrder, type CustomerLookup, type StaffOrderCreated, type StaffOrderItem, type StaffOrderQuote } from '@/lib/data/staffOrders';
-import { formatInr } from '@/lib/orders/finance';
+import { formatInr, parseRupeesToPaise } from '@/lib/orders/finance';
 import { CUSTOM_PIECE_LIMITS, DEFAULT_CUSTOM_FINISH_RATES } from '@/lib/pricing/customPiece';
 import { CUSTOM_PRODUCT_ID } from '@/types/products';
 import { useAuth } from '@/lib/auth/AuthProvider';
@@ -236,7 +236,8 @@ export function NewOrderConsole() {
   const canHandover = channel === 'counter' && paymentMethod === 'offline' && !hasCustom;
   const handingOver = canHandover && handover;
   const advanceAllowed = paymentMethod !== 'cod' && !handingOver;
-  const advancePaise = advanceAllowed && takeAdvance ? Math.round(Number(advanceRupees) * 100) : undefined;
+  // An advance that does not parse (or has more than two decimals) is 0 here, which advanceProblem rejects.
+  const advancePaise = advanceAllowed && takeAdvance ? parseRupeesToPaise(advanceRupees) ?? 0 : undefined;
   const productName = (id: string) => products.find(p => p.id === id)?.name ?? id;
   const itemLabel = (item: StaffOrderItem) => item.productId === CUSTOM_PRODUCT_ID
     ? `Custom piece ${item.widthMm} × ${item.heightMm} mm · ${DEFAULT_CUSTOM_FINISH_RATES[item.finish]?.label ?? item.finish} · design: ${item.customDesignRef}`
@@ -323,7 +324,7 @@ export function NewOrderConsole() {
   const needsReference = paymentMethod === 'offline' && mode !== 'cash';
   const totalPaise = quote?.totals.totalPaise ?? 0;
   const advanceProblem = advancePaise === undefined ? null
-    : !Number.isFinite(advancePaise) || advancePaise < 100 ? 'Enter the advance in rupees (at least ₹1).'
+    : advancePaise < 100 ? 'Enter the advance in rupees (at least ₹1, at most two decimals).'
       : totalPaise && advancePaise >= totalPaise ? 'The advance must be less than the total; untick it to take the full amount.' : null;
   const ready = items.length > 0 && customer.name.trim() && customer.phone.trim() && (!needsReference || reference.trim()) && !advanceProblem
     && (handingOver || (customer.address.trim() && customer.city.trim() && customer.state.trim() && customer.pincode.trim()));

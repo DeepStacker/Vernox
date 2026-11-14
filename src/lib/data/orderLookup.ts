@@ -27,7 +27,7 @@ export function toPublicSummary(order: Order, returnWindowDays?: number): Public
     shippingState: order.shippingState,
     paymentMethod: ops?.paymentMethod ?? 'prepaid',
     invoiceNumber: ops?.invoiceNumber ?? null,
-    canCancel: CUSTOMER_CANCELLABLE_STATUSES.includes(order.status),
+    canCancel: order.kind !== 'service' && CUSTOMER_CANCELLABLE_STATUSES.includes(order.status),
     returnEligibleUntil:
       order.status === 'Delivered' && deliveredAt && returnWindowDays !== undefined ? deliveredAt + returnWindowDays * 24 * 3600_000 : null,
     codFee: (ops?.codFeePaise ?? 0) / 100,

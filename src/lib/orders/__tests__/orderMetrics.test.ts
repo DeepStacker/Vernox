@@ -43,3 +43,27 @@ describe('order metrics', () => {
     expect(m.revenueByDay.reduce((s, d) => s + d.revenue, 0)).toBe(4000);
   });
 });
+
+describe('order metrics in IST paise', () => {
+  const ops = (totalPaise: number, refundedPaise = 0) => ({ totalPaise, refundedPaise } as Order['ops']);
+  const IST_DAY_START = Date.UTC(2026, 10, 9, 18, 30); // 10 Nov 00:00 IST
+
+  it('buckets by IST day: 00:10 IST belongs to the new day, not the previous UTC day', () => {
+    const early = { ...o('x', 'Paid', 100, 0), placedAt: IST_DAY_START + 10 * 60_000, ops: ops(10000) };
+    const m = computeOrderMetrics([early], IST_DAY_START - 3 * DAY + 5 * 3600_000, IST_DAY_START + 12 * 3600_000);
+    expect(m.revenueByDay.find(d => d.orders === 1)?.day).toBe('2026-11-10');
+    expect(m.revenueByDay.map(d => d.day)).toEqual(['2026-11-07', '2026-11-08', '2026-11-09', '2026-11-10']);
+  });
+
+  it('uses paise from ops net of refunds and drops returned orders', () => {
+    const base = IST_DAY_START + 3600_000;
+    const orders = [
+      { ...o('a', 'Partially_Refunded', 999, 0), placedAt: base, ops: ops(100000, 25000) },
+      { ...o('b', 'Returned', 500, 0), placedAt: base, ops: ops(50000) },
+      { ...o('c', 'Delivered', 1, 0), placedAt: base, ops: ops(100010) },
+    ];
+    const m = computeOrderMetrics(orders, base - DAY, base + DAY);
+    expect(m.paidOrderCount).toBe(2);
+    expect(m.revenue).toBe(1750.1);
+  });
+});

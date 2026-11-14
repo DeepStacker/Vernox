@@ -12,7 +12,7 @@ import { RefundDialog } from './RefundDialog';
 
 const REFUND_TONE: Record<RefundView['status'], BadgeTone> = { processed: 'good', pending: 'warn', failed: 'bad' };
 const PAYMENT_LABEL = {
-  prepaid_captured: 'Prepaid, captured', prepaid_unpaid: 'Prepaid, no payment on record', cod_collected: 'COD collected', cod_pending: 'COD, cash not collected', replacement: 'Replacement (no payment)',
+  prepaid_captured: 'Prepaid, captured', prepaid_partial: 'Advance paid, balance due', prepaid_unpaid: 'Prepaid, no payment on record', cod_collected: 'COD collected', cod_pending: 'COD, cash not collected', replacement: 'Replacement (no payment)',
 } as const;
 
 const Row = ({ label, value }: { label: string; value: string }) => (

@@ -12,11 +12,14 @@ import { CsvUpload, OrderLinks } from './reconFile';
 export function RemittancePanel({ orders, onSelect }: { orders: readonly Order[]; onSelect: (id: string) => void }) {
   const [report, setReport] = useState<RemittanceReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rowErrors, setRowErrors] = useState<string[]>([]);
 
   const load = async (file: File) => {
     setError(null);
+    setRowErrors([]);
     try {
-      const { lines, truncated } = parseRemittanceCsv(await file.text());
+      const { lines, truncated, rowErrors: skipped } = parseRemittanceCsv(await file.text());
+      setRowErrors(skipped);
       setReport(reconcileRemittance(lines, orders, truncated));
     } catch (err) {
       setReport(null);
@@ -30,6 +33,7 @@ export function RemittancePanel({ orders, onSelect }: { orders: readonly Order[]
         <CsvUpload label="Upload remittance CSV" onFile={f => void load(f)} />
         <p className="text-xs text-muted-foreground">Shiprocket → Billing → COD Remittance (export). Matched by AWB with the {orders.length} loaded orders.</p>
         {error && <AdminError>{error}</AdminError>}
+        {rowErrors.length > 0 && <AdminError>{rowErrors.length} row(s) skipped and not counted below: {rowErrors.slice(0, 3).join(' ')}{rowErrors.length > 3 ? ' …' : ''}</AdminError>}
         {report && (
           <>
             {report.truncated && <AdminError>Only the first rows of this file were read; split it by date.</AdminError>}
