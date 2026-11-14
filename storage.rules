@@ -29,6 +29,12 @@ rules_version = '2';
 //  evidence for damage claims and returns. Read by staff who can read orders; created by staff who can update
 //  orders (mirrors canUpdateOrders() / 'orders.update_status'). WebP only, at most 2 MB, never overwritten or
 //  deleted from clients.
+// staff-designs/{draftId}/{file}: design files (SVG, DXF, PDF, PNG, JPEG, WebP) staff attach to custom lines of a
+//  staff-entered order (Admin > New order). Uploaded before the order exists, under a browser-generated draft id;
+//  the order line stores the paths (api/_lib/staffOrders.ts). Read by staff who can read orders; created by staff
+//  who can create orders (mirrors 'orders.create': super_admin, admin, order_manager, support). At most 10 MB,
+//  never overwritten or deleted from clients. SVG can carry script: it must only be downloaded or shown through
+//  <img>, never inlined into the page from our origin.
 // Cross-service reads (firestore.get) require the Storage service agent to have
 // Firestore read access — Firebase grants it when these rules are first deployed.
 service firebase.storage {
@@ -59,6 +65,11 @@ service firebase.storage {
     function isStaffOrderWriter() {
       return request.auth != null && emailTrusted()
         && request.auth.token.get('role', '') in ['super_admin', 'admin', 'order_manager', 'production', 'shipping'];
+    }
+
+    function isStaffOrderCreator() {
+      return request.auth != null && emailTrusted()
+        && request.auth.token.get('role', '') in ['super_admin', 'admin', 'order_manager', 'support'];
     }
 
     function isConsultationStaff() {
@@ -140,6 +151,16 @@ service firebase.storage {
         && fileName.matches('^[A-Za-z0-9_-]{1,60}[.]webp$')
         && request.resource.size <= 2 * 1024 * 1024
         && request.resource.contentType == 'image/webp';
+      allow update, delete: if false;
+    }
+
+    match /staff-designs/{draftId}/{fileName} {
+      allow read: if isStaffOrderReader();
+      allow create: if isStaffOrderCreator() && resource == null
+        && draftId.matches('^[A-Za-z0-9_-]{16,64}$')
+        && fileName.matches('^[A-Za-z0-9_-]{1,60}[.](svg|dxf|pdf|png|jpg|webp)$')
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType in ['image/svg+xml', 'application/dxf', 'application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
       allow update, delete: if false;
     }
 

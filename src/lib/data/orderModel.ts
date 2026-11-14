@@ -7,6 +7,7 @@ import { auth } from '@/lib/firebase';
 import { normalizeOrderStatus } from '@/lib/orders/orderStateMachine';
 import type { Order, OrderItem, OrderTracking, PaymentStatus, PublicOrderSummary, StatusHistoryEntry } from '@/types/store';
 import type { OrderOps } from '@/types/orderOps';
+import type { DesignFile } from '@/types/staffOrders';
 
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any -- Firestore documents are untyped at the boundary
 
@@ -41,6 +42,7 @@ function normalizeItem(raw: Raw, index: number): OrderItem {
     lineTotal: Number(raw.lineTotal) || unitPrice * quantity,
     customDesignThumb: raw.customDesignThumb,
     customDesignRef: raw.customDesignRef,
+    designFiles: Array.isArray(raw.designFiles) && raw.designFiles.length > 0 ? (raw.designFiles as DesignFile[]) : undefined,
     userUploadedImage: raw.userUploadedImage,
     uploadedArtworkName: raw.uploadedArtworkName,
   };

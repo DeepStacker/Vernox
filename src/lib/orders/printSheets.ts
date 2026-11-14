@@ -63,7 +63,8 @@ function wrap(title: string, bodies: string[]): string {
 function customFlag(item: OrderItem): string {
   if (hasCustomDesign(item)) return '<br><span class="flag">CUSTOM DESIGN</span>';
   if (item.productId === CUSTOM_PRODUCT_ID) {
-    return `<br><span class="flag">CUSTOM</span>${item.customDesignRef ? ` design: ${escapeHtml(item.customDesignRef)}` : ''}`;
+    const files = item.designFiles?.length ? ` files (download in Production): ${escapeHtml(item.designFiles.map(f => f.name).join(', '))}` : '';
+    return `<br><span class="flag">CUSTOM</span>${item.customDesignRef ? ` design: ${escapeHtml(item.customDesignRef)}` : ''}${files}`;
   }
   return '';
 }

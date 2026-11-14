@@ -3,7 +3,7 @@
  * The server prices everything; the quote only previews what the order will be created with.
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { OfflinePaymentMode, StaffOrderChannel } from '@/types/staffOrders';
+import type { DesignFile, OfflinePaymentMode, StaffOrderChannel } from '@/types/staffOrders';
 import { adminAction } from './adminApi';
 
 export interface StaffOrderItem {
@@ -13,6 +13,8 @@ export interface StaffOrderItem {
   widthMm?: number;
   heightMm?: number;
   customDesignRef?: string;
+  /** Uploaded design files (staffDesignFiles.ts), sent with CREATE_STAFF_ORDER only. */
+  designFiles?: DesignFile[];
   finish: string;
   quantity: number;
 }
@@ -38,6 +40,8 @@ export interface NewStaffOrder {
   handover: boolean;
   whatsappOptIn: boolean;
   idempotencyKey: string;
+  /** Id the design files were uploaded under; required when any line has designFiles. */
+  designDraftId?: string;
   note?: string;
   tradeEnquiryId?: string;
 }

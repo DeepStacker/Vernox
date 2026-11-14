@@ -5,7 +5,7 @@
  * sent to the customer, or cash on delivery. A counter handover is delivered and GST-invoiced at once, so the
  * invoice can be printed for the customer before they leave.
  */
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { Copy, FileText, MessageCircle, Plus, Trash2 } from 'lucide-react';
 import { finishName } from '@/lib/catalog';
@@ -19,10 +19,11 @@ import { formatInr, parseRupeesToPaise } from '@/lib/orders/finance';
 import { CUSTOM_PIECE_LIMITS, DEFAULT_CUSTOM_FINISH_RATES } from '@/lib/pricing/customPiece';
 import { CUSTOM_PRODUCT_ID } from '@/types/products';
 import { useAuth } from '@/lib/auth/AuthProvider';
+import { checkDesignFile, newDesignDraftId, STAFF_DESIGN_FILE_ACCEPT, uploadDesignFile } from '@/lib/data/staffDesignFiles';
 import { PrintReceiptButton } from './PrintReceiptButton';
 import {
   OFFLINE_PAYMENT_MODES, OFFLINE_PAYMENT_MODE_LABELS, PAYMENT_LINK_TTL_HOURS, STAFF_ORDER_CHANNELS, STAFF_ORDER_CHANNEL_LABELS,
-  type OfflinePaymentMode, type StaffOrderChannel, type StaffPaymentMethod,
+  MAX_STAFF_DESIGN_FILES_PER_LINE, type DesignFile, type OfflinePaymentMode, type StaffOrderChannel, type StaffPaymentMethod,
 } from '@/types/staffOrders';
 
 const newKey = () => `staff-${crypto.randomUUID()}`;
@@ -98,16 +99,26 @@ function ItemPicker({ onAdd }: { onAdd: (item: StaffOrderItem) => void }) {
  * A custom (Studio) piece for a customer who gives the design by phone, WhatsApp or at the counter. The price comes
  * from the server like any other line; the design itself is not in the Studio, so staff note where it is kept.
  */
-function CustomPiecePicker({ onAdd }: { onAdd: (item: StaffOrderItem) => void }) {
+function CustomPiecePicker({ draftId, onAdd }: { draftId: string; onAdd: (item: StaffOrderItem) => void }) {
   const { minDimensionMm, maxWidthMm, maxHeightMm } = CUSTOM_PIECE_LIMITS;
   const [width, setWidth] = useState('');
   const [height, setHeight] = useState('');
   const [finish, setFinish] = useState('steel');
   const [quantity, setQuantity] = useState(1);
   const [designRef, setDesignRef] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
-  const add = () => {
+  const pickFiles = (picked: FileList | null) => {
+    const list = Array.from(picked ?? []);
+    const bad = list.map(checkDesignFile).find(Boolean) ?? (list.length > MAX_STAFF_DESIGN_FILES_PER_LINE ? `Attach at most ${MAX_STAFF_DESIGN_FILES_PER_LINE} files.` : null);
+    setProblem(bad);
+    setFiles(bad ? [] : list);
+  };
+
+  const add = async () => {
     const widthMm = Number(width);
     const heightMm = Number(height);
     if (!Number.isInteger(widthMm) || !Number.isInteger(heightMm) || widthMm < minDimensionMm || heightMm < minDimensionMm || widthMm > maxWidthMm || heightMm > maxHeightMm) {
@@ -118,8 +129,21 @@ function CustomPiecePicker({ onAdd }: { onAdd: (item: StaffOrderItem) => void })
     if (!ref) { setProblem('Say where the design is (file name, WhatsApp message or job number) so the workshop can find it.'); return; }
     if (ref.startsWith('{')) { setProblem('Write the reference as plain text, not design data.'); return; }
     setProblem(null);
-    onAdd({ productId: CUSTOM_PRODUCT_ID, widthMm, heightMm, finish, quantity, customDesignRef: ref });
-    setWidth(''); setHeight(''); setDesignRef(''); setQuantity(1);
+    let designFiles: DesignFile[] | undefined;
+    if (files.length > 0) {
+      setUploading(true);
+      try {
+        designFiles = await Promise.all(files.map(f => uploadDesignFile(draftId, f)));
+      } catch (err) {
+        setProblem(err instanceof Error ? err.message : 'The design files could not be uploaded.');
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+    onAdd({ productId: CUSTOM_PRODUCT_ID, widthMm, heightMm, finish, quantity, customDesignRef: ref, designFiles });
+    setWidth(''); setHeight(''); setDesignRef(''); setQuantity(1); setFiles([]);
+    if (fileInput.current) fileInput.current.value = '';
   };
 
   return (
@@ -144,9 +168,13 @@ function CustomPiecePicker({ onAdd }: { onAdd: (item: StaffOrderItem) => void })
       <label className="block text-sm font-medium">Design reference *
         <input value={designRef} onChange={e => setDesignRef(e.target.value)} maxLength={300} className="field mt-1 font-normal" placeholder="e.g. WhatsApp file gate-sign.dxf, 12 Nov, or job number" />
       </label>
+      <label className="block text-sm font-medium">Design files (optional)
+        <input ref={fileInput} type="file" multiple accept={STAFF_DESIGN_FILE_ACCEPT} onChange={e => pickFiles(e.target.files)} className="field mt-1 font-normal" />
+        <span className="text-xs font-normal text-muted-foreground">SVG, DXF, PDF, PNG, JPEG or WebP; up to {MAX_STAFF_DESIGN_FILES_PER_LINE} files of 10 MB. Production downloads them from the job.</span>
+      </label>
       {problem && <p role="alert" className="text-sm text-destructive">{problem}</p>}
-      <button type="button" onClick={add} className="btn-secondary inline-flex items-center gap-1.5">
-        <Plus className="h-4 w-4" /> Add custom piece
+      <button type="button" onClick={() => void add()} disabled={uploading} className="btn-secondary inline-flex items-center gap-1.5">
+        <Plus className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Add custom piece'}
       </button>
     </div>
   );
@@ -229,6 +257,8 @@ export function NewOrderConsole() {
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<StaffOrderCreated | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(newKey);
+  // Design files are uploaded before the order exists, under this id (storage.rules `staff-designs/`).
+  const [designDraftId, setDesignDraftId] = useState(newDesignDraftId);
   const [returning, setReturning] = useState<Extract<CustomerLookup, { found: true }> | null>(null);
 
   // A custom piece is made after the order, so it can be neither handed over at once nor sold for cash on delivery.
@@ -240,7 +270,7 @@ export function NewOrderConsole() {
   const advancePaise = advanceAllowed && takeAdvance ? parseRupeesToPaise(advanceRupees) ?? 0 : undefined;
   const productName = (id: string) => products.find(p => p.id === id)?.name ?? id;
   const itemLabel = (item: StaffOrderItem) => item.productId === CUSTOM_PRODUCT_ID
-    ? `Custom piece ${item.widthMm} × ${item.heightMm} mm · ${DEFAULT_CUSTOM_FINISH_RATES[item.finish]?.label ?? item.finish} · design: ${item.customDesignRef}`
+    ? `Custom piece ${item.widthMm} × ${item.heightMm} mm · ${DEFAULT_CUSTOM_FINISH_RATES[item.finish]?.label ?? item.finish} · design: ${item.customDesignRef}${item.designFiles?.length ? ` · ${item.designFiles.length} file${item.designFiles.length > 1 ? 's' : ''} attached` : ''}`
     : `${productName(item.productId)}${item.sizeLabel ? ` · ${item.sizeLabel}` : ''} · ${finishName(item.finish)}`;
   useEffect(() => { if (hasCustom && paymentMethod === 'cod') setPaymentMethod('offline'); }, [hasCustom, paymentMethod]);
   const setField = (key: keyof typeof EMPTY_CUSTOMER) => (value: string) => setCustomer(c => ({ ...c, [key]: value }));
@@ -248,7 +278,7 @@ export function NewOrderConsole() {
   usePincodeAutofill(customer.pincode, customer, patch => setCustomer(c => ({ ...c, ...patch })));
   // Any change to what is ordered is a new order, not a retry of the last one.
   const quoteInput = useMemo(
-    () => ({ items, couponCode: couponCode.trim() || undefined, customerEmail: customer.email.trim() || undefined, cod: paymentMethod === 'cod', handover: handingOver }),
+    () => ({ items: items.map(({ designFiles: _designFiles, ...priced }) => priced), couponCode: couponCode.trim() || undefined, customerEmail: customer.email.trim() || undefined, cod: paymentMethod === 'cod', handover: handingOver }),
     [items, couponCode, customer.email, paymentMethod, handingOver],
   );
   useEffect(() => setIdempotencyKey(newKey()), [quoteInput, customer, channel, mode, reference, advancePaise]);
@@ -290,7 +320,7 @@ export function NewOrderConsole() {
 
   const reset = () => {
     setItems([]); setCustomer(EMPTY_CUSTOMER); setTakeAdvance(false); setAdvanceRupees(''); setWhatsappOptIn(false); setCouponCode(''); setNote(''); setReference(''); setTradeEnquiryId('');
-    setCreated(null); setError(null); setReturning(null); setIdempotencyKey(newKey());
+    setCreated(null); setError(null); setReturning(null); setIdempotencyKey(newKey()); setDesignDraftId(newDesignDraftId()); setDesignDraftId(newDesignDraftId());
   };
 
   const submit = async (e: FormEvent) => {
@@ -309,6 +339,7 @@ export function NewOrderConsole() {
         handover: handingOver,
         whatsappOptIn,
         idempotencyKey,
+        designDraftId: items.some(i => i.designFiles?.length) ? designDraftId : undefined,
         note: note.trim() || undefined,
         tradeEnquiryId: channel === 'trade' && tradeEnquiryId ? tradeEnquiryId : undefined,
       });
@@ -362,7 +393,7 @@ export function NewOrderConsole() {
         <section className="space-y-3">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Pieces</h3>
           <ItemPicker onAdd={item => setItems(list => [...list, item])} />
-          <CustomPiecePicker onAdd={item => setItems(list => [...list, item])} />
+          <CustomPiecePicker draftId={designDraftId} onAdd={item => setItems(list => [...list, item])} />
           {items.length > 0 && (
             <ul className="divide-y divide-border rounded-lg border border-border">
               {items.map((item, i) => (
