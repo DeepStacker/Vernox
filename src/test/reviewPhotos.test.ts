@@ -82,6 +82,14 @@ describe('review photo moderation (SAVE_REVIEW / DELETE_REVIEW)', () => {
     await submitReview(store, user, input([mine('a.webp'), mine('b.webp')]), bucket);
   });
 
+  it('a cleared reply, role or location is removed, and a stored null round-trips', async () => {
+    await publish('published', { conciergeResponse: 'Thank you!', customerRole: 'Architect', location: 'Pune' });
+    expect(store.read(`reviews/${RID}`)).toMatchObject({ conciergeResponse: 'Thank you!', location: 'Pune' });
+    expect((await publish('published')).status).toBe(200);
+    expect(store.read(`reviews/${RID}`)).toMatchObject({ conciergeResponse: null, conciergeRespondedAt: null, customerRole: null, location: null });
+    expect((await publish('published', { conciergeResponse: null, location: null })).status).toBe(200);
+  });
+
   it('keeps photos private while pending', async () => {
     expect((await publish('pending')).status).toBe(200);
     expect(store.read(`reviews/${RID}`)!.photos).toEqual([]);

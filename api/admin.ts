@@ -94,19 +94,22 @@ const couponSchema = z.object({
   applicableProductIds: z.array(z.string().max(128)).max(200).optional(),
 }).refine(c => c.discountType !== 'percentage' || c.discountValue <= 100, { message: 'percentage cannot exceed 100', path: ['discountValue'] });
 
+/** Optional text a moderator may clear; a stored null comes back as null on the next save. */
+const clearableText = (max: number) => z.string().trim().max(max).nullable().optional().transform(v => v || undefined);
+
 const reviewSchema = z.object({
   id: z.string().trim().regex(/^[A-Za-z0-9_-]{1,64}$/),
   productId: z.string().trim().min(1).max(128),
   customerName: z.string().trim().min(1).max(120),
-  customerRole: z.string().trim().max(120).optional(),
-  location: z.string().trim().max(120).optional(),
+  customerRole: clearableText(120),
+  location: clearableText(120),
   rating: z.number().int().min(1).max(5),
   comment: z.string().trim().min(1).max(5000),
   placedAt: z.number().int().positive().optional(),
   verified: z.boolean().optional(),
   featured: z.boolean().optional(),
   status: z.enum(['published', 'pending', 'archived']),
-  conciergeResponse: z.string().trim().max(5000).optional(),
+  conciergeResponse: clearableText(5000),
 });
 
 const idSchema = (key: string) => z.object({ [key]: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/) });
@@ -895,7 +898,18 @@ const ACTIONS: Record<string, ActionDefinition> = {
       const photos = await syncPublicReviewPhotos(getPhotoStorage(), r.id, await ctx.store.get(`reviews/${r.id}`), r.status);
       await ctx.store.set(
         `reviews/${r.id}`,
-        { ...r, photos, ...(r.conciergeResponse ? { conciergeRespondedAt: now } : {}), moderatedBy: ctx.actor.uid, updatedAt: now },
+        {
+          ...r,
+          photos,
+          // The console sends the whole review, so a missing optional field was cleared: write null, or the merge
+          // would keep the old reply, role or location.
+          customerRole: r.customerRole ?? null,
+          location: r.location ?? null,
+          conciergeResponse: r.conciergeResponse ?? null,
+          conciergeRespondedAt: r.conciergeResponse ? now : null,
+          moderatedBy: ctx.actor.uid,
+          updatedAt: now,
+        },
         { merge: true },
       );
       await recordAudit(ctx.store, audit(ctx, 'REVIEW_SAVED', 'review', r.id, { productId: r.productId, status: r.status, rating: r.rating }));

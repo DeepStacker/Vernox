@@ -23,6 +23,8 @@ export async function previewCoupon(params: {
   });
   const data = (await res.json().catch(() => null)) as CouponValidationResult | null;
   if (!data) throw new Error(`Coupon service unavailable (${res.status}).`);
-  if (!res.ok && !data.error) throw new Error(`Coupon service unavailable (${res.status}).`);
+  // API errors arrive as { success: false, code, message } (rate limit, validation): show the server's words.
+  const apiMessage = (data as unknown as { message?: unknown }).message;
+  if (!res.ok && !data.error) throw new Error(typeof apiMessage === 'string' && apiMessage ? apiMessage : `Coupon service unavailable (${res.status}).`);
   return data;
 }
