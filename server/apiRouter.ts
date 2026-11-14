@@ -72,6 +72,9 @@ export function setSecurityHeaders(res: http.ServerResponse) {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // Only directives that cannot break Razorpay Checkout or Google sign-in pop-ups. A script/connect allow-list
+  // needs a browser pass against live payments first (ROADMAP, production readiness).
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
 }
 
 function setSecurityAndCorsHeaders(req: http.IncomingMessage, res: http.ServerResponse) {
