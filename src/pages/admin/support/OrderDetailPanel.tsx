@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
+import { useAuth } from '@/lib/auth/AuthProvider';
 import { useProducts } from '@/lib/data/products';
 import { isRevenueStatus } from '@/lib/orders/orderStateMachine';
 import { summariseCustomer } from '@/lib/orders/orderSearch';
 import type { Order } from '@/types/store';
+import { BalancePanel } from '../shared/BalancePanel';
 import { StatusBadge } from '../shared/badges';
 import { OrderItemSpecs } from '../shared/OrderItemSpecs';
 import { OrderNotesPanel } from '../shared/OrderNotesPanel';
@@ -13,6 +15,7 @@ const inr = (n: number, currency: string) => `${currency}${n.toLocaleString('en-
 /** Everything support needs about one order: customer, items, totals, timeline, notes, messages. */
 export function OrderDetailPanel({ order, allOrders, currency, storeName }: { order: Order; allOrders: readonly Order[]; currency: string; storeName: string }) {
   const products = useProducts().data ?? [];
+  const { permissions } = useAuth();
   const customer = useMemo(() => summariseCustomer(order.email, allOrders, o => isRevenueStatus(o.status)), [order.email, allOrders]);
   const address = [order.shippingAddress, order.shippingCity, order.shippingState, order.shippingPincode, order.shippingCountry].filter(Boolean).join(', ');
 
@@ -32,6 +35,9 @@ export function OrderDetailPanel({ order, allOrders, currency, storeName }: { or
           In loaded orders: {customer.orderCount} order(s), lifetime value {inr(customer.lifetimeValue, currency)}, last order {customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString('en-IN') : 'n/a'}.
         </div>
       </section>
+
+      {/* Support enters advance orders (orders.create), so it also collects their balance. */}
+      <BalancePanel order={order} canCollect={Boolean(permissions?.canCreateOrders)} />
 
       <OrderItemSpecs order={order} products={products} />
 

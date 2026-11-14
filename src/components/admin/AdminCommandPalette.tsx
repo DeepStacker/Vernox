@@ -19,6 +19,8 @@ interface AdminCommandPaletteProps {
   onSelectOrder?: (order: Order) => void;
   onSelectProduct?: (product: Product) => void;
   onSelectTab: (tab: string) => void;
+  /** Whether the signed-in role may open a tab; results and shortcuts for other tabs are hidden. */
+  canOpen?: (tab: string) => boolean;
 }
 
 export function AdminCommandPalette({
@@ -27,6 +29,7 @@ export function AdminCommandPalette({
   onSelectOrder,
   onSelectProduct,
   onSelectTab,
+  canOpen = () => true,
 }: AdminCommandPaletteProps) {
   const { orders, products, coupons, customers, storeConfig } = useAdminData();
   const [query, setQuery] = useState('');
@@ -65,6 +68,7 @@ export function AdminCommandPalette({
 
     const matchedOrders = orders.filter(o => 
       o.id.toLowerCase().includes(q) ||
+      (o.orderNumber ?? '').toLowerCase().includes(q) ||
       o.email.toLowerCase().includes(q) ||
       (o.customerName && o.customerName.toLowerCase().includes(q)) ||
       (o.items && o.items.some(i => 
@@ -92,12 +96,12 @@ export function AdminCommandPalette({
     ).slice(0, 3);
 
     return {
-      orders: matchedOrders,
-      products: matchedProducts,
-      coupons: matchedCoupons,
-      customers: matchedCustomers,
+      orders: canOpen('orders') || canOpen('support') ? matchedOrders : [],
+      products: canOpen('products') ? matchedProducts : [],
+      coupons: canOpen('coupons') ? matchedCoupons : [],
+      customers: canOpen('customers') ? matchedCustomers : [],
     };
-  }, [query, orders, products, coupons, customers]);
+  }, [query, orders, products, coupons, customers, canOpen]);
 
   if (!isOpen) return null;
 
@@ -143,7 +147,7 @@ export function AdminCommandPalette({
               <p className="text-xs">Type an order ID, customer name, coupon code, or product name...</p>
               <div className="flex flex-wrap justify-center gap-2 pt-2">
                 <span className="text-[10px] font-mono bg-muted px-2 py-1 rounded text-muted-foreground">#VX-2026</span>
-                <button 
+                {canOpen('custom-orders') && <button 
                   onClick={() => {
                     onClose();
                     onSelectTab('custom-orders');
@@ -151,8 +155,8 @@ export function AdminCommandPalette({
                   className="text-[10px] font-mono bg-brass/10 border border-brass/30 px-2 py-1 rounded text-brass hover:bg-brass/20 transition flex items-center gap-1"
                 >
                   <Palette className="w-2.5 h-2.5" /> Custom Orders
-                </button>
-                <button 
+                </button>}
+                {canOpen('hero-slider') && <button 
                   onClick={() => {
                     onClose();
                     onSelectTab('hero-slider');
@@ -160,7 +164,7 @@ export function AdminCommandPalette({
                   className="text-[10px] font-mono bg-oxblood/10 border border-oxblood/30 px-2 py-1 rounded text-oxblood hover:bg-oxblood/20 transition flex items-center gap-1"
                 >
                   <ImageIcon className="w-2.5 h-2.5" /> Hero Sliders
-                </button>
+                </button>}
                 <span className="text-[10px] font-mono bg-muted px-2 py-1 rounded text-muted-foreground">WELCOME10</span>
                 <span className="text-[10px] font-mono bg-muted px-2 py-1 rounded text-muted-foreground">Heraldry</span>
               </div>
@@ -168,7 +172,7 @@ export function AdminCommandPalette({
           ) : totalResults === 0 ? (
             <div className="py-8 text-center text-muted-foreground text-xs space-y-2">
               <p>No matching records found for "{query}".</p>
-              {(query.toLowerCase().includes('hero') || query.toLowerCase().includes('slider') || query.toLowerCase().includes('slide') || query.toLowerCase().includes('banner')) && (
+              {canOpen('hero-slider') && (query.toLowerCase().includes('hero') || query.toLowerCase().includes('slider') || query.toLowerCase().includes('slide') || query.toLowerCase().includes('banner')) && (
                 <button
                   onClick={() => {
                     onClose();
@@ -179,7 +183,7 @@ export function AdminCommandPalette({
                   <ImageIcon className="w-3.5 h-3.5" /> Go to Hero Slider Management
                 </button>
               )}
-              {(query.toLowerCase().includes('custom') || query.toLowerCase().includes('art')) && (
+              {canOpen('custom-orders') && (query.toLowerCase().includes('custom') || query.toLowerCase().includes('art')) && (
                 <button
                   onClick={() => {
                     onClose();

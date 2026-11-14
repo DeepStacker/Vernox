@@ -5,6 +5,8 @@
  */
 
 import { useMemo } from 'react';
+import { useAuth } from '@/lib/auth/AuthProvider';
+import { canAccessTab, type AdminTabId } from '@/lib/auth/permissions';
 import { useAdminData } from '@/lib/data/adminData';
 import { 
   Bell, AlertTriangle, AlertCircle, ShoppingBag, 
@@ -16,7 +18,8 @@ interface AdminNotificationsProps {
 }
 
 export function AdminNotifications({ onSelectTab }: AdminNotificationsProps) {
-  const { products, orders, coupons, storeConfig } = useAdminData();
+  const { products, orders, coupons } = useAdminData();
+  const { staffRole } = useAuth();
 
   const notifications = useMemo(() => {
     const list: Array<{
@@ -24,7 +27,6 @@ export function AdminNotifications({ onSelectTab }: AdminNotificationsProps) {
       type: 'critical' | 'warning' | 'info' | 'success';
       title: string;
       message: string;
-      timestamp: number;
       actionTab?: string;
       actionLabel?: string;
     }> = [];
@@ -37,7 +39,6 @@ export function AdminNotifications({ onSelectTab }: AdminNotificationsProps) {
         type: 'critical',
         title: `Out of Stock: ${p.name}`,
         message: `Inventory depleted to 0 units. Customers currently cannot purchase this item.`,
-        timestamp: Date.now() - 3600000,
         actionTab: 'products',
         actionLabel: 'Replenish Stock',
       });
@@ -51,21 +52,19 @@ export function AdminNotifications({ onSelectTab }: AdminNotificationsProps) {
         type: 'warning',
         title: `Low Inventory Alert: ${p.name}`,
         message: `Only ${p.stock} units remaining in inventory.`,
-        timestamp: Date.now() - 7200000,
         actionTab: 'products',
         actionLabel: 'Adjust Inventory',
       });
     });
 
-    // 3. Pending orders needing workshop routing (Warning)
-    const pendingOrders = orders.filter(o => o.status === 'Pending_Payment' || o.status === 'Paid');
+    // 3. Confirmed orders production has not started (unpaid orders are not work yet)
+    const pendingOrders = orders.filter(o => o.status === 'Paid' || o.status === 'Confirmed_COD');
     if (pendingOrders.length > 0) {
       list.push({
         id: 'pending-orders-batch',
         type: 'info',
-        title: `${pendingOrders.length} Orders Awaiting Workshop CAM Routing`,
-        message: `Orders require CAD inspection, laser DXF export, or courier dispatch.`,
-        timestamp: Date.now() - 1800000,
+        title: `${pendingOrders.length} order${pendingOrders.length === 1 ? '' : 's'} waiting to start production`,
+        message: `Paid or confirmed cash-on-delivery orders not yet moved to design.`,
         actionTab: 'orders',
         actionLabel: 'View Order Pipeline',
       });
@@ -79,25 +78,14 @@ export function AdminNotifications({ onSelectTab }: AdminNotificationsProps) {
         type: 'info',
         title: `Promotion Near Limit: ${c.code}`,
         message: `Redeemed ${c.usedCount} of ${c.maxUsageCount} available allowances.`,
-        timestamp: Date.now() - 14400000,
         actionTab: 'coupons',
         actionLabel: 'Manage Coupon',
       });
     });
 
-    // 5. System Security & Gateway Status (Success)
-    list.push({
-      id: 'gateway-status',
-      type: 'success',
-      title: 'Banking Gateway & Razorpay Rails Verified Active',
-      message: 'Cryptographic payment verification and server-authoritative pricing engine operational.',
-      timestamp: Date.now() - 86400000,
-      actionTab: 'settings',
-      actionLabel: 'Inspect Settings',
-    });
-
-    return list;
-  }, [products, orders, coupons]);
+    // Only alerts this role can act on (a finance user cannot restock products).
+    return list.filter(n => !n.actionTab || (staffRole !== null && canAccessTab(staffRole, n.actionTab as AdminTabId)));
+  }, [products, orders, coupons, staffRole]);
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -136,9 +124,6 @@ export function AdminNotifications({ onSelectTab }: AdminNotificationsProps) {
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <h4 className="font-semibold text-sm text-foreground">{n.title}</h4>
-                <span className="text-[10px] text-muted-foreground whitespace-nowrap font-mono">
-                  {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">{n.message}</p>
             </div>

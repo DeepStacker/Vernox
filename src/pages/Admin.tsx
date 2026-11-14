@@ -104,9 +104,11 @@ function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; display
   const pendingOrders = useMemo(() => orders.filter(o => o.kind !== 'service' && (o.status === 'Paid' || o.status === 'In_Design')).length, [orders]);
   const customOrders = useMemo(() => orders.filter(o => o.items?.some(i => i.customDesignRef || i.userUploadedImage || i.productId === 'custom-bespoke')).length, [orders]);
   const lowStock = useMemo(() => products.filter(p => (p.stock ?? 0) <= 5).length, [products]);
+  // Matches AdminNotifications: count only what this role can act on.
   const urgentAlerts = useMemo(
-    () => products.filter(p => (p.stock ?? 0) <= 5).length + orders.filter(o => o.status === 'Paid').length,
-    [products, orders],
+    () => (canAccessTab(role, 'products') ? products.filter(p => (p.stock ?? 0) <= 5).length : 0)
+      + (canAccessTab(role, 'orders') ? orders.filter(o => o.status === 'Paid' || o.status === 'Confirmed_COD').length : 0),
+    [products, orders, role],
   );
 
   const groups = useMemo(() => {
@@ -152,8 +154,9 @@ function AdminShell({ role, displayName, onSignOut }: { role: StaffRole; display
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-background text-foreground">
       <AdminCommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)}
         onSelectTab={tab => { selectTab(tab as AdminTabId); setPaletteOpen(false); }}
-        onSelectOrder={() => { selectTab('orders'); setPaletteOpen(false); }}
-        onSelectProduct={() => { selectTab('products'); setPaletteOpen(false); }} />
+        onSelectOrder={() => { selectTab(canAccessTab(role, 'orders') ? 'orders' : 'support'); setPaletteOpen(false); }}
+        onSelectProduct={() => { selectTab('products'); setPaletteOpen(false); }}
+        canOpen={tab => canAccessTab(role, tab as AdminTabId)} />
 
       <header className="relative z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-3 sm:px-5">
         <div className="flex min-w-0 items-center gap-2">
