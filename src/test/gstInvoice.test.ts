@@ -125,7 +125,7 @@ describe('GST invoice', () => {
     setStatus(store, res.orderId, 'Packed');
     const err = await createShipment(store, manual, TEST_CONFIG, { orderId: res.orderId, manual: { courier: 'DTDC', awb: 'D123456' }, actor: STAFF_ACTOR }).catch(e => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect((err as ApiError).code).toBe('CONFIG_ERROR');
+    expect((err as ApiError).code).toBe('SELLER_DETAILS_MISSING');
     expect(store.read(`invoices/${res.orderId}`)).toBeUndefined();
     expect(store.read(orderPath(res.orderId))!.status).toBe('Packed');
   });

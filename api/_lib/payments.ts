@@ -160,7 +160,7 @@ export async function confirmPayment(
         invoicePlan = await planInvoice(tx, order, seller, now);
       } catch (err) {
         // A missing GSTIN must never fail a customer's payment: confirm it and flag the invoice for finance.
-        if (!(err instanceof ApiError && err.code === 'CONFIG_ERROR')) throw err;
+        if (!(err instanceof ApiError && err.code === 'SELLER_DETAILS_MISSING')) throw err;
         console.error(`[payments] service order ${order.id} paid but not invoiced: ${err.message}`);
         flags.push('INVOICE_PENDING_SELLER_SETTINGS');
       }

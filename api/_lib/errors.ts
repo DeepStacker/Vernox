@@ -23,6 +23,8 @@ export type ApiErrorCode =
   | 'NOT_SERVICEABLE'
   | 'SIGNATURE_INVALID'
   | 'CONFIG_ERROR'
+  /** Seller GSTIN, legal name or address not saved in Settings > Business: no GST invoice can be issued. */
+  | 'SELLER_DETAILS_MISSING'
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'
   | 'NOT_FOUND'

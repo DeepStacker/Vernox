@@ -86,7 +86,7 @@ export function CreateShipmentDialog({ order, open, onClose, missingSeller, onOp
     setError(result.error);
     // The server answers "not automated" when Shiprocket is not configured; hand over to manual entry.
     if (/not automated/i.test(result.error)) setMode('manual');
-    if (result.code === 'CONFIG_ERROR') setConfigError(true);
+    if (result.code === 'SELLER_DETAILS_MISSING') setConfigError(true);
   };
 
   return (

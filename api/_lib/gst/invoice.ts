@@ -17,7 +17,7 @@
  * `credit_notes/{refundId}` (one per refund), both server-only.
  */
 import { isPlaceholderSeller } from '../../../src/types/settings';
-import { configError } from '../errors';
+import { ApiError } from '../errors';
 import type { OrderDoc } from '../orders';
 import { allocateProRata } from '../pricing';
 import type { SellerDetails } from '../storeConfig';
@@ -116,12 +116,21 @@ export function supplyTypeFor(seller: SellerDetails, buyerStateCode: string | nu
   return buyerStateCode !== null && buyerStateCode === seller.stateCode ? 'intra_state' : 'inter_state';
 }
 
-/** Missing seller details make every invoice invalid, so issuing fails loudly instead. */
+const SELLER_FIELD_LABELS = {
+  legalName: 'legal name', gstin: 'GSTIN', address: 'address', state: 'state', stateCode: 'GST state code', pincode: 'PIN code',
+} as const;
+
+/**
+ * Missing seller details make every invoice invalid, so issuing fails loudly instead, with its own code
+ * (SELLER_DETAILS_MISSING, 409) so staff screens can point to Settings rather than report a server fault.
+ */
 export function assertSellerConfigured(seller: SellerDetails) {
-  const missing = (['legalName', 'gstin', 'address', 'state', 'stateCode', 'pincode'] as const).filter(k => !seller[k]);
-  if (missing.length > 0) throw configError(`settings/store.seller is missing ${missing.join(', ')}; GST invoices cannot be issued`);
-  if (!GSTIN_PATTERN.test(seller.gstin)) throw configError('settings/store.seller.gstin is not a valid GSTIN');
-  if (seller.gstin.slice(0, 2) !== seller.stateCode) throw configError('settings/store.seller.stateCode does not match the GSTIN');
+  const fail = (what: string, detail: string) =>
+    new ApiError(409, 'SELLER_DETAILS_MISSING', `GST invoices need the seller ${what}. Add it in Settings > Business details.`, detail);
+  const missing = (Object.keys(SELLER_FIELD_LABELS) as Array<keyof typeof SELLER_FIELD_LABELS>).filter(k => !seller[k]);
+  if (missing.length > 0) throw fail(missing.map(k => SELLER_FIELD_LABELS[k]).join(', '), `settings/store.seller is missing ${missing.join(', ')}`);
+  if (!GSTIN_PATTERN.test(seller.gstin)) throw fail('GSTIN in the right format (15 characters)', 'settings/store.seller.gstin is not a valid GSTIN');
+  if (seller.gstin.slice(0, 2) !== seller.stateCode) throw fail('GST state code matching the GSTIN', 'settings/store.seller.stateCode does not match the GSTIN');
 }
 
 /**

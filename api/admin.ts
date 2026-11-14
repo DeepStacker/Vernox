@@ -744,12 +744,8 @@ const ACTIONS: Record<string, ActionDefinition> = {
         if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
         if (order.kind !== 'service') throw new ApiError(409, 'CONFLICT', 'Products are invoiced when the shipment is booked.');
         if (!order.razorpayPaymentId) throw new ApiError(409, 'CONFLICT', 'This consultation has not been paid.');
-        const plan = await planInvoice(tx, order, seller, now).catch(err => {
-          if (err instanceof ApiError && err.code === 'CONFIG_ERROR') {
-            throw new ApiError(409, 'CONFLICT', 'Save the seller GSTIN, legal name and address in Settings first.');
-          }
-          throw err;
-        });
+        // Missing seller details surface as SELLER_DETAILS_MISSING with what to add in Settings.
+        const plan = await planInvoice(tx, order, seller, now);
         const invoice = applyInvoice(tx, plan, order, seller, now);
         tx.update(orderPath(order.id), { ...invoice, flags: order.flags.filter(f => f !== 'INVOICE_PENDING_SELLER_SETTINGS'), updatedAt: now });
         auditInTransaction(ctx.store, tx, audit(ctx, 'SERVICE_INVOICE_ISSUED', 'order', order.id, invoice));

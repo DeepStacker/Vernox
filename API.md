@@ -9,7 +9,7 @@ Shared server code lives in `api/_lib/` (the underscore keeps Vercel from deploy
 - Validation failures (`VALIDATION_ERROR`, 400) carry a readable message naming the field, e.g. `Name must be at most 120 characters.`
 - Codes: `VALIDATION_ERROR` (400/409), `INVALID_ITEM` (400), `INVALID_COUPON` (400), `COD_NOT_AVAILABLE` (400), `INSUFFICIENT_STOCK` (409),
   `SIGNATURE_INVALID` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409),
-  `METHOD_NOT_ALLOWED` (405), `RATE_LIMITED` (429), `PAYMENT_PROVIDER_ERROR` (502), `SHIPPING_PROVIDER_ERROR` (502), `CONFIG_ERROR` (500), `INTERNAL_ERROR` (500).
+  `METHOD_NOT_ALLOWED` (405), `RATE_LIMITED` (429), `PAYMENT_PROVIDER_ERROR` (502), `SHIPPING_PROVIDER_ERROR` (502), `CONFIG_ERROR` (500), `SELLER_DETAILS_MISSING` (409: seller GSTIN, legal name or address not saved; the message says what to add), `INTERNAL_ERROR` (500).
 - Money: the server computes in integer **paise**. `amount` fields are paise; every `pricing` object is in **rupees**
   (decimal numbers, e.g. `634.84`). No endpoint accepts a price, tax rate or shipping fee from the client.
 - Auth: optional/required `Authorization: Bearer <Firebase ID token>`.
@@ -260,7 +260,7 @@ amounts in responses ending in `Paise` are paise. `orderId` is the Firestore ord
 | `MARK_RETURN_RECEIVED` | POST | `orders.update_status` | `orderId, restock?: boolean = false, note?` | `{ orderId, status: 'Returned', replacementOrderId \| null, replacementOrderNumber \| null }` |
 
 Rules and side effects:
-- `CREATE_SHIPMENT` needs status `Packed`. It first issues the GST invoice (once; fails with `500 CONFIG_ERROR` if
+- `CREATE_SHIPMENT` needs status `Packed`. It first issues the GST invoice (once; fails with `409 SELLER_DETAILS_MISSING` if
   `settings/store.seller` lacks legal name, GSTIN, address, state, state code or PIN), then books the courier. Shiprocket:
   create order → assign AWB → pickup → label → manifest; the order stays `Packed` with `shipment.status: 'awb_assigned'` until the
   pickup scan arrives by webhook. A failed step returns `502 SHIPPING_PROVIDER_ERROR` and stores the progress; calling again
