@@ -423,7 +423,7 @@ export function NewOrderConsole() {
                   ))}
                 </div>
               )}
-              {advanceProblem && <p role="alert" className="text-xs text-destructive">{advanceProblem}</p>}
+              {advanceProblem && advanceRupees !== '' && <p role="alert" className="text-xs text-destructive">{advanceProblem}</p>}
             </div>
           )}
           {canHandover && (
