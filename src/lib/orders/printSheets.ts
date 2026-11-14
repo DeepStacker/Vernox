@@ -4,6 +4,7 @@
  * Every dynamic value is HTML-escaped: order data is customer-supplied.
  */
 import { formatSizeCm } from '@/lib/catalog';
+import { CUSTOM_PRODUCT_ID } from '@/types/products';
 import type { Order, OrderItem, Product } from '@/types/store';
 import { hasCustomDesign } from './camDocument';
 import { code39Svg } from './code39';
@@ -55,13 +56,25 @@ function wrap(title: string, bodies: string[]): string {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${BASE_CSS}</style></head><body>${bodies.join('')}</body></html>`;
 }
 
+/**
+ * Flag for a custom line on a workshop sheet. A Studio design is flagged by its stored geometry; a piece entered
+ * by staff has only a typed reference to the design (where the file is), which production needs to see.
+ */
+function customFlag(item: OrderItem): string {
+  if (hasCustomDesign(item)) return '<br><span class="flag">CUSTOM DESIGN</span>';
+  if (item.productId === CUSTOM_PRODUCT_ID) {
+    return `<br><span class="flag">CUSTOM</span>${item.customDesignRef ? ` design: ${escapeHtml(item.customDesignRef)}` : ''}`;
+  }
+  return '';
+}
+
 function jobSheetBody(order: Order, ctx: PrintContext): string {
   const ref = order.orderNumber || order.id;
   const notes = freeText(order.adminNotes);
   const rows = order.items.map(item => {
     const product = ctx.products.find(p => p.id === item.productId);
     return `<tr>
-      <td><strong>${escapeHtml(item.productName)}</strong>${hasCustomDesign(item) ? '<br><span class="flag">CUSTOM DESIGN</span>' : ''}</td>
+      <td><strong>${escapeHtml(item.productName)}</strong>${customFlag(item)}</td>
       <td>${escapeHtml(sizeText(item))}</td>
       <td>${escapeHtml(item.finish || 'n/a')}</td>
       <td>${escapeHtml(materialLine(item, product))}</td>

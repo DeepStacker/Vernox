@@ -16,6 +16,8 @@ import { downloadTaxDocument } from '@/lib/data/orderOps';
 import { useProducts } from '@/lib/data/products';
 import { findCustomerByPhone, quoteStaffOrder, useCreateStaffOrder, type CustomerLookup, type StaffOrderCreated, type StaffOrderItem, type StaffOrderQuote } from '@/lib/data/staffOrders';
 import { formatInr } from '@/lib/orders/finance';
+import { CUSTOM_PIECE_LIMITS, DEFAULT_CUSTOM_FINISH_RATES } from '@/lib/pricing/customPiece';
+import { CUSTOM_PRODUCT_ID } from '@/types/products';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import {
   OFFLINE_PAYMENT_MODES, OFFLINE_PAYMENT_MODE_LABELS, PAYMENT_LINK_TTL_HOURS, STAFF_ORDER_CHANNELS, STAFF_ORDER_CHANNEL_LABELS,
@@ -91,6 +93,64 @@ function ItemPicker({ onAdd }: { onAdd: (item: StaffOrderItem) => void }) {
   );
 }
 
+/**
+ * A custom (Studio) piece for a customer who gives the design by phone, WhatsApp or at the counter. The price comes
+ * from the server like any other line; the design itself is not in the Studio, so staff note where it is kept.
+ */
+function CustomPiecePicker({ onAdd }: { onAdd: (item: StaffOrderItem) => void }) {
+  const { minDimensionMm, maxWidthMm, maxHeightMm } = CUSTOM_PIECE_LIMITS;
+  const [width, setWidth] = useState('');
+  const [height, setHeight] = useState('');
+  const [finish, setFinish] = useState('steel');
+  const [quantity, setQuantity] = useState(1);
+  const [designRef, setDesignRef] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const add = () => {
+    const widthMm = Number(width);
+    const heightMm = Number(height);
+    if (!Number.isInteger(widthMm) || !Number.isInteger(heightMm) || widthMm < minDimensionMm || heightMm < minDimensionMm || widthMm > maxWidthMm || heightMm > maxHeightMm) {
+      setProblem(`Enter whole millimetres: each side at least ${minDimensionMm}, width up to ${maxWidthMm} and height up to ${maxHeightMm}.`);
+      return;
+    }
+    const ref = designRef.trim();
+    if (!ref) { setProblem('Say where the design is (file name, WhatsApp message or job number) so the workshop can find it.'); return; }
+    if (ref.startsWith('{')) { setProblem('Write the reference as plain text, not design data.'); return; }
+    setProblem(null);
+    onAdd({ productId: CUSTOM_PRODUCT_ID, widthMm, heightMm, finish, quantity, customDesignRef: ref });
+    setWidth(''); setHeight(''); setDesignRef(''); setQuantity(1);
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border border-dashed border-border p-3">
+      <p className="text-sm font-medium">Custom piece (made to order from the customer's own design)</p>
+      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_2fr_5rem] sm:items-end">
+        <label className="block text-sm font-medium">Width (mm)
+          <input type="number" inputMode="numeric" min={minDimensionMm} max={maxWidthMm} value={width} onChange={e => setWidth(e.target.value)} className="field mt-1 font-normal" />
+        </label>
+        <label className="block text-sm font-medium">Height (mm)
+          <input type="number" inputMode="numeric" min={minDimensionMm} max={maxHeightMm} value={height} onChange={e => setHeight(e.target.value)} className="field mt-1 font-normal" />
+        </label>
+        <div className="block text-sm font-medium"><label htmlFor="new-order-custom-finish">Finish</label>
+          <select id="new-order-custom-finish" value={finish} onChange={e => setFinish(e.target.value)} className="field mt-1 font-normal">
+            {Object.entries(DEFAULT_CUSTOM_FINISH_RATES).map(([id, rate]) => <option key={id} value={id}>{rate.label}</option>)}
+          </select>
+        </div>
+        <label className="block text-sm font-medium">Qty
+          <input type="number" min={1} max={99} value={quantity} onChange={e => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} className="field mt-1 font-normal" />
+        </label>
+      </div>
+      <label className="block text-sm font-medium">Design reference *
+        <input value={designRef} onChange={e => setDesignRef(e.target.value)} maxLength={300} className="field mt-1 font-normal" placeholder="e.g. WhatsApp file gate-sign.dxf, 12 Nov, or job number" />
+      </label>
+      {problem && <p role="alert" className="text-sm text-destructive">{problem}</p>}
+      <button type="button" onClick={add} className="btn-secondary inline-flex items-center gap-1.5">
+        <Plus className="h-4 w-4" /> Add custom piece
+      </button>
+    </div>
+  );
+}
+
 function Created({ result, phone, onNext }: { result: StaffOrderCreated; phone: string; onNext: () => void }) {
   const [downloading, setDownloading] = useState(false);
   const link = result.paymentLink;
@@ -160,9 +220,15 @@ export function NewOrderConsole() {
   const [idempotencyKey, setIdempotencyKey] = useState(newKey);
   const [returning, setReturning] = useState<Extract<CustomerLookup, { found: true }> | null>(null);
 
-  const canHandover = channel === 'counter' && paymentMethod === 'offline';
+  // A custom piece is made after the order, so it can be neither handed over at once nor sold for cash on delivery.
+  const hasCustom = items.some(i => i.productId === CUSTOM_PRODUCT_ID);
+  const canHandover = channel === 'counter' && paymentMethod === 'offline' && !hasCustom;
   const handingOver = canHandover && handover;
   const productName = (id: string) => products.find(p => p.id === id)?.name ?? id;
+  const itemLabel = (item: StaffOrderItem) => item.productId === CUSTOM_PRODUCT_ID
+    ? `Custom piece ${item.widthMm} × ${item.heightMm} mm · ${DEFAULT_CUSTOM_FINISH_RATES[item.finish]?.label ?? item.finish} · design: ${item.customDesignRef}`
+    : `${productName(item.productId)}${item.sizeLabel ? ` · ${item.sizeLabel}` : ''} · ${finishName(item.finish)}`;
+  useEffect(() => { if (hasCustom && paymentMethod === 'cod') setPaymentMethod('offline'); }, [hasCustom, paymentMethod]);
   const setField = (key: keyof typeof EMPTY_CUSTOMER) => (value: string) => setCustomer(c => ({ ...c, [key]: value }));
   // Typing the PIN fills an empty city/state (never overwrites typed values).
   usePincodeAutofill(customer.pincode, customer, patch => setCustomer(c => ({ ...c, ...patch })));
@@ -276,12 +342,13 @@ export function NewOrderConsole() {
         <section className="space-y-3">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Pieces</h3>
           <ItemPicker onAdd={item => setItems(list => [...list, item])} />
+          <CustomPiecePicker onAdd={item => setItems(list => [...list, item])} />
           {items.length > 0 && (
             <ul className="divide-y divide-border rounded-lg border border-border">
               {items.map((item, i) => (
                 <li key={`${item.productId}-${i}`} className="flex items-center justify-between gap-2 p-3 text-sm">
-                  <span>{item.quantity} × {productName(item.productId)}{item.sizeLabel ? ` · ${item.sizeLabel}` : ''} · {finishName(item.finish)}</span>
-                  <button type="button" aria-label={`Remove ${productName(item.productId)}`} onClick={() => setItems(list => list.filter((_, j) => j !== i))}
+                  <span>{item.quantity} × {itemLabel(item)}</span>
+                  <button type="button" aria-label={`Remove ${item.productId === CUSTOM_PRODUCT_ID ? 'custom piece' : productName(item.productId)}`} onClick={() => setItems(list => list.filter((_, j) => j !== i))}
                     className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive">
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -289,15 +356,17 @@ export function NewOrderConsole() {
               ))}
             </ul>
           )}
-          <p className="text-xs text-muted-foreground">Custom designs are ordered through the Studio; note any special request below.</p>
+          {hasCustom && (
+            <p className="text-xs text-muted-foreground">Custom pieces are made after the order is placed, so they cannot be handed over at the counter or sent cash on delivery. Take payment first or send a payment link; production finds the design from your reference.</p>
+          )}
         </section>
 
         <section className="space-y-3">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Payment</h3>
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Payment">
             {(Object.keys(PAYMENT_LABELS) as StaffPaymentMethod[]).map(m => (
-              <button key={m} type="button" role="radio" aria-checked={paymentMethod === m} onClick={() => setPaymentMethod(m)}
-                className={`min-h-11 rounded-lg px-4 text-sm font-semibold ${paymentMethod === m ? 'bg-oxblood text-ivory' : 'bg-muted/50 text-muted-foreground'}`}>
+              <button key={m} type="button" role="radio" aria-checked={paymentMethod === m} onClick={() => setPaymentMethod(m)} disabled={m === 'cod' && hasCustom}
+                className={`min-h-11 rounded-lg px-4 text-sm font-semibold ${paymentMethod === m ? 'bg-oxblood text-ivory' : 'bg-muted/50 text-muted-foreground'} disabled:opacity-50`}>
                 {PAYMENT_LABELS[m]}
               </button>
             ))}

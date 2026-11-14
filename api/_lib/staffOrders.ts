@@ -13,6 +13,7 @@
  */
 import { z } from 'zod';
 import { ORDER_LIMITS } from '../../src/lib/pricing/orderLimits';
+import { CUSTOM_PRODUCT_ID } from '../../src/types/products';
 import { OFFLINE_PAYMENT_MODES, STAFF_ORDER_CHANNELS } from '../../src/types/staffOrders';
 import { createCheckoutIntent, customerSchema, itemSchema, quoteItems, type CheckoutDeps, type StaffCheckoutResponse } from './checkout';
 import type { CheckoutItemInput } from './pricing';
@@ -45,6 +46,31 @@ const paymentSchema = z.discriminatedUnion('method', [
   z.object({ method: z.literal('cod') }),
 ]);
 
+const CUSTOM_HANDOVER_MESSAGE = 'Custom pieces are made to order, so they cannot be handed over at the counter. Untick "Customer takes the pieces now".';
+
+/**
+ * Custom (Studio) lines entered by staff. The customer's design is not in the Studio, so the line carries a plain-text
+ * design reference (file name, WhatsApp message, job number) in `customDesignRef`; a value starting with "{" would be
+ * read by production as a Studio design document, so it is refused. Size, finish and price are validated and priced
+ * by the checkout engine (api/_lib/pricing.ts), never taken from the client.
+ */
+const MAX_STAFF_DESIGN_REF_CHARS = 300;
+type IssueFn = (path: (string | number)[], message: string) => void;
+function checkCustomLines(items: z.infer<typeof itemSchema>[], handover: boolean, issue: IssueFn) {
+  items.forEach((item, i) => {
+    if (item.productId !== CUSTOM_PRODUCT_ID) {
+      if (item.customDesignRef) issue(['items', i, 'customDesignRef'], 'Only a custom piece carries a design reference.');
+      return;
+    }
+    const ref = item.customDesignRef?.trim() ?? '';
+    if (!ref) issue(['items', i, 'customDesignRef'], 'Enter where the design is (file name, WhatsApp message or job number) so the workshop can find it.');
+    else if (ref.length > MAX_STAFF_DESIGN_REF_CHARS || ref.startsWith('{')) {
+      issue(['items', i, 'customDesignRef'], `The design reference must be plain text of at most ${MAX_STAFF_DESIGN_REF_CHARS} characters.`);
+    }
+    if (handover) issue(['items', i], CUSTOM_HANDOVER_MESSAGE);
+  });
+}
+
 export const staffOrderSchema = z
   .object({
     channel: z.enum(STAFF_ORDER_CHANNELS),
@@ -62,6 +88,7 @@ export const staffOrderSchema = z
   })
   .superRefine((o, ctx) => {
     const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
+    checkCustomLines(o.items, o.handover, issue);
     if (o.handover) {
       if (o.channel !== 'counter') issue(['handover'], 'Only a counter sale can be handed over at once.');
       if (o.payment.method !== 'offline') issue(['handover'], 'Take the payment before handing the pieces over.');
@@ -77,14 +104,22 @@ export const staffOrderSchema = z
   });
 export type StaffOrderInput = z.infer<typeof staffOrderSchema>;
 
-export const staffQuoteSchema = z.object({
-  items: z.array(itemSchema).min(1).max(ORDER_LIMITS.maxLines),
-  couponCode: optionalText(40),
-  customerEmail: z.string().trim().toLowerCase().email().max(254).optional().or(z.literal('')).transform(v => v || undefined),
-  cod: z.boolean().default(false),
-  /** Counter handover: no shipping. */
-  handover: z.boolean().default(false),
-});
+export const staffQuoteSchema = z
+  .object({
+    items: z.array(itemSchema).min(1).max(ORDER_LIMITS.maxLines),
+    couponCode: optionalText(40),
+    customerEmail: z.string().trim().toLowerCase().email().max(254).optional().or(z.literal('')).transform(v => v || undefined),
+    cod: z.boolean().default(false),
+    /** Counter handover: no shipping. */
+    handover: z.boolean().default(false),
+  })
+  .superRefine((q, ctx) => {
+    // The quote checks only what changes the price or the rules; the design reference is required at creation.
+    if (!q.handover) return;
+    q.items.forEach((item, i) => {
+      if (item.productId === CUSTOM_PRODUCT_ID) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', i], message: CUSTOM_HANDOVER_MESSAGE });
+    });
+  });
 export type StaffQuoteInput = z.infer<typeof staffQuoteSchema>;
 
 export async function quoteStaffOrder(store: DocStore, config: StoreConfig, input: StaffQuoteInput) {

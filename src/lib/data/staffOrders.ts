@@ -9,6 +9,10 @@ import { adminAction } from './adminApi';
 export interface StaffOrderItem {
   productId: string;
   sizeLabel?: string;
+  /** Custom (Studio) piece only: size in mm, and a plain-text reference to the customer's design. */
+  widthMm?: number;
+  heightMm?: number;
+  customDesignRef?: string;
   finish: string;
   quantity: number;
 }
