@@ -1,5 +1,7 @@
 import { finishName } from '@/lib/catalog';
+import { CUSTOM_PRODUCT_ID } from '@/types/products';
 import type { Order, Product } from '@/types/store';
+import { DesignFileLinks } from './DesignFileLinks';
 import { isCustomItem, itemSizeText } from './itemSpec';
 
 function materialText(product?: Product): string {
@@ -27,6 +29,10 @@ export function OrderItemSpecs({ order, products }: { order: Order; products: re
               <div><dt className="inline">Finish: </dt><dd className="inline text-foreground">{item.finish ? finishName(item.finish) : 'n/a'}</dd></div>
               <div className="col-span-2"><dt className="inline">Material: </dt><dd className="inline text-foreground">{materialText(product)}</dd></div>
             </dl>
+            {item.productId === CUSTOM_PRODUCT_ID && item.customDesignRef && !item.customDesignRef.trim().startsWith('{') && (
+              <p className="mt-1 text-xs text-muted-foreground">Design reference: <span className="text-foreground">{item.customDesignRef}</span></p>
+            )}
+            <DesignFileLinks files={item.designFiles} />
             {item.uploadedArtworkName && <p className="mt-1 text-xs text-muted-foreground">Artwork: {item.uploadedArtworkName}</p>}
           </li>
         );

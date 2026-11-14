@@ -122,6 +122,32 @@ describe.skipIf(!firestoreHost || !storageHost)('storage.rules', () => {
     await assertFails(uploadBytes(ref(production, 'qc/ord_rulestest/p4.webp'), bytes(2 * 1024 * 1024 + 1), webp));
   });
 
+  it('staff design files: order creators upload allowed types; order readers download; nobody overwrites or deletes', async () => {
+    const draft = 'rulestest-draft-0001';
+    const path = `staff-designs/${draft}/gate.svg`;
+    created.push(path);
+    const manager = storageAs('m', { role: 'order_manager' });
+    await assertSucceeds(uploadBytes(ref(manager, path), bytes(), { contentType: 'image/svg+xml' }));
+    await assertSucceeds(uploadBytes(ref(storageAs('sup', { role: 'support' }), `staff-designs/${draft}/a.dxf`), bytes(), { contentType: 'application/dxf' }));
+    created.push(`staff-designs/${draft}/a.dxf`);
+    // Immutable: no overwrite, no delete, even by a super admin.
+    await assertFails(uploadBytes(ref(storageAs('s', { role: 'super_admin' }), path), bytes(), { contentType: 'image/svg+xml' }));
+    await assertFails(deleteObject(ref(storageAs('s', { role: 'super_admin' }), path)));
+    for (const reader of ['production', 'finance', 'shipping', 'support', 'admin']) await assertSucceeds(getBytes(ref(storageAs(reader, { role: reader }), path)));
+    for (const denied of [storageAs(OWNER), guest(), storageAs('c', { role: 'catalog_manager' }), storageAs('d', { role: 'designer' })]) {
+      await assertFails(getBytes(ref(denied, path)));
+    }
+    // Staff who cannot create orders (and customers) cannot upload.
+    for (const denied of [storageAs(OWNER), guest(), storageAs('p', { role: 'production' }), storageAs('f', { role: 'finance' })]) {
+      await assertFails(uploadBytes(ref(denied, `staff-designs/${draft}/b.svg`), bytes(), { contentType: 'image/svg+xml' }));
+    }
+    await assertFails(uploadBytes(ref(manager, `staff-designs/${draft}/c.exe`), bytes(), { contentType: 'application/octet-stream' }));
+    await assertFails(uploadBytes(ref(manager, `staff-designs/${draft}/c.svg`), bytes(), { contentType: 'text/html' }));
+    await assertFails(uploadBytes(ref(manager, `staff-designs/${draft}/bad name.svg`), bytes(), { contentType: 'image/svg+xml' }));
+    await assertFails(uploadBytes(ref(manager, 'staff-designs/short/d.svg'), bytes(), { contentType: 'image/svg+xml' }));
+    await assertFails(uploadBytes(ref(manager, `staff-designs/${draft}/e.pdf`), bytes(10 * 1024 * 1024 + 1), { contentType: 'application/pdf' }));
+  });
+
   it('consultation photos: the customer and consultation staff read; no client writes a wall snapshot', async () => {
     for (const reader of [storageAs(OWNER), storageAs('d', { role: 'designer' }), storageAs('a', { role: 'admin' }), storageAs('s', { role: 'super_admin' })]) {
       await assertSucceeds(getBytes(ref(reader, WALL)));

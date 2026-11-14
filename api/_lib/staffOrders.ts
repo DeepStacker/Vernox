@@ -16,7 +16,16 @@
 import { z } from 'zod';
 import { ORDER_LIMITS } from '../../src/lib/pricing/orderLimits';
 import { CUSTOM_PRODUCT_ID } from '../../src/types/products';
-import { OFFLINE_PAYMENT_MODES, STAFF_ORDER_CHANNELS } from '../../src/types/staffOrders';
+import {
+  MAX_STAFF_DESIGN_FILES_PER_LINE,
+  type DesignFile,
+  OFFLINE_PAYMENT_MODES,
+  STAFF_DESIGN_CONTENT_TYPES,
+  STAFF_DESIGN_DRAFT_ID_PATTERN,
+  STAFF_DESIGN_FILE_NAME_PATTERN,
+  STAFF_DESIGN_FILE_TYPES,
+  STAFF_ORDER_CHANNELS,
+} from '../../src/types/staffOrders';
 import { createCheckoutIntent, customerSchema, itemSchema, quoteItems, type CheckoutDeps, type StaffCheckoutResponse } from './checkout';
 import type { CheckoutItemInput } from './pricing';
 import { ApiError } from './errors';
@@ -63,13 +72,37 @@ const CUSTOM_HANDOVER_MESSAGE = 'Custom pieces are made to order, so they cannot
  * by the checkout engine (api/_lib/pricing.ts), never taken from the client.
  */
 const MAX_STAFF_DESIGN_REF_CHARS = 300;
+
+/**
+ * A design file staff uploaded to Storage (`staff-designs/{designDraftId}/{file}`) before the order existed. Only the
+ * reference is stored on the line; storage.rules decides who may upload and read the bytes.
+ */
+const designFileSchema = z.object({
+  path: z.string().max(200),
+  name: z.string().trim().min(1).max(120),
+  contentType: z.enum(STAFF_DESIGN_CONTENT_TYPES),
+});
+const staffItemSchema = itemSchema.extend({ designFiles: z.array(designFileSchema).max(MAX_STAFF_DESIGN_FILES_PER_LINE).optional() });
+
 type IssueFn = (path: (string | number)[], message: string) => void;
-function checkCustomLines(items: z.infer<typeof itemSchema>[], handover: boolean, issue: IssueFn) {
+function checkDesignFiles(item: z.infer<typeof staffItemSchema>, index: number, draftId: string | undefined, issue: IssueFn) {
+  item.designFiles?.forEach((file, f) => {
+    const at = ['items', index, 'designFiles', f];
+    const fileName = file.path.split('/')[2] ?? '';
+    const inDraft = Boolean(draftId) && file.path === `staff-designs/${draftId}/${fileName}`;
+    if (!inDraft || !STAFF_DESIGN_FILE_NAME_PATTERN.test(fileName)) issue(at, 'The design file path is not one of this order\'s uploads.');
+    else if (!fileName.endsWith(`.${STAFF_DESIGN_FILE_TYPES[file.contentType]}`)) issue(at, 'The design file type does not match its name.');
+  });
+}
+
+function checkCustomLines(items: z.infer<typeof staffItemSchema>[], handover: boolean, draftId: string | undefined, issue: IssueFn) {
   items.forEach((item, i) => {
     if (item.productId !== CUSTOM_PRODUCT_ID) {
       if (item.customDesignRef) issue(['items', i, 'customDesignRef'], 'Only a custom piece carries a design reference.');
+      if (item.designFiles?.length) issue(['items', i, 'designFiles'], 'Only a custom piece carries design files.');
       return;
     }
+    checkDesignFiles(item, i, draftId, issue);
     const ref = item.customDesignRef?.trim() ?? '';
     if (!ref) issue(['items', i, 'customDesignRef'], 'Enter where the design is (file name, WhatsApp message or job number) so the workshop can find it.');
     else if (ref.length > MAX_STAFF_DESIGN_REF_CHARS || ref.startsWith('{')) {
@@ -82,7 +115,9 @@ function checkCustomLines(items: z.infer<typeof itemSchema>[], handover: boolean
 export const staffOrderSchema = z
   .object({
     channel: z.enum(STAFF_ORDER_CHANNELS),
-    items: z.array(itemSchema).min(1).max(ORDER_LIMITS.maxLines),
+    items: z.array(staffItemSchema).min(1).max(ORDER_LIMITS.maxLines),
+    /** Id the browser generated for this order's design uploads, which happen before the order exists. */
+    designDraftId: z.string().regex(STAFF_DESIGN_DRAFT_ID_PATTERN).optional(),
     couponCode: optionalText(40),
     customer: staffCustomerSchema,
     payment: paymentSchema,
@@ -96,7 +131,7 @@ export const staffOrderSchema = z
   })
   .superRefine((o, ctx) => {
     const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
-    checkCustomLines(o.items, o.handover, issue);
+    checkCustomLines(o.items, o.handover, o.designDraftId, issue);
     if (o.handover && 'advancePaise' in o.payment && o.payment.advancePaise) {
       issue(['payment', 'advancePaise'], 'A counter handover needs the full amount; take an advance only for pieces delivered later.');
     }
@@ -223,6 +258,7 @@ export async function createStaffOrder(deps: CheckoutDeps, input: StaffOrderInpu
         handover: input.handover,
         advancePaise: payment.method === 'cod' ? undefined : payment.advancePaise,
         note: input.note,
+        designFiles: input.items.map(i => (i.designFiles ?? []) as DesignFile[]),
       },
     },
   );

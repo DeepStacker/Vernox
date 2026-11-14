@@ -115,7 +115,7 @@ export interface StoreConfig {
 }
 
 import type { ConsultationSettings } from './consultation';
-import type { OfflinePaymentMode, StaffOrderChannel } from './staffOrders';
+import type { DesignFile, OfflinePaymentMode, StaffOrderChannel } from './staffOrders';
 import type { SellerSettings } from './settings';
 export type { SellerSettings, StoreSettingsDoc } from './settings';
 
@@ -135,6 +135,8 @@ export interface OrderItem {
   customDesignThumb?: string;
   /** Full design JSON written by the Crafting Studio (see editor/TopBar). */
   customDesignRef?: string;
+  /** Design files staff attached when entering the order (private Storage paths; see designFiles in DATABASE.md). */
+  designFiles?: DesignFile[];
   userUploadedImage?: string;
   uploadedArtworkName?: string;
 }

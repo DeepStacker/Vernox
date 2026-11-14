@@ -8,7 +8,7 @@
  * them back for money logic.
  */
 import type { OrderHold } from '../../src/types/orderStatus';
-import type { OfflinePaymentMode, StaffOrderChannel } from '../../src/types/staffOrders';
+import type { DesignFile, OfflinePaymentMode, StaffOrderChannel } from '../../src/types/staffOrders';
 import crypto from 'crypto';
 import { paiseToRupees } from './money';
 import { CUSTOMER_CANCELLABLE_STATUSES, type OrderStatus, type StatusHistoryEntry } from './orderLifecycle';
@@ -45,6 +45,8 @@ export interface OrderItemSnapshot {
   /** True for the design consultation service line. */
   isService?: boolean;
   customDesignRef: string | null;
+  /** Design files staff uploaded for a custom line of a staff-entered order (storage.rules `staff-designs/`). */
+  designFiles?: DesignFile[];
   hsnCode: string;
   gstRateBps: number;
   /** Share of the order discount, taxable value and GST of this line (see pricing.computeTotals). */

@@ -272,4 +272,39 @@ describe('staff orders: custom (Studio) pieces', () => {
       createStaffOrder(staffDeps(store), input({ items: [customLine()], payment: { method: 'cod' }, idempotencyKey: 'staff-key-0002' }), ACTOR),
     ).rejects.toBeInstanceOf(ApiError);
   });
+  describe('design files', () => {
+    const DRAFT = 'draft-abcdef0123456789';
+    const file = (name = 'gate.svg', contentType = 'image/svg+xml', path = `staff-designs/${DRAFT}/${name}`) => ({ path, name: 'Gate sign.svg', contentType });
+    const withFiles = (designFiles: unknown[], extra: Record<string, unknown> = {}) =>
+      input({ items: [customLine({ designFiles })], designDraftId: DRAFT, ...extra });
+
+    it('stores the files on the custom line, next to the typed reference', async () => {
+      const store = seededStore();
+      const files = [file(), file('b.dxf', 'application/dxf')];
+      const res = await createStaffOrder(staffDeps(store), withFiles(files), ACTOR);
+      expect(order(store, res.orderId).items[0]).toMatchObject({ customDesignRef: 'WhatsApp gate-sign.dxf, 12 Nov', designFiles: files });
+    });
+
+    it('attaches each line its own files and leaves a line without files unchanged', async () => {
+      const store = seededStore();
+      const res = await createStaffOrder(staffDeps(store), input({ items: [ITEMS[0], customLine({ designFiles: [file()] })], designDraftId: DRAFT }), ACTOR);
+      const items = order(store, res.orderId).items as Array<{ designFiles?: unknown }>;
+      expect(items[0].designFiles).toBeUndefined();
+      expect(items[1].designFiles).toEqual([file()]);
+    });
+
+    it('refuses paths outside this order\'s draft, odd names or types, too many files, and files on catalogue lines', () => {
+      const bad = (fn: () => unknown) => expect(fn).toThrow();
+      bad(() => withFiles([file('gate.svg', 'image/svg+xml', 'staff-designs/other-draft-0123456789/gate.svg')]));
+      bad(() => withFiles([file('gate.svg', 'image/svg+xml', `qc/${DRAFT}/gate.svg`)]));
+      bad(() => withFiles([file('gate.svg', 'image/svg+xml', `staff-designs/${DRAFT}/../x/gate.svg`)]));
+      bad(() => withFiles([file('gate.exe', 'image/svg+xml')]));
+      bad(() => withFiles([file('gate.png', 'image/svg+xml')])); // type does not match the name
+      bad(() => withFiles([file('gate.svg', 'text/html')]));
+      bad(() => withFiles(['a', 'b', 'c', 'd', 'e', 'f'].map(n => file(`${n}.svg`))));
+      bad(() => input({ items: [customLine({ designFiles: [file()] })] })); // no draft id
+      bad(() => input({ items: [{ ...ITEMS[0], designFiles: [file()] }], designDraftId: DRAFT }));
+      expect(() => withFiles(['a', 'b', 'c', 'd', 'e'].map(n => file(`${n}.svg`)))).not.toThrow();
+    });
+  });
 });

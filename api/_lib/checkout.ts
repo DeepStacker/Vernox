@@ -65,7 +65,7 @@ import {
   type ProductRecord,
 } from './pricing';
 import type { PaymentGateway, PaymentLinkGateway } from './razorpay';
-import { PAYMENT_LINK_TTL_HOURS } from '../../src/types/staffOrders';
+import { PAYMENT_LINK_TTL_HOURS, type DesignFile } from '../../src/types/staffOrders';
 import { itemLeadTimeDays, serviceabilityFor } from './shipping';
 import type { ShippingProvider } from './shipping/types';
 import { increment, type DocStore } from './store';
@@ -202,7 +202,7 @@ function requestHash(req: CheckoutRequest, consultation: ConsultationPurchase | 
     // The delivery details too: a retry with a corrected address must not get back the order with the old one.
     customer: [req.customer.name, req.customer.phone, req.customer.address, req.customer.city, req.customer.state, req.customer.pincode, req.customer.country],
     ...(req.paymentMethod === 'cod' ? { paymentMethod: 'cod' } : {}),
-    ...(staff ? { staff: [staff.source.channel, req.customer.phone, staff.offlinePayment?.mode ?? null, staff.offlinePayment?.reference ?? null, Boolean(staff.handover), ...(staff.advancePaise ? [staff.advancePaise] : [])] } : {}),
+    ...(staff ? { staff: [staff.source.channel, req.customer.phone, staff.offlinePayment?.mode ?? null, staff.offlinePayment?.reference ?? null, Boolean(staff.handover), ...(staff.advancePaise ? [staff.advancePaise] : []), ...(staff.designFiles?.some(f => f.length) ? [staff.designFiles.map(f => f.map(d => d.path))] : [])] } : {}),
   });
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
@@ -280,6 +280,8 @@ export interface StaffCheckout {
   advancePaise?: number;
   /** Staff note saved as the order's first note. */
   note?: string;
+  /** Design files per request item (same order as `req.items`), attached to the matching order line. */
+  designFiles?: DesignFile[][];
 }
 
 export async function createCheckoutIntent(
@@ -418,6 +420,10 @@ export async function createCheckoutIntent(
       reservationTtlMs: viaPaymentLink ? PAYMENT_LINK_TTL_HOURS * 3600_000 : config.reservationTtlMs,
     });
     if (staff?.note) order = { ...order, notes: staff.note };
+    if (staff?.designFiles?.some(files => files.length > 0)) {
+      // Lines are priced in request order, so the files of item i belong to line i.
+      order = { ...order, items: order.items.map((item, i) => (staff.designFiles![i]?.length ? { ...item, designFiles: staff.designFiles![i] } : item)) };
+    }
     // Nobody confirmed this COD order with the customer: staff must phone before production (CONFIRM_COD_ORDER).
     if (customerCod && !deps.codOtpEnabled) order = { ...order, flags: [...order.flags, COD_UNVERIFIED_FLAG] };
     if (staff?.handover) {

@@ -366,8 +366,10 @@ MSG91 and Meta WhatsApp delivery.
 - Done (2026-11-07): staff-entered orders (Admin > New order; `CREATE_STAFF_ORDER`, permission `orders.create` for order manager,
   support and admins): counter sale with handover and on-the-spot GST invoice, phone / WhatsApp / email / trade orders paid in person
   (cash, UPI, card, bank transfer), by Razorpay payment link, or COD. Custom (Studio) pieces can be added from the staff screen (width x height in mm, finish, quantity; server-priced; a
-  typed design reference replaces the Studio design, shown on the job sheet; not handed over at the counter, no COD). Not built:
-  attaching a design file or Studio design from admin (no storage rule or design id exists for it).
+  typed design reference replaces the Studio design, shown on the job sheet; not handed over at the counter, no COD). Staff can also attach design files
+  (SVG, DXF, PDF, PNG, JPEG, WebP; up to 5 per line, 10 MB each) to a custom line: uploaded to `staff-designs/{draftId}/` (storage.rules) before
+  the order exists, stored as `designFiles` on the line and downloaded from the production job detail. Not built: picking a saved Studio
+  design from admin (no design id exists for it); a server-side check that each uploaded object exists.
 - Done: thermal receipt (80 mm, or 58 mm remembered per browser) printed with `window.print()` from the New order success screen and the
   Finance order panel (`PrintReceiptButton`, mapping in `src/lib/orders/receipt.ts`). It shows seller GSTIN, "Tax invoice" or "Order
   receipt", masked phone, lines, CGST/SGST or IGST (from the invoice when issued), payment mode and reference, and any balance due. No PDF
