@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { signInPath } from '@/lib/auth/returnTo';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Plus } from 'lucide-react';
@@ -70,7 +71,7 @@ export default function SpaceDetail() {
 
   if (loading || isLoading) return <StoreLayout><div className="container py-10"><LoadingBlock /></div></StoreLayout>;
   if (!user) {
-    return <StoreLayout><div className="container py-10"><EmptyState title="Sign in to see your space" action={{ label: 'Sign in', to: '/account' }} /></div></StoreLayout>;
+    return <StoreLayout><div className="container py-10"><EmptyState title="Sign in to see your space" action={{ label: 'Sign in', to: signInPath(window.location.pathname) }} /></div></StoreLayout>;
   }
   if (error) return <StoreLayout><div className="container py-10"><ErrorState>We could not load this space. Please try again.</ErrorState></div></StoreLayout>;
   if (!space) {

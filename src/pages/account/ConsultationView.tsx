@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { signInPath } from '@/lib/auth/returnTo';
 import { Link, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -123,7 +124,7 @@ export default function ConsultationView() {
 
   if (loading || isLoading) return <StoreLayout><div className="container py-10"><LoadingBlock /></div></StoreLayout>;
   const crumbs = [{ label: 'Account', to: '/account' }, { label: 'My Space', to: '/account/spaces' }, { label: 'Consultation' }];
-  if (!user) return <StoreLayout><div className="container py-10"><EmptyState title="Sign in to see your consultation" action={{ label: 'Sign in', to: '/account' }} /></div></StoreLayout>;
+  if (!user) return <StoreLayout><div className="container py-10"><EmptyState title="Sign in to see your consultation" action={{ label: 'Sign in', to: signInPath(window.location.pathname) }} /></div></StoreLayout>;
   const notYours = (error as { code?: string } | null)?.code === 'permission-denied';
   if (error && !notYours) return <StoreLayout><div className="container py-10"><ErrorState>We could not load this consultation.</ErrorState></div></StoreLayout>;
   if (!c) return <StoreLayout><div className="container py-10"><EmptyState title="Consultation not found" action={{ label: 'My Space', to: '/account/spaces' }} /></div></StoreLayout>;

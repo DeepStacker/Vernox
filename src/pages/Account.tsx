@@ -1,7 +1,8 @@
 import { usePincodeAutofill } from '@/lib/shipping/usePincodeAutofill';
+import { safeReturnPath } from '@/lib/auth/returnTo';
 import { useSeo } from '@/lib/seo';
 import { useState, useEffect, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { SiteHeader } from '@/components/shop/SiteHeader';
 import { SiteFooter } from '@/components/shop/SiteFooter';
 import { useCatalog } from '@/lib/catalogContext';
@@ -25,6 +26,12 @@ export default function Account() {
   const { data: customerOrders = [], isLoading: ordersLoading, error: ordersError } = useMyOrders(user?.uid);
   
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  // Sent here to sign in from another page (/account?next=...): go back once signed in.
+  const returnTo = safeReturnPath(searchParams.get('next'));
+  useEffect(() => {
+    if (user && returnTo) navigate(returnTo, { replace: true });
+  }, [user, returnTo, navigate]);
   
   // Navigation tabs inside dashboard
   const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'security' | 'wishlist'>('orders');

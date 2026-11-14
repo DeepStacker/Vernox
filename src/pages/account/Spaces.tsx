@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { signInPath } from '@/lib/auth/returnTo';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Plus } from 'lucide-react';
@@ -84,7 +85,7 @@ export default function Spaces() {
       <StoreLayout>
         <div className="container py-6 sm:py-10">
           <PageHeader title="My Space" crumbs={crumbs} />
-          <EmptyState title="Sign in to save your walls" hint="Keep photos and measurements of your rooms, and see designs on them." action={{ label: 'Sign in', to: '/account' }} />
+          <EmptyState title="Sign in to save your walls" hint="Keep photos and measurements of your rooms, and see designs on them." action={{ label: 'Sign in', to: signInPath('/account/spaces') }} />
         </div>
       </StoreLayout>
     );
