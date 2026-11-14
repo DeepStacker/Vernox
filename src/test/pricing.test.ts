@@ -36,6 +36,18 @@ describe('productFromDoc', () => {
     expect(frame.finishes).toEqual(['gold', 'brass', 'steel']);
   });
 
+  it('keeps negative size price differences and drops only a size that would not price above zero', () => {
+    const product = productFromDoc('x', {
+      price: 100,
+      sizes: [
+        { label: 'Small', widthMm: 200, heightMm: 200, priceDelta: -20.5 },
+        { label: 'Broken', widthMm: 100, heightMm: 100, priceDelta: -100 },
+        { label: 'Big', widthMm: 500, heightMm: 500, priceDelta: 50 },
+      ],
+    })!;
+    expect(product.sizes.map(s => [s.label, s.priceDeltaPaise])).toEqual([['Small', -2_050], ['Big', 5_000]]);
+  });
+
   it('refuses documents without a valid price instead of guessing', () => {
     expect(productFromDoc('x', null)).toBeNull();
     expect(productFromDoc('x', { name: 'No price' })).toBeNull();

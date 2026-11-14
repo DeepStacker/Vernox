@@ -15,7 +15,7 @@
  */
 import crypto from 'crypto';
 import type { CouponValidationResult, DiscountType } from '../../src/types/coupon';
-import { isNonNegativeFinite, rupeesToPaise } from './money';
+import { formatRupees, isNonNegativeFinite, rupeesToPaise } from './money';
 import type { PricedLine } from './pricing';
 import { increment, type DocData, type DocStore, type StoreTransaction } from './store';
 
@@ -133,7 +133,7 @@ export function evaluateCoupon(coupon: CouponRecord | null, lines: PricedLine[],
   const subtotal = lines.reduce((sum, l) => sum + l.lineTotalPaise, 0);
   if (subtotal <= 0) return reject('MIN_ORDER_NOT_MET', 'Your cart is empty.');
   if (coupon.minOrderPaise !== null && subtotal < coupon.minOrderPaise) {
-    return reject('MIN_ORDER_NOT_MET', `A minimum order of ₹${coupon.minOrderPaise / 100} is required for this coupon.`);
+    return reject('MIN_ORDER_NOT_MET', `A minimum order of ${formatRupees(coupon.minOrderPaise)} is required for this coupon.`);
   }
 
   const restricted = coupon.applicableCategories.length > 0 || coupon.applicableProductIds.length > 0;

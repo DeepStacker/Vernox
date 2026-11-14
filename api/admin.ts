@@ -20,7 +20,7 @@ import { normaliseCouponCode } from './_lib/coupons';
 import { ApiError, badRequest, sendError } from './_lib/errors';
 import { getAdminAuth, getPhotoStorage, getStore } from './_lib/firebaseAdmin';
 import { applyInvoice, invoicePath, planInvoice, type TaxDocument } from './_lib/gst/invoice';
-import { clientIp } from './_lib/http';
+import { clientIp, friendlyIssueMessage } from './_lib/http';
 import { rupeesToPaise } from './_lib/money';
 import { STAFF_SETTABLE_STATUSES, type OrderStatus } from './_lib/orderLifecycle';
 import { HOLDABLE_STATUSES, HOLD_KINDS, type OrderHold } from '../src/types/orderStatus';
@@ -66,8 +66,7 @@ interface ActionDefinition {
 function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, params: unknown): T {
   const result = schema.safeParse(params);
   if (!result.success) {
-    const issue = result.error.issues[0];
-    throw badRequest(`Invalid request: ${issue?.path.join('.') || 'params'} ${issue?.message ?? ''}`.trim());
+    throw badRequest(friendlyIssueMessage(result.error.issues[0], 'request'));
   }
   return result.data;
 }
@@ -77,18 +76,19 @@ const audit = (ctx: ActionContext, action: string, targetType: Parameters<typeof
 
 // ---------- schemas ----------
 
+// Optional limits accept null so staff can clear them: null (or absent) means "no limit" and is stored as null.
 const couponSchema = z.object({
   id: z.string().trim().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
   code: z.string().trim().min(3).max(40).regex(/^[A-Za-z0-9_-]+$/),
   description: z.string().trim().max(300).default(''),
   discountType: z.enum(['percentage', 'fixed']),
   discountValue: z.number().positive(),
-  maxDiscountLimit: z.number().nonnegative().optional(),
-  minOrderValue: z.number().nonnegative().optional(),
-  maxUsageCount: z.number().int().positive().optional(),
-  maxUsagePerCustomer: z.number().int().positive().optional(),
-  startDate: z.string().trim().max(40).optional(),
-  expiryDate: z.string().trim().max(40).optional(),
+  maxDiscountLimit: z.number().nonnegative().nullable().optional(),
+  minOrderValue: z.number().nonnegative().nullable().optional(),
+  maxUsageCount: z.number().int().positive().nullable().optional(),
+  maxUsagePerCustomer: z.number().int().positive().nullable().optional(),
+  startDate: z.string().trim().max(40).nullable().optional(),
+  expiryDate: z.string().trim().max(40).nullable().optional(),
   isActive: z.boolean(),
   applicableCategories: z.array(z.string().max(64)).max(50).optional(),
   applicableProductIds: z.array(z.string().max(128)).max(200).optional(),
@@ -792,6 +792,38 @@ const ACTIONS: Record<string, ActionDefinition> = {
         ctx.params,
       );
       return markReturnReceived(ctx.store, { orderId: p.orderId, restock: p.restock, note: p.note, actor: ctx.actor });
+    },
+  },
+
+  /**
+   * Relative stock change. Reservations and releases also move `stock` (with increment()), so staff
+   * edits are deltas applied in a transaction, never an absolute value written back from a stale screen.
+   * Direct client writes to `stock` are refused by firestore.rules.
+   */
+  ADJUST_STOCK: {
+    method: 'POST',
+    permission: 'inventory.write',
+    async run(ctx) {
+      const p = parse(
+        z.object({
+          productId: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/),
+          delta: z.number().int().refine(n => n !== 0 && Math.abs(n) <= 100_000, 'must be a non-zero whole number up to 100000'),
+          reason: z.string().trim().max(300).optional(),
+        }),
+        ctx.params,
+      );
+      const now = Date.now();
+      const stock = await ctx.store.runTransaction(async tx => {
+        const product = await tx.get(`products/${p.productId}`);
+        if (!product) throw new ApiError(404, 'NOT_FOUND', 'Product not found.');
+        const before = typeof product.stock === 'number' && Number.isFinite(product.stock) ? Math.floor(product.stock) : 0;
+        const after = before + p.delta;
+        if (after < 0) throw new ApiError(409, 'CONFLICT', `Stock cannot go below 0 (currently ${before}).`);
+        tx.update(`products/${p.productId}`, { stock: after, updatedAt: now });
+        auditInTransaction(ctx.store, tx, audit(ctx, 'STOCK_ADJUSTED', 'inventory', p.productId, { before, after, delta: p.delta, reason: p.reason ?? null }));
+        return after;
+      });
+      return { productId: p.productId, stock };
     },
   },
 

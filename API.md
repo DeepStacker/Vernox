@@ -6,6 +6,7 @@ Shared server code lives in `api/_lib/` (the underscore keeps Vercel from deploy
 ## Conventions
 
 - JSON in, JSON out. Errors are always `{ "success": false, "code": "<CODE>", "message": "<human text>" }`.
+- Validation failures (`VALIDATION_ERROR`, 400) carry a readable message naming the field, e.g. `Name must be at most 120 characters.`
 - Codes: `VALIDATION_ERROR` (400/409), `INVALID_ITEM` (400), `INVALID_COUPON` (400), `COD_NOT_AVAILABLE` (400), `INSUFFICIENT_STOCK` (409),
   `SIGNATURE_INVALID` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409),
   `METHOD_NOT_ALLOWED` (405), `RATE_LIMITED` (429), `PAYMENT_PROVIDER_ERROR` (502), `SHIPPING_PROVIDER_ERROR` (502), `CONFIG_ERROR` (500), `INTERNAL_ERROR` (500).
@@ -138,7 +139,8 @@ POST body / GET query: `{ "action": "...", ... }` → `200 { "success": true, ..
 | `SET_STAFF_ROLE` | POST | `staff.manage` | `email` or `uid`, `role: StaffRole \| null` → `{ staff }`; cannot change own role |
 | `ADD_ORDER_NOTE` | POST | `customers.read` | `orderId, note (1–500)` | `{ orderId, notes }` — appends `[YYYY-MM-DD HH:mm UTC <email>] note` to `orders.notes` in a transaction and keeps the `#vernox:v1` block; for roles that cannot write orders (support). 400 when `notes` would exceed 20 000 characters |
 | `UPDATE_ORDER_STATUS` | POST | `orders.update_status` (+ `orders.tracking` for `tracking`) | `orderId, status` (workshop stage: `In_Design`, `Cutting`, `Finishing`, `Quality_Check`, `Packed`), `note?, tracking?` |
-| `SAVE_COUPON` | POST | `coupons.write` | `coupon` (code unique, upper-cased; `usedCount` is server-maintained) |
+| `ADJUST_STOCK` | POST | `inventory.write` | `productId, delta` (non-zero integer, ±100 000), `reason?` | `{ productId, stock }` — applies the change to `products/{id}.stock` in a transaction and audits `STOCK_ADJUSTED` (before/after). 409 when the result would be below 0; 404 for an unknown product. Clients cannot write `stock` directly (firestore.rules) |
+| `SAVE_COUPON` | POST | `coupons.write` | `coupon` (code unique, upper-cased; `usedCount` is server-maintained). Optional limits `maxDiscountLimit, minOrderValue, maxUsageCount, maxUsagePerCustomer, startDate, expiryDate` accept `null` = no limit and are stored as `null`, so staff can clear them; omitting a field leaves the stored value |
 | `DELETE_COUPON` | POST | `coupons.write` | `couponId` |
 | `SAVE_REVIEW` | POST | `reviews.moderate` | `review` |
 | `DELETE_REVIEW` | POST | `reviews.moderate` | `reviewId` |

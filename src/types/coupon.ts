@@ -10,13 +10,13 @@ export interface Coupon {
   description: string;
   discountType: DiscountType;
   discountValue: number; // e.g. 20 for 20%, or 50 for $50/₹50
-  maxDiscountLimit?: number; // Capped max discount for percentage coupons (e.g. max $100 off)
-  minOrderValue?: number; // Minimum cart subtotal required to apply
-  maxUsageCount?: number; // Maximum total redemptions across all customers (null/undefined = unlimited)
+  maxDiscountLimit?: number | null; // Capped max discount for percentage coupons (e.g. max $100 off)
+  minOrderValue?: number | null; // Minimum cart subtotal required to apply
+  maxUsageCount?: number | null; // Maximum total redemptions across all customers (null/undefined = unlimited)
   usedCount: number; // Current redemption count
-  maxUsagePerCustomer?: number; // Maximum times a single customer email can use this (default: 1)
-  startDate?: string; // ISO date string or YYYY-MM-DD
-  expiryDate?: string; // ISO date string or YYYY-MM-DD
+  maxUsagePerCustomer?: number | null; // Maximum times a single customer email can use this (null/undefined = unlimited)
+  startDate?: string | null; // ISO date string or YYYY-MM-DD
+  expiryDate?: string | null; // ISO date string or YYYY-MM-DD
   isActive: boolean; // Enable/disable toggle
   applicableCategories?: string[]; // Empty or undefined = all categories
   applicableProductIds?: string[]; // Empty or undefined = all products

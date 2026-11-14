@@ -11,9 +11,10 @@ server hold authoritative **paise** (`*Paise` fields).
 
 ### `products/{productId}` — public read, catalog roles write
 `name`, `slug`, `category`, `price` (₹, required — a product without a valid price cannot be bought), `sizes[{ label, widthMm,
-heightMm, priceDelta (₹) }]`, `finishes` (lower-case finish ids; empty = any), `stock` (integer; missing = 0), `trackInventory`
+heightMm, priceDelta (₹, may be negative; a size whose price + delta is not above 0 is ignored) }]`, `finishes` (lower-case finish ids; empty = any), `stock` (integer; missing = 0), `trackInventory`
 (default true), `status` (`archived`/`draft` = not purchasable), `isActive` (false = not purchasable), display fields.
-Stock is changed only by the API with atomic increments.
+Stock is changed only by the API (atomic increments for reservations, the `ADJUST_STOCK` admin action for staff); firestore.rules
+refuse client updates that change `stock`, and product saves from the admin UI never write it. Creating a product may set its initial stock.
 
 Products may also set `hsnCode` (4–8 digits; default `settings/store.defaultHsnCode`), `gstRatePercent` (default the store
 rate) and `leadTimeDays` (production days; default `defaultLeadTimeDays`).
@@ -102,7 +103,7 @@ most 20 000 characters (QC/packing records are kept there by the staff consoles)
 
 ### `coupons/{couponId}` — read `coupons.read`, write `coupons.write` (normally via `SAVE_COUPON`)
 `code` (unique, upper-case), `description`, `discountType` (`percentage`|`fixed`), `discountValue` (% or ₹), `maxDiscountLimit` (₹),
-`minOrderValue` (₹), `maxUsageCount`, `usedCount` (server-maintained), `maxUsagePerCustomer`, `startDate`/`expiryDate`
+`minOrderValue` (₹), `maxUsageCount`, `usedCount` (server-maintained), `maxUsagePerCustomer`, `startDate`/`expiryDate` (optional limits are `null` or absent = no limit)
 (`YYYY-MM-DD` = whole day IST, or ISO timestamp), `isActive`, `applicableCategories[]`, `applicableProductIds[]`.
 Subcollection `customer_usage/{sha256(email)}`: `{ count }` (server only).
 Consultation credits add `boundEmail` (only that checkout email may redeem), `consultationId`, `source: 'consultation_credit'` (`cc_{orderId}`, see below).

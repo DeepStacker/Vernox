@@ -57,6 +57,14 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     await assertSucceeds(updateDoc(doc(as('cm', { role: 'catalog_manager' }), 'products/p-01'), { price: 199 }));
   });
 
+  it('catalog roles cannot write product stock directly but can create products with initial stock', async () => {
+    const cm = as('cm', { role: 'catalog_manager' });
+    await assertFails(updateDoc(doc(cm, 'products/p-01'), { stock: 99 }));
+    await assertFails(setDoc(doc(cm, 'products/p-01'), { name: 'Frame', price: 189, stock: 99 }));
+    await assertSucceeds(setDoc(doc(cm, 'products/p-01'), { name: 'Frame renamed', price: 189, stock: 10 }));
+    await assertSucceeds(setDoc(doc(cm, 'products/p-new'), { name: 'New', price: 50, stock: 5 }));
+  });
+
   it('roles from unverified password accounts are ignored', async () => {
     const db = env.authenticatedContext('x', { role: 'super_admin', email_verified: false, firebase: { sign_in_provider: 'password' as const } }).firestore();
     await assertFails(updateDoc(doc(db, 'products/p-01'), { price: 1 }));
