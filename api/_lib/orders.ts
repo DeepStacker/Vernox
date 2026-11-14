@@ -156,6 +156,8 @@ export interface OrderDoc {
   /** Production days promised at checkout (max over lines). */
   leadTimeDays?: number;
   shipment?: ShipmentRecord | null;
+  /** Courier booking in progress until this time (shipments.ts lease); 0 or absent when free. */
+  shipmentBookingUntil?: number;
   invoiceId?: string | null;
   invoiceNumber?: string | null;
   deliveredAt?: number | null;

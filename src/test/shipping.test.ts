@@ -184,6 +184,19 @@ describe('manual shipping and delivery estimate', () => {
     expect(store.read(orderPath(res.orderId))).toMatchObject({ status: 'Shipped', tracking: { carrier: 'India Post', trackingNumber: 'EE123456789IN' } });
   });
 
+  it('a second booking while one is in progress is refused, and a booked order is returned as is', async () => {
+    const store = seededStore();
+    const res = await packedOrder(store);
+    const manual = new ManualShippingProvider({ transitDays: 5, codEnabled: true });
+    store.seed(orderPath(res.orderId), { ...store.read(orderPath(res.orderId))!, shipmentBookingUntil: NOW + 60_000 });
+    const busy = await createShipment(store, manual, SELLER_CONFIG, { orderId: res.orderId, manual: { courier: 'DTDC', awb: 'D1' }, actor: STAFF_ACTOR, now: NOW }).catch(e => e);
+    expect((busy as ApiError).message).toMatch(/already being booked/);
+    const first = await createShipment(store, manual, SELLER_CONFIG, { orderId: res.orderId, manual: { courier: 'DTDC', awb: 'D1' }, actor: STAFF_ACTOR, now: NOW + 120_001 });
+    const again = await createShipment(store, manual, SELLER_CONFIG, { orderId: res.orderId, manual: { courier: 'DTDC', awb: 'D2' }, actor: STAFF_ACTOR, now: NOW + 120_002 });
+    expect(again.awb).toBe(first.awb);
+    expect(store.read(orderPath(res.orderId))).toMatchObject({ shipmentBookingUntil: 0, shipmentAwb: 'D1' });
+  });
+
   it('refuses to ship an order that is not packed', async () => {
     const store = seededStore();
     const res = await paidOrder(store);

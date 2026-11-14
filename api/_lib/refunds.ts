@@ -155,3 +155,33 @@ export async function createRefund(store: DocStore, gateway: RefundGateway | nul
   }
   return { ...refund, providerRefundId: providerRefund.id };
 }
+
+/** A Razorpay refund reserved but never sent (the process stopped in between) is released after this long. */
+export const STALE_REFUND_MS = 15 * 60_000;
+
+/**
+ * Cron sweep (release-reservations): a `pending` refund with no Razorpay id older than STALE_REFUND_MS never
+ * reached Razorpay, so nothing will ever confirm it. It is marked `failed` and its amount stops counting against
+ * the order's refund ceiling, so finance can refund again. Refunds Razorpay accepted carry its id and are left to
+ * the webhook.
+ */
+export async function releaseStaleRefunds(store: DocStore, now = Date.now()): Promise<number> {
+  const pending = await store.query('refunds', { where: [{ field: 'status', op: '==', value: 'pending' }], limit: 200 });
+  let released = 0;
+  for (const { id, data } of pending) {
+    const refund = data as unknown as RefundDoc;
+    if (refund.method !== 'razorpay' || refund.providerRefundId || refund.createdAt > now - STALE_REFUND_MS) continue;
+    const done = await store.runTransaction(async tx => {
+      const current = (await tx.get(refundPath(id))) as unknown as RefundDoc | null;
+      if (current?.status !== 'pending' || current.providerRefundId) return false;
+      tx.update(refundPath(id), { status: 'failed', error: 'Never reached Razorpay (released by the cron); start a new refund.', updatedAt: now });
+      tx.update(orderPath(current.orderId), { refundPendingPaise: increment(-current.amountPaise), updatedAt: now });
+      return true;
+    });
+    if (done) {
+      released++;
+      console.error(`[refunds] released stale pending refund ${id} on order ${refund.orderId}`);
+    }
+  }
+  return released;
+}

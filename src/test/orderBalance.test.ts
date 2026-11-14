@@ -10,7 +10,7 @@ import { processWebhookEvent } from '../../api/_lib/webhook';
 import type { MemoryStore } from './support/memoryStore';
 import { deps, FakeRefundGateway, NOW, paidOrder, seededStore, setStatus, STAFF_ACTOR } from './support/serverFixtures';
 import { cancelOrder } from '../../api/_lib/cancellation';
-import { createRefund } from '../../api/_lib/refunds';
+import { createRefund, releaseStaleRefunds, STALE_REFUND_MS } from '../../api/_lib/refunds';
 
 class FakeLinks implements PaymentLinkGateway {
   calls: Parameters<PaymentLinkGateway['createPaymentLink']>[0][] = [];
@@ -197,5 +197,18 @@ describe('cancelling and refunding orders not paid in one online payment', () =>
     await expect(refund(1000, 'refund-key-02')).resolves.toMatchObject({ amountPaise: 1000 });
     expect(order(store, orderId).refundPendingPaise).toBe(1000);
     expect(total).toBeGreaterThan(1000);
+  });
+
+  it('releases a refund reserved but never sent to Razorpay, and leaves ones Razorpay accepted', async () => {
+    const store = seededStore();
+    const { orderId } = await paidOrder(store);
+    store.seed('refunds/rf_stuck', { id: 'rf_stuck', orderId, amountPaise: 500, method: 'razorpay', status: 'pending', providerRefundId: null, createdAt: NOW });
+    store.seed('refunds/rf_sent', { id: 'rf_sent', orderId, amountPaise: 300, method: 'razorpay', status: 'pending', providerRefundId: 'rfnd_1', createdAt: NOW });
+    store.seed(`orders/${orderId}`, { ...store.read(`orders/${orderId}`)!, refundPendingPaise: 800 });
+    expect(await releaseStaleRefunds(store, NOW + STALE_REFUND_MS - 1)).toBe(0);
+    expect(await releaseStaleRefunds(store, NOW + STALE_REFUND_MS + 1)).toBe(1);
+    expect(store.read('refunds/rf_stuck')).toMatchObject({ status: 'failed' });
+    expect(store.read('refunds/rf_sent')).toMatchObject({ status: 'pending' });
+    expect(order(store, orderId).refundPendingPaise).toBe(300);
   });
 });

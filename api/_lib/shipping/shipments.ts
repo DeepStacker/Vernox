@@ -39,20 +39,30 @@ async function loadOrder(store: DocStore, orderId: string): Promise<OrderDoc> {
   return order;
 }
 
-/** Issues the invoice (idempotent) and returns its number; the order must still be Packed. */
+/** How long one booking attempt holds the order, so a double click or a second staff member cannot book twice. */
+const BOOKING_LEASE_MS = 2 * 60_000;
+
+/**
+ * Issues the invoice (idempotent), claims the booking lease and returns the invoice number; the order must still
+ * be Packed and not already booked.
+ */
 async function issueInvoiceForDispatch(store: DocStore, orderId: string, config: StoreConfig, actor: Actor, now: number) {
   return store.runTransaction(async tx => {
     const order = asOrder(await tx.get(orderPath(orderId)));
     if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
+    if (order.shipment?.awb && order.shipment.status !== 'cancelled') return { order, invoiceNumber: order.invoiceNumber ?? null, alreadyBooked: true };
+    if ((order.shipmentBookingUntil ?? 0) > now) {
+      throw new ApiError(409, 'CONFLICT', 'This order is already being booked with the courier. Wait a moment and refresh.');
+    }
     if (order.status !== 'Packed') throw new ApiError(409, 'CONFLICT', `Only packed orders can be shipped (status is ${order.status}).`);
     if (hasBalanceDue(order)) throw balanceDueError(order);
     const plan = await planInvoice(tx, order, config.seller, now);
     const fields = applyInvoice(tx, plan, order, config.seller, now);
+    tx.update(orderPath(order.id), { ...(plan.reservation ? fields : {}), shipmentBookingUntil: now + BOOKING_LEASE_MS, updatedAt: now });
     if (plan.reservation) {
-      tx.update(orderPath(order.id), { ...fields, updatedAt: now });
       auditInTransaction(store, tx, buildAuditEntry({ actor, action: 'INVOICE_ISSUED', targetType: 'order', targetId: order.id, details: { number: fields.invoiceNumber }, now }));
     }
-    return { order: { ...order, ...fields } as OrderDoc, invoiceNumber: (fields as { invoiceNumber?: string }).invoiceNumber ?? null };
+    return { order: { ...order, ...fields } as OrderDoc, invoiceNumber: (fields as { invoiceNumber?: string }).invoiceNumber ?? null, alreadyBooked: false };
   });
 }
 
@@ -74,7 +84,8 @@ export async function createShipment(
   }
   if (!params.manual && !params.package) throw new ApiError(400, 'VALIDATION_ERROR', 'Package dimensions and weight are required.');
 
-  const { order, invoiceNumber } = await issueInvoiceForDispatch(store, params.orderId, config, params.actor, now);
+  const { order, invoiceNumber, alreadyBooked } = await issueInvoiceForDispatch(store, params.orderId, config, params.actor, now);
+  if (alreadyBooked) return order.shipment!;
   const previous = order.shipment?.status === 'cancelled' ? null : order.shipment ?? null;
 
   let update: ShipmentUpdate;
@@ -99,9 +110,10 @@ export async function createShipment(
     } catch (err) {
       if (err instanceof ShipmentStepError) {
         // Keep the progress so a retry resumes instead of booking twice.
-        await store.update(orderPath(order.id), { shipment: shipmentRecord(err.progress, previous, now), updatedAt: now });
+        await store.update(orderPath(order.id), { shipment: shipmentRecord(err.progress, previous, now), shipmentBookingUntil: 0, updatedAt: now });
         throw new ApiError(502, 'SHIPPING_PROVIDER_ERROR', `Courier booking stopped at "${err.progress.error}". Retry to continue.`, err.message);
       }
+      await store.update(orderPath(order.id), { shipmentBookingUntil: 0, updatedAt: now });
       throw err;
     }
   }
@@ -113,6 +125,7 @@ export async function createShipment(
     const fields = {
       shipment,
       shipmentAwb: shipment.awb,
+      shipmentBookingUntil: 0,
       tracking: { carrier: shipment.courier ?? '', trackingNumber: shipment.awb ?? '', url: shipment.trackingUrl ?? '' },
     };
     const plan = params.manual && fresh.status === 'Packed' ? await planStatusChange(tx, fresh, { to: 'Shipped', by: params.actor.uid }) : null;
