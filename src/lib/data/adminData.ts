@@ -26,7 +26,7 @@ export function useAdminData() {
         permissions.canManageFinance || permissions.canManageSupport),
   );
   const ordersQuery = useAdminOrders(canReadOrders);
-  const coupons = useCoupons(Boolean(permissions?.canManageCoupons));
+  const coupons = useCoupons(Boolean(permissions?.canReadCoupons));
   const customers = useMemo(() => deriveCustomers(ordersQuery.orders), [ordersQuery.orders]);
 
   return {

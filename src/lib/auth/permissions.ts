@@ -26,6 +26,8 @@ export interface RolePermissions {
   /** reports.export: finance CSV exports. */
   canExportReports: boolean;
   canManageCoupons: boolean;
+  /** coupons.read: see coupons and their redemptions (read-only without coupons.write). */
+  canReadCoupons: boolean;
   canModerateReviews: boolean;
   canManageStaff: boolean;
   canViewAuditLogs: boolean;
@@ -63,6 +65,7 @@ function derivePermissions(role: StaffRole): RolePermissions {
     canRefund: has('orders.refund'),
     canExportReports: has('reports.export'),
     canManageCoupons: has('coupons.write'),
+    canReadCoupons: has('coupons.read'),
     canModerateReviews: has('reviews.moderate'),
     canManageStaff: has('staff.manage'),
     canViewAuditLogs: has('audit.read'),
@@ -127,7 +130,8 @@ export function canAccessTab(role: StaffRole, tab: AdminTabId): boolean {
       return p.canManageProducts;
     case 'marketing':
     case 'coupons':
-      return p.canManageCoupons;
+      // Finance and support (coupons.read) get a read-only view to answer customers and reconcile discounts.
+      return p.canReadCoupons;
     case 'hero-slider':
     case 'settings':
       return p.canManageSettings;

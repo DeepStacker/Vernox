@@ -110,6 +110,12 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     const admin = as('a', { role: 'admin' });
     await assertSucceeds(getDoc(doc(admin, 'coupons/c1')));
     await assertFails(updateDoc(doc(admin, 'coupons/c1'), { usedCount: 0 }));
+    // Redemption history: readable by coupon readers (finance, support, admins), written only by the API.
+    await assertSucceeds(getDoc(doc(as('s', { role: 'support' }), 'coupon_usages/o1')));
+    await assertSucceeds(getDoc(doc(as('f', { role: 'finance' }), 'coupon_usages/o1')));
+    await assertFails(getDoc(doc(as('alice'), 'coupon_usages/o1')));
+    await assertFails(getDoc(doc(as('p', { role: 'production' }), 'coupon_usages/o1')));
+    await assertFails(setDoc(doc(as('f', { role: 'finance' }), 'coupon_usages/o2'), { x: 1 }));
   });
 
   it('server-only collections are closed to clients; audit logs readable by super_admin', async () => {

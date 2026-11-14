@@ -22,7 +22,9 @@ import { AtelierSelect } from '@/components/ui/select';
 export function AdminCoupons() {
   const { coupons, storeConfig } = useAdminData();
   const { permissions } = useAuth();
-  const { data: couponUsages = [] } = useCouponUsages(Boolean(permissions?.canManageCoupons));
+  const { data: couponUsages = [] } = useCouponUsages(Boolean(permissions?.canReadCoupons));
+  // Finance and support see coupons read-only; only coupons.write may change them.
+  const canWrite = Boolean(permissions?.canManageCoupons);
   const { createCoupon, saveCoupon, deleteCoupon } = useCouponMutations();
   const updateCoupon = (id: string, updates: Partial<Coupon>) => {
     const existing = coupons.find(c => c.id === id);
@@ -194,13 +196,13 @@ export function AdminCoupons() {
             Control promotional pricing, usage caps, per-customer restrictions, and monitor real-time redemptions.
           </p>
         </div>
-        <button
+        {canWrite && <button
           onClick={handleOpenCreate}
           className="inline-flex items-center gap-2 bg-oxblood text-ivory hover:bg-oxblood-deep px-4 py-2.5 rounded-lg text-sm font-semibold transition shadow-soft shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Create New Coupon</span>
-        </button>
+        </button>}
       </div>
 
       {/* KPI Stats Grid */}
@@ -369,6 +371,7 @@ export function AdminCoupons() {
                       <td className="p-4">
                         <button
                           onClick={() => toggleCouponStatus(c.id, !c.isActive)}
+                          disabled={!canWrite}
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition ${
                             c.isActive && !isExpired && !isLimitReached
                               ? 'bg-emerald-950/30 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-950/50'
@@ -389,7 +392,7 @@ export function AdminCoupons() {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
+                          {canWrite && <><button
                             onClick={() => handleOpenEdit(c)}
                             title="Edit Coupon"
                             className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition"
@@ -402,7 +405,7 @@ export function AdminCoupons() {
                             className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition"
                           >
                             <Trash2 className="w-4 h-4" />
-                          </button>
+                          </button></>}
                         </div>
                       </td>
                     </tr>

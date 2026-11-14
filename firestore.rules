@@ -219,8 +219,10 @@ service cloud.firestore {
 
     // ---------- server-only collections ----------
 
+    // One redemption per paid order, written by the API; staff who may read coupons see the history.
     match /coupon_usages/{usageId} {
-      allow read, write: if false;
+      allow read: if canReadCoupons();
+      allow write: if false;
     }
     match /idempotency/{key} {
       allow read, write: if false;
