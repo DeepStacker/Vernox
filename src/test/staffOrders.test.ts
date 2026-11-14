@@ -7,7 +7,8 @@ import { OUTBOX_COLLECTION } from '../../api/_lib/notifications/outbox';
 import type { OrderDoc } from '../../api/_lib/orders';
 import { collectedPaise } from '../../api/_lib/payments';
 import type { PaymentLinkGateway } from '../../api/_lib/razorpay';
-import { createStaffOrder, findCustomerByPhone, quoteStaffOrder, staffOrderSchema, type StaffOrderInput } from '../../api/_lib/staffOrders';
+import { quoteCustomPiece } from '../lib/pricing/customPiece';
+import { createStaffOrder, findCustomerByPhone, quoteStaffOrder, staffOrderSchema, staffQuoteSchema, type StaffOrderInput } from '../../api/_lib/staffOrders';
 import { processWebhookEvent } from '../../api/_lib/webhook';
 import type { MemoryStore } from './support/memoryStore';
 import { deps, NOW, seededStore, SELLER_CONFIG } from './support/serverFixtures';
@@ -111,9 +112,11 @@ describe('staff orders: offline payment', () => {
   it('refuses a counter handover of a made-to-order custom piece', async () => {
     const store = seededStore();
     const custom = [{ productId: 'custom-bespoke', widthMm: 300, heightMm: 300, finish: 'steel', quantity: 1, customDesignRef: 'design-1' }];
-    await expect(
-      createStaffOrder(staffDeps(store), input({ items: custom, channel: 'counter', handover: true, payment: { method: 'offline', mode: 'cash' } }), ACTOR),
-    ).rejects.toBeInstanceOf(ApiError);
+    // The schema refuses it first; the checkout engine refuses it again if a caller bypasses the schema.
+    const handover = { items: custom, channel: 'counter', handover: true, payment: { method: 'offline', mode: 'cash' } };
+    expect(() => input(handover)).toThrow(/cannot be handed over/);
+    const unchecked = { ...input({ channel: 'counter', payment: { method: 'offline', mode: 'cash' } }), items: custom, handover: true } as StaffOrderInput;
+    await expect(createStaffOrder(staffDeps(store), unchecked, ACTOR)).rejects.toBeInstanceOf(ApiError);
     expect(store.collection('orders')).toHaveLength(0);
   });
 });
@@ -207,5 +210,62 @@ describe('returning customer lookup', () => {
     );
     const found = await findCustomerByPhone(store, '98765 43210');
     expect(found).toMatchObject({ found: true, orderCount: 2, name: 'Asha R', email: 'asha@example.com', address: ADDRESS });
+  });
+});
+
+describe('staff orders: custom (Studio) pieces', () => {
+  const customLine = (overrides: Record<string, unknown> = {}) => ({
+    productId: 'custom-bespoke', widthMm: 400, heightMm: 300, finish: 'steel', quantity: 2, customDesignRef: 'WhatsApp gate-sign.dxf, 12 Nov', ...overrides,
+  });
+
+  it('quotes a custom line on the server with the storefront price, ignoring any client price', async () => {
+    const store = seededStore();
+    const quote = await quoteStaffOrder(store, SELLER_CONFIG, { items: [customLine({ unitPrice: 1 }) as never], cod: false, handover: false });
+    const expected = quoteCustomPiece({ widthMm: 400, heightMm: 300, finish: 'steel' }, SELLER_CONFIG.customPieces.finishes, SELLER_CONFIG.customPieces);
+    if (!expected.ok) throw new Error('fixture finish must be priced');
+    expect(quote.lines[0]).toMatchObject({ productId: 'custom-bespoke', quantity: 2, unitPricePaise: expected.unitPricePaise, lineTotalPaise: expected.unitPricePaise * 2 });
+    expect(quote.totals.taxPaise).toBeGreaterThan(0);
+  });
+
+  it('rejects a size outside the Studio limits in the quote and at creation', async () => {
+    const store = seededStore();
+    const { maxWidthMm, minDimensionMm } = SELLER_CONFIG.customPieces;
+    for (const size of [{ widthMm: maxWidthMm + 1 }, { heightMm: minDimensionMm - 1 }]) {
+      const items = [customLine(size)];
+      await expect(quoteStaffOrder(store, SELLER_CONFIG, { items: items as never, cod: false, handover: false })).rejects.toThrow(/must be between/);
+      await expect(createStaffOrder(staffDeps(store), input({ items }), ACTOR)).rejects.toBeInstanceOf(ApiError);
+    }
+    expect(store.collection('orders')).toHaveLength(0);
+  });
+
+  it('cannot be handed over at the counter, in the quote or the order schema', () => {
+    const handover = { channel: 'counter', handover: true, customer: { name: 'Walk-in', phone: '9876543210' }, payment: { method: 'offline', mode: 'cash' } };
+    const issues = staffOrderSchema.safeParse({ ...handover, items: [customLine()], idempotencyKey: 'staff-key-0001' });
+    expect(issues.success).toBe(false);
+    expect(JSON.stringify(issues)).toContain('cannot be handed over');
+    expect(staffQuoteSchema.safeParse({ items: [customLine()], handover: true }).success).toBe(false);
+    expect(staffQuoteSchema.safeParse({ items: [customLine()], handover: false }).success).toBe(true);
+  });
+
+  it('needs a plain-text design reference on custom lines and none on catalogue lines', () => {
+    const bad = (items: unknown[]) => expect(() => input({ items })).toThrow();
+    bad([customLine({ customDesignRef: undefined })]);
+    bad([customLine({ customDesignRef: '   ' })]);
+    bad([customLine({ customDesignRef: '{"schemaVersion":4}' })]); // would be read by production as a Studio document
+    bad([customLine({ customDesignRef: 'x'.repeat(301) })]);
+    bad([{ ...ITEMS[0], customDesignRef: 'design-1' }]);
+  });
+
+  it('creates a Paid order with the design reference stored, a custom lead time and no COD', async () => {
+    const store = seededStore();
+    const res = await createStaffOrder(staffDeps(store), input({ items: [customLine()] }), ACTOR);
+    const doc = order(store, res.orderId);
+    expect(res.status).toBe('Paid');
+    expect(doc.items).toHaveLength(1);
+    expect(doc.items[0]).toMatchObject({ productId: 'custom-bespoke', widthMm: 400, heightMm: 300, quantity: 2, customDesignRef: 'WhatsApp gate-sign.dxf, 12 Nov' });
+    expect(doc.leadTimeDays).toBe(SELLER_CONFIG.fulfilment.customLeadTimeDays);
+    await expect(
+      createStaffOrder(staffDeps(store), input({ items: [customLine()], payment: { method: 'cod' }, idempotencyKey: 'staff-key-0002' }), ACTOR),
+    ).rejects.toBeInstanceOf(ApiError);
   });
 });
