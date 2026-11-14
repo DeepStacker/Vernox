@@ -86,6 +86,14 @@ describe('checkout intent', () => {
     await expectCode(createCheckoutIntent(deps(store), other, null), 'VALIDATION_ERROR', 409);
   });
 
+  it('rejects a key reused with a corrected address instead of returning the order with the old one', async () => {
+    const store = seededStore();
+    const first = checkoutRequest();
+    await createCheckoutIntent(deps(store), first, null);
+    const corrected = checkoutRequest({ customer: { ...first.customer, address: '14 MG Road' } });
+    await expectCode(createCheckoutIntent(deps(store), corrected, null), 'VALIDATION_ERROR', 409);
+  });
+
   it('never oversells under concurrent checkouts', async () => {
     const store = seededStore(); // p-01 stock 10
     const d = deps(store);

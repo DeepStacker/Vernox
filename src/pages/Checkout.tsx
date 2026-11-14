@@ -133,7 +133,9 @@ export default function Checkout() {
   const [phase, setPhase] = useState<Phase>('details');
   const [intent, setIntent] = useState<CheckoutIntent | null>(null);
   const [intentFingerprint, setIntentFingerprint] = useState('');
-  const idempotencyKey = useRef(crypto.randomUUID());
+  // One key per distinct request: a retry of the same request (lost response) reuses it and gets the same order;
+  // any change to items, address, coupon or payment gets a new key instead of a conflict or a stale order.
+  const idempotencyKey = useRef({ key: crypto.randomUUID(), fingerprint: '' });
 
   const customer: CheckoutCustomer = useMemo(() => ({
     email: form.email.trim().toLowerCase(),
@@ -156,7 +158,7 @@ export default function Checkout() {
     if (intent && !intentIsCurrent && phase === 'ready') {
       setIntent(null);
       setPhase('details');
-      idempotencyKey.current = crypto.randomUUID();
+      idempotencyKey.current = { key: crypto.randomUUID(), fingerprint: '' };
     }
   }, [intent, intentIsCurrent, phase]);
 
@@ -192,7 +194,11 @@ export default function Checkout() {
 
     setPhase('creating');
     try {
-      const created = await createCheckoutIntent({ items, couponCode, idempotencyKey: idempotencyKey.current, customer, paymentMethod, codVerificationToken: codOtp.token ?? undefined, whatsappOptIn });
+      if (idempotencyKey.current.fingerprint && idempotencyKey.current.fingerprint !== fingerprint) {
+        idempotencyKey.current = { key: crypto.randomUUID(), fingerprint };
+      }
+      idempotencyKey.current.fingerprint = fingerprint;
+      const created = await createCheckoutIntent({ items, couponCode, idempotencyKey: idempotencyKey.current.key, customer, paymentMethod, codVerificationToken: codOtp.token ?? undefined, whatsappOptIn });
       if (created.paymentMethod === 'cod') {
         // Confirmed at creation: there is no payment step.
         trackStoreEvent('purchase', { orderId: created.orderId, orderTotal: created.pricing.total });

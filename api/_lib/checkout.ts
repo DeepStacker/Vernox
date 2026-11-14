@@ -199,7 +199,8 @@ function requestHash(req: CheckoutRequest, consultation: ConsultationPurchase | 
     items: req.items.map(i => [i.productId, i.sizeLabel ?? null, i.widthMm ?? null, i.heightMm ?? null, i.finish, i.quantity, i.customDesignRef ?? null]),
     coupon: req.couponCode ? normaliseCouponCode(req.couponCode) : null,
     email: req.customer.email,
-    // Only COD changes the hash, so prepaid hashes are unchanged from Phase 1.
+    // The delivery details too: a retry with a corrected address must not get back the order with the old one.
+    customer: [req.customer.name, req.customer.phone, req.customer.address, req.customer.city, req.customer.state, req.customer.pincode, req.customer.country],
     ...(req.paymentMethod === 'cod' ? { paymentMethod: 'cod' } : {}),
     ...(staff ? { staff: [staff.source.channel, req.customer.phone, staff.offlinePayment?.mode ?? null, staff.offlinePayment?.reference ?? null, Boolean(staff.handover), ...(staff.advancePaise ? [staff.advancePaise] : [])] } : {}),
   });
