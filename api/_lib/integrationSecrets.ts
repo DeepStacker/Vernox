@@ -52,6 +52,8 @@ export const INTEGRATION_FIELDS: readonly IntegrationField[] = [
     validate: v => (v.startsWith('re_') ? null : 'A Resend API key starts with re_.') },
   { name: 'NOTIFY_FROM_EMAIL', group: 'email', label: 'Send emails from', secret: false, hint: 'For example: Vernox <orders@yourdomain.in> (an address on the verified domain).',
     validate: v => (/^(.+<)?[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+>?$/.test(v) ? null : 'Enter an email address, optionally as Name <address>.') },
+  { name: 'ALERT_EMAIL', group: 'email', label: 'Send error alerts to', secret: false, hint: 'Who is e-mailed when the server hits an unexpected error. Empty: the admin e-mail from the install.',
+    validate: v => (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? null : 'Enter one e-mail address.') },
   { name: 'MSG91_AUTH_KEY', group: 'sms', label: 'MSG91 auth key', secret: true },
   { name: 'MSG91_TEMPLATES', group: 'sms', label: 'MSG91 SMS templates (JSON)', secret: false, hint: 'Event to DLT-approved Flow id, e.g. {"order_confirmed":"…","shipped":"…"}.', validate: json },
   { name: 'MSG91_OTP_TEMPLATE_ID', group: 'sms', label: 'MSG91 OTP template id', secret: false, hint: 'DLT-approved template containing ##OTP##; turns on the COD confirmation code.' },

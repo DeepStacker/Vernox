@@ -7,6 +7,7 @@
  * (stack traces, Firestore paths, provider responses) never reach the client.
  */
 import type { VercelResponse } from '@vercel/node';
+import { reportServerError } from './opsAlert';
 
 export type ApiErrorCode =
   | 'VALIDATION_ERROR'
@@ -57,10 +58,12 @@ export function toErrorBody(err: unknown, context: string): { status: number; bo
   if (err instanceof ApiError) {
     if (err.status >= 500 || err.internalDetail) {
       console.error(`[${context}] ${err.code}: ${err.message}${err.internalDetail ? ` (${err.internalDetail})` : ''}`);
+      if (err.status >= 500) void reportServerError(context, new Error(`${err.code}: ${err.internalDetail ?? err.message}`));
     }
     return { status: err.status, body: { success: false, code: err.code, message: err.message } };
   }
   console.error(`[${context}] unexpected error`, err);
+  void reportServerError(context, err);
   return {
     status: 500,
     body: { success: false, code: 'INTERNAL_ERROR', message: 'An internal error occurred. Please try again.' },
