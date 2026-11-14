@@ -90,6 +90,8 @@ export interface PaymentLinkGateway {
     expireBy: number;
     notes: Record<string, string>;
   }): Promise<{ id: string; url: string; razorpayOrderId: string | null }>;
+  /** Stops a link from taking payment (the balance was paid another way, or a new link replaces it). */
+  cancelPaymentLink(id: string): Promise<void>;
 }
 
 export function createRazorpayPaymentLinkGateway(): PaymentLinkGateway {
@@ -119,6 +121,15 @@ export function createRazorpayPaymentLinkGateway(): PaymentLinkGateway {
         return { id: link.id, url: link.short_url, razorpayOrderId: typeof orderId === 'string' && orderId ? orderId : null };
       } catch (err) {
         throw new ApiError(502, 'PAYMENT_PROVIDER_ERROR', 'The payment provider could not create the payment link. Please try again.', providerFailure(err));
+      }
+    },
+    async cancelPaymentLink(id) {
+      const { keyId, keySecret } = getRazorpayCredentials();
+      const client = new Razorpay({ key_id: keyId, key_secret: keySecret });
+      try {
+        await client.paymentLink.cancel(id);
+      } catch (err) {
+        throw new ApiError(502, 'PAYMENT_PROVIDER_ERROR', 'The payment provider could not cancel the payment link.', providerFailure(err));
       }
     },
   };

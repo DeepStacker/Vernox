@@ -33,6 +33,7 @@ import {
 import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/AdminUi';
 import { StatusBadge } from './shared/badges';
+import { BalancePanel } from './shared/BalancePanel';
 import { CodConfirmPanel } from './shared/CodConfirmPanel';
 import { HoldPanel } from './shared/HoldPanel';
 
@@ -612,6 +613,7 @@ export function AdminOrders({ initialFilter = 'all', onSelectTab }: AdminOrdersP
               
               <CodConfirmPanel order={orders.find(o => o.id === inspectingOrder.id) ?? inspectingOrder} canWrite={canEdit} />
               <HoldPanel order={orders.find(o => o.id === inspectingOrder.id) ?? inspectingOrder} canWrite={canEdit} />
+              <BalancePanel order={orders.find(o => o.id === inspectingOrder.id) ?? inspectingOrder} canCollect={Boolean(permissions?.canCreateOrders)} />
 
               {/* Status update: only transitions the state machine allows for this role */}
               <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-3">

@@ -76,7 +76,11 @@ export async function confirmPayment(
     if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
 
     if (isPaidStatus(order.status)) {
-      if (order.razorpayPaymentId && order.razorpayPaymentId !== params.razorpayPaymentId) {
+      // A balance payment of an advance-paid order is recorded by its payment_link.paid event (orderBalance.ts).
+      const balancePayment =
+        (order.payments ?? []).some(p => p.id === params.razorpayPaymentId) ||
+        (order.balanceLink && params.captured?.amountPaise === order.balanceLink.amountPaise);
+      if (order.razorpayPaymentId && order.razorpayPaymentId !== params.razorpayPaymentId && !balancePayment) {
         console.error(
           `[payments] order ${order.id} already paid by ${order.razorpayPaymentId}; second payment ${params.razorpayPaymentId} needs a refund`,
         );
@@ -89,12 +93,14 @@ export async function confirmPayment(
       return { outcome: 'duplicate', order };
     }
 
+    // An advance order's payment link asks for the advance only; everything else must pay the total.
+    const expectedPaise = order.advancePaise ?? order.amounts.totalPaise;
     if (
       params.captured &&
-      (params.captured.amountPaise !== order.amounts.totalPaise ||
+      (params.captured.amountPaise !== expectedPaise ||
         params.captured.currency.toUpperCase() !== order.currency)
     ) {
-      const note = `captured ${params.captured.amountPaise} ${params.captured.currency}, expected ${order.amounts.totalPaise} ${order.currency}`;
+      const note = `captured ${params.captured.amountPaise} ${params.captured.currency}, expected ${expectedPaise} ${order.currency}`;
       console.error(`[payments] SECURITY: amount mismatch on order ${order.id}: ${note}`);
       const canFlagStatus = canTransition(order.status, 'Payment_Discrepancy');
       tx.update(orderPath(order.id), {
@@ -167,6 +173,12 @@ export async function confirmPayment(
       razorpayPaymentId: params.razorpayPaymentId,
       paidAt: now,
       paymentConfirmedVia: params.source,
+      ...(order.advancePaise
+        ? {
+            balanceDuePaise: order.amounts.totalPaise - order.advancePaise,
+            payments: arrayUnion({ id: params.razorpayPaymentId, kind: 'advance', amountPaise: order.advancePaise, mode: 'razorpay', reference: params.razorpayPaymentId, at: now, by }),
+          }
+        : {}),
       ...invoiceFields,
       ...(order.stockReservation?.status === 'none' ? {} : { stockReservation: { ...order.stockReservation, status: 'committed' } }),
       ...(flags.length > 0 ? { flags: arrayUnion(...flags) } : {}),
@@ -280,7 +292,8 @@ export function collectedPaise(order: OrderDoc): number {
   if (order.paymentMethod === 'cod') return order.codCollectedPaise ?? 0;
   if (order.paymentMethod === 'replacement') return 0;
   // Staff orders paid in person (cash, UPI, card, bank transfer) are refunded manually, like COD.
-  return order.razorpayPaymentId || order.offlinePayment ? order.amounts.totalPaise : 0;
+  // An advance-paid order has collected the total less what is still owed.
+  return order.razorpayPaymentId || order.offlinePayment ? order.amounts.totalPaise - (order.balanceDuePaise ?? 0) : 0;
 }
 
 export type RecordRefundOutcome = 'recorded' | 'duplicate';

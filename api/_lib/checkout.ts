@@ -36,6 +36,7 @@ import {
 } from './coupons';
 import type { ConsultationPurchase } from './consultations';
 import { ApiError } from './errors';
+import { paiseToRupees } from './money';
 import { applyInvoice, planInvoice } from './gst/invoice';
 import { recordWhatsAppOptIn } from './whatsapp';
 import { enqueueNotification, payloadFromOrder, planNotification } from './notifications/outbox';
@@ -170,6 +171,9 @@ export interface StaffCheckoutResponse {
   paymentLink: { id: string; url: string; expiresAt: number } | null;
   invoiceNumber: string | null;
   pricing: ReturnType<typeof pricingPayload>;
+  /** Advance orders: the advance (₹) and what is still owed once it is paid (₹). Null when paid in full. */
+  advance: number | null;
+  balanceDue: number | null;
 }
 
 export type CheckoutResponse = PrepaidCheckoutResponse | CodCheckoutResponse | StaffCheckoutResponse;
@@ -197,7 +201,7 @@ function requestHash(req: CheckoutRequest, consultation: ConsultationPurchase | 
     email: req.customer.email,
     // Only COD changes the hash, so prepaid hashes are unchanged from Phase 1.
     ...(req.paymentMethod === 'cod' ? { paymentMethod: 'cod' } : {}),
-    ...(staff ? { staff: [staff.source.channel, req.customer.phone, staff.offlinePayment?.mode ?? null, staff.offlinePayment?.reference ?? null, Boolean(staff.handover)] } : {}),
+    ...(staff ? { staff: [staff.source.channel, req.customer.phone, staff.offlinePayment?.mode ?? null, staff.offlinePayment?.reference ?? null, Boolean(staff.handover), ...(staff.advancePaise ? [staff.advancePaise] : [])] } : {}),
   });
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
@@ -232,6 +236,8 @@ const toStaffResponse = (order: OrderDoc): StaffCheckoutResponse => ({
   paymentLink: order.paymentLink ?? null,
   invoiceNumber: order.invoiceNumber ?? null,
   pricing: pricingPayload(order),
+  advance: order.advancePaise ? paiseToRupees(order.advancePaise) : null,
+  balanceDue: order.advancePaise ? paiseToRupees(order.balanceDuePaise ?? order.amounts.totalPaise - order.advancePaise) : null,
 });
 
 async function resolveDuplicate(deps: CheckoutDeps, orderId: string): Promise<CheckoutResponse> {
@@ -266,6 +272,11 @@ export interface StaffCheckout {
   offlinePayment?: OfflinePayment;
   /** Counter sale: the customer takes the pieces now, so the order is `Delivered` and invoiced at once. */
   handover?: boolean;
+  /**
+   * Part payment: the amount taken in person (with `offlinePayment`) or asked for by the payment link; must be
+   * less than the total. The rest is collected later (api/_lib/orderBalance.ts). Not with `handover`.
+   */
+  advancePaise?: number;
   /** Staff note saved as the order's first note. */
   note?: string;
 }
@@ -289,6 +300,9 @@ export async function createCheckoutIntent(
   const confirmedAtCreation = cod || paidOffline;
   if (staff?.handover && !paidOffline) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'A counter handover needs the payment taken first.');
+  }
+  if (staff?.advancePaise !== undefined && (cod || staff.handover || !Number.isInteger(staff.advancePaise) || staff.advancePaise < MIN_PAYABLE_PAISE)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'An advance needs a prepaid order that is not handed over now, of at least the minimum payable amount.');
   }
   if (viaPaymentLink && !deps.paymentLinks) {
     throw new ApiError(500, 'CONFIG_ERROR', 'Payment links are not configured.', 'checkout deps.paymentLinks missing');
@@ -354,6 +368,9 @@ export async function createCheckoutIntent(
     if (totals.totalPaise < MIN_PAYABLE_PAISE) {
       throw new ApiError(400, 'VALIDATION_ERROR', 'The order total is below the minimum payable amount.');
     }
+    if (staff?.advancePaise !== undefined && staff.advancePaise >= totals.totalPaise) {
+      throw new ApiError(400, 'VALIDATION_ERROR', `The advance must be less than the order total of ₹${paiseToRupees(totals.totalPaise)}. To take the full amount, leave the advance empty.`);
+    }
     if (cod) assertCodOrderAllowed(lines, totals.totalPaise, config.cod);
     const leadTimeDays = consultation
       ? undefined
@@ -396,6 +413,7 @@ export async function createCheckoutIntent(
       consultation: consultation ?? undefined,
       source: staff?.source,
       offlinePayment: paidOffline ? staff!.offlinePayment : undefined,
+      advancePaise: staff?.advancePaise,
       reservationTtlMs: viaPaymentLink ? PAYMENT_LINK_TTL_HOURS * 3600_000 : config.reservationTtlMs,
     });
     if (staff?.note) order = { ...order, notes: staff.note };
@@ -478,9 +496,9 @@ async function attachPaymentLink(deps: CheckoutDeps, order: OrderDoc, now: numbe
   let link: Awaited<ReturnType<PaymentLinkGateway['createPaymentLink']>>;
   try {
     link = await deps.paymentLinks!.createPaymentLink({
-      amountPaise: order.amounts.totalPaise,
+      amountPaise: order.advancePaise ?? order.amounts.totalPaise,
       referenceId: order.orderNumber,
-      description: `Vernox order ${order.orderNumber}`,
+      description: order.advancePaise ? `Advance for Vernox order ${order.orderNumber}` : `Vernox order ${order.orderNumber}`,
       customer: { name: order.customer.name, email: order.email || undefined, contact: order.customer.phone || undefined },
       expireBy: Math.floor(expiresAt / 1000),
       notes: { orderId: order.id, orderNumber: order.orderNumber },
@@ -493,7 +511,7 @@ async function attachPaymentLink(deps: CheckoutDeps, order: OrderDoc, now: numbe
     }
     throw err;
   }
-  const paymentLink = { id: link.id, url: link.url, expiresAt };
+  const paymentLink = { id: link.id, url: link.url, expiresAt, ...(order.advancePaise ? { amountPaise: order.advancePaise } : {}) };
   // The link's Razorpay order id (when known) lets payment.captured find this order like a checkout payment.
   await deps.store.update(orderPath(order.id), {
     paymentLink,

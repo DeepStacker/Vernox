@@ -7,12 +7,16 @@
  * checked against the state machine in orderLifecycle.ts.
  */
 import { ApiError } from './errors';
+import { balanceDueError, hasBalanceDue } from './orderBalance';
 import { enqueueNotification, payloadFromOrder, planNotification, type NotificationPlan } from './notifications/outbox';
 import type { NotificationEvent, NotificationPayload } from './notifications/types';
 import { HOLD_BLOCKED_TARGETS } from '../../src/types/orderStatus';
 import { canTransition, type OrderStatus, type StatusHistoryEntry } from './orderLifecycle';
 import { orderPath, type OrderDoc } from './orders';
 import { arrayUnion, type DocData, type StoreTransaction } from './store';
+
+/** Leaving the workshop needs the balance of an advance-paid order (orderBalance.ts). */
+const BALANCE_BLOCKED_TARGETS: readonly OrderStatus[] = ['Shipped', 'Out_For_Delivery', 'Delivered'];
 
 const EVENT_FOR_STATUS: Partial<Record<OrderStatus, NotificationEvent>> = {
   Paid: 'order_confirmed',
@@ -64,6 +68,7 @@ export async function planStatusChange(tx: StoreTransaction, order: OrderDoc, re
     const what = order.hold.kind === 'material_shortage' ? 'waiting for material' : 'on hold';
     throw new ApiError(409, 'CONFLICT', `This order is ${what}: ${order.hold.reason}. Release the hold first.`);
   }
+  if (hasBalanceDue(order) && path.some(s => BALANCE_BLOCKED_TARGETS.includes(s))) throw balanceDueError(order);
   const final = path[path.length - 1];
   const event = request.event === undefined ? EVENT_FOR_STATUS[final] : request.event;
   const notification = event ? await planNotification(tx, order.id, event, request.eventDiscriminator) : null;

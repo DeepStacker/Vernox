@@ -23,7 +23,11 @@ export interface StaffOrderQuote {
   totals: { subtotalPaise: number; discountPaise: number; shippingPaise: number; codFeePaise: number; taxPaise: number; totalPaise: number };
 }
 
-export type StaffOrderPayment = { method: 'offline'; mode: OfflinePaymentMode; reference: string } | { method: 'payment_link' } | { method: 'cod' };
+/** `advancePaise`: take (or ask the link for) only this part now; the balance is collected before dispatch. */
+export type StaffOrderPayment =
+  | { method: 'offline'; mode: OfflinePaymentMode; reference: string; advancePaise?: number }
+  | { method: 'payment_link'; advancePaise?: number }
+  | { method: 'cod' };
 
 export interface NewStaffOrder {
   channel: StaffOrderChannel;
@@ -44,6 +48,9 @@ export interface StaffOrderCreated {
   status: string;
   paymentLink: { id: string; url: string; expiresAt: number } | null;
   invoiceNumber: string | null;
+  /** Rupees; null when the order was paid (or asked) in full. */
+  advance: number | null;
+  balanceDue: number | null;
 }
 
 export type CustomerLookup =

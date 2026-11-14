@@ -40,6 +40,8 @@ import { createShippingProvider } from './_lib/shipping';
 import { applyCourierStatus, bulkShipmentDocuments, cancelShipment, courierRatesFor, createShipment, getLabel, type ManualShipmentDetails } from './_lib/shipping/shipments';
 import type { PackageDetails } from './_lib/shipping/types';
 import type { DocStore } from './_lib/store';
+import { recordOfflineBalancePayment, sendBalanceLink } from './_lib/orderBalance';
+import { OFFLINE_PAYMENT_MODES } from '../src/types/staffOrders';
 import { createStaffOrder, customerLookupSchema, findCustomerByPhone, quoteStaffOrder, staffOrderSchema, staffQuoteSchema } from './_lib/staffOrders';
 import { checkIntegration } from './_lib/integrationChecks';
 import { listIntegrations, saveIntegrations } from './_lib/integrationSecrets';
@@ -425,6 +427,34 @@ const ACTIONS: Record<string, ActionDefinition> = {
         }),
       );
       return { ...created };
+    },
+  },
+
+  // Balance of an advance-paid order (api/_lib/orderBalance.ts); the audit entries are written in its transactions.
+  RECORD_ORDER_PAYMENT: {
+    method: 'POST',
+    permission: 'orders.create',
+    async run(ctx) {
+      const p = parse(
+        z.object({
+          orderId: z.string().trim().min(1).max(128),
+          amountPaise: z.number().int().positive(),
+          mode: z.enum(OFFLINE_PAYMENT_MODES),
+          reference: z.string().trim().max(80).default(''),
+          idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/),
+        }),
+        ctx.params,
+      );
+      return recordOfflineBalancePayment(ctx.store, createRazorpayPaymentLinkGateway(), p, ctx.actor);
+    },
+  },
+
+  SEND_BALANCE_LINK: {
+    method: 'POST',
+    permission: 'orders.create',
+    async run(ctx) {
+      const p = parse(z.object({ orderId: z.string().trim().min(1).max(128) }), ctx.params);
+      return { link: await sendBalanceLink(ctx.store, createRazorpayPaymentLinkGateway(), p.orderId, ctx.actor) };
     },
   },
 

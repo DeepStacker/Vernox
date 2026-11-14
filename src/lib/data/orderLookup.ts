@@ -31,6 +31,8 @@ export function toPublicSummary(order: Order, returnWindowDays?: number): Public
     returnEligibleUntil:
       order.status === 'Delivered' && deliveredAt && returnWindowDays !== undefined ? deliveredAt + returnWindowDays * 24 * 3600_000 : null,
     codFee: (ops?.codFeePaise ?? 0) / 100,
+    balanceDue: order.balanceDuePaise ? order.balanceDuePaise / 100 : null,
+    payBalanceUrl: null,
   };
 }
 

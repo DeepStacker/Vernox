@@ -64,11 +64,29 @@ export interface OfflinePayment {
   at: number;
 }
 
-/** Razorpay payment link sent for a staff-entered prepaid order. */
+/** Razorpay payment link sent for a staff-entered prepaid order, or for the balance of an advance-paid order. */
 export interface PaymentLinkRecord {
   id: string;
   url: string;
   expiresAt: number;
+  /** Amount the link asks for, when it is not the order total (an advance or a balance). */
+  amountPaise?: number;
+}
+
+/**
+ * One part payment of an order paid in instalments (api/_lib/orderBalance.ts): the advance taken when the order
+ * was entered, then balance payments until `balanceDuePaise` is 0. Orders paid in full in one go have no entries.
+ */
+export interface OrderPaymentEntry {
+  /** Razorpay payment id, or a generated id for money taken in person. Unique per order (idempotency). */
+  id: string;
+  kind: 'advance' | 'balance';
+  amountPaise: number;
+  mode: OfflinePaymentMode | 'razorpay';
+  /** UPI / card / bank reference, the Razorpay payment id, or '' for cash. */
+  reference: string;
+  at: number;
+  by: string;
 }
 
 /** Who entered an order that did not come through the storefront checkout. */
@@ -179,6 +197,15 @@ export interface OrderDoc {
   source?: OrderSource;
   offlinePayment?: OfflinePayment | null;
   paymentLink?: PaymentLinkRecord | null;
+  /**
+   * Advance-paid staff orders: the advance asked for (a payment link for less than the total is checked against
+   * it), what is still owed, the instalments taken and the open balance link. Dispatch, delivery and the GST
+   * invoice wait until `balanceDuePaise` is 0. Absent on orders paid in full.
+   */
+  advancePaise?: number;
+  balanceDuePaise?: number;
+  payments?: OrderPaymentEntry[];
+  balanceLink?: PaymentLinkRecord | null;
   /** Staff notes: free text plus the structured `#vernox:v1` block (src/lib/orders/orderNotes.ts). Staff-written only. */
   notes?: string;
 }
@@ -244,6 +271,8 @@ export function buildOrderDoc(params: {
   /** Staff-entered order: who entered it, and the in-person payment if it was already taken. */
   source?: OrderSource;
   offlinePayment?: OfflinePayment;
+  /** Part of the total taken now (offline) or asked for by the payment link; the rest is the balance. */
+  advancePaise?: number;
 }): OrderDoc {
   const { customer, totals, now } = params;
   const paymentMethod = params.paymentMethod ?? 'prepaid';
@@ -265,7 +294,9 @@ export function buildOrderDoc(params: {
         ...(paymentMethod === 'replacement'
           ? { note: `replacement for ${params.parentOrderId}` }
           : params.offlinePayment
-            ? { note: `paid by ${params.offlinePayment.mode}${params.offlinePayment.reference ? ` (${params.offlinePayment.reference})` : ''}` }
+            ? {
+                note: `${params.advancePaise ? `advance ₹${paiseToRupees(params.advancePaise)} ` : ''}paid by ${params.offlinePayment.mode}${params.offlinePayment.reference ? ` (${params.offlinePayment.reference})` : ''}`,
+              }
             : {}),
       },
     ],
@@ -295,6 +326,7 @@ export function buildOrderDoc(params: {
     parentOrderId: params.parentOrderId ?? null,
     ...(params.consultation ? { kind: 'service' as const, consultation: params.consultation } : {}),
     ...(params.source ? { source: params.source, offlinePayment: params.offlinePayment ?? null, paymentLink: null } : {}),
+    ...(params.advancePaise ? advanceFields(params.advancePaise, totals.totalPaise, params.offlinePayment) : {}),
     flags: [],
     placedAt: now,
     createdAt: now,
@@ -311,6 +343,17 @@ export function buildOrderDoc(params: {
     shippingZip: customer.pincode,
     shippingCountry: customer.country,
     phone: customer.phone,
+  };
+}
+
+/** An advance taken in person is already an instalment; an advance by payment link is recorded when paid. */
+function advanceFields(advancePaise: number, totalPaise: number, offline: OfflinePayment | undefined): Partial<OrderDoc> {
+  if (!offline) return { advancePaise, payments: [], balanceLink: null };
+  return {
+    advancePaise,
+    balanceDuePaise: totalPaise - advancePaise,
+    payments: [{ id: `adv_${offline.at}`, kind: 'advance', amountPaise: advancePaise, mode: offline.mode, reference: offline.reference, at: offline.at, by: offline.receivedBy }],
+    balanceLink: null,
   };
 }
 
@@ -348,7 +391,7 @@ function publicTracking(order: OrderDoc) {
 }
 
 /** Guest-safe order view: no address line, phone, payment ids, design files or internal flags. */
-export function publicOrderSummary(order: OrderDoc, returnWindowDays?: number) {
+export function publicOrderSummary(order: OrderDoc, returnWindowDays?: number, now = Date.now()) {
   const { items: pricedItems, ...totals } = pricingPayload(order);
   return {
     orderId: order.id,
@@ -374,5 +417,8 @@ export function publicOrderSummary(order: OrderDoc, returnWindowDays?: number) {
         ? order.deliveredAt + returnWindowDays * 24 * 3600_000
         : null,
     shipTo: { name: order.customer?.name ?? order.shippingName, city: order.customer?.city ?? order.shippingCity },
+    /** Advance-paid orders: what is still owed (₹) and the open balance link, if staff sent one. */
+    balanceDue: order.balanceDuePaise ? paiseToRupees(order.balanceDuePaise) : null,
+    payBalanceUrl: order.balanceDuePaise && order.balanceLink && order.balanceLink.expiresAt > now ? order.balanceLink.url : null,
   };
 }

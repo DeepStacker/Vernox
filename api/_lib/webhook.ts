@@ -19,6 +19,7 @@
  * Docs: https://razorpay.com/docs/webhooks/payment-links/
  */
 import { ApiError } from './errors';
+import { recordBalanceLinkPayment } from './orderBalance';
 import {
   confirmPayment,
   findOrderIdByPaymentId,
@@ -56,6 +57,7 @@ export interface RazorpayWebhookEvent {
 
 export type WebhookOutcome =
   | 'paid'
+  | 'balance_paid'
   | 'duplicate_payment'
   | 'payment_discrepancy'
   | 'payment_for_closed_order'
@@ -74,8 +76,16 @@ async function orderIdForPaymentLink(store: DocStore, link: RazorpayPaymentLinkE
   const orderId = typeof notes.orderId === 'string' && /^[A-Za-z0-9]{10,40}$/.test(notes.orderId) ? notes.orderId : null;
   if (!orderId || !link?.id) return null;
   const order = await store.get(`orders/${orderId}`);
+  // Balance links (orderBalance.ts) are matched by their signed notes even after the order moved on to a newer
+  // link, so money paid on a superseded link is still recorded (and flagged) rather than lost.
+  if (notes.purpose === 'balance') return order ? orderId : null;
   const recorded = (order?.paymentLink as { id?: unknown } | null | undefined)?.id;
   return recorded === link.id ? orderId : null;
+}
+
+function isBalanceLink(link: RazorpayPaymentLinkEntity | undefined): boolean {
+  const notes = link?.notes && !Array.isArray(link.notes) ? link.notes : {};
+  return notes.purpose === 'balance' && Boolean(link?.id);
 }
 
 async function resolveOrderId(store: DocStore, event: RazorpayWebhookEvent): Promise<string | null> {
@@ -147,6 +157,12 @@ async function applyEvent(
     case 'payment_link.paid': {
       if (!payment?.id || typeof payment.amount !== 'number' || !payment.currency) {
         throw new ApiError(400, 'VALIDATION_ERROR', 'Webhook payment entity is incomplete.');
+      }
+      const link = event.payload?.payment_link?.entity;
+      if (type === 'payment_link.paid' && link?.id && isBalanceLink(link)) {
+        return recordBalanceLinkPayment(store, {
+          orderId, linkId: link.id, razorpayPaymentId: payment.id, amountPaise: payment.amount, currency: payment.currency, now,
+        });
       }
       const result = await confirmPayment(store, {
         orderId,

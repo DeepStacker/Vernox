@@ -313,6 +313,18 @@ asia-south1 with delete protection, rules and all 12 composite indexes deployed.
 plan and Storage "Get started" (Storage on new projects needs Blaze), Authentication "Get started" with the Email/Password and Google
 providers, the production domain under Authorized domains, and a service-account key for `install.sh`.
 
+## Production readiness follow-ups (2026-11-14)
+
+- Dependencies: `npm audit fix` and moving `@vercel/node` (types only) to devDependencies took production advisories from 45 to 18.
+  The rest need major upgrades, each a separate change with a full test pass: zod 3 → 4 (memory exhaustion on oversized constrained
+  collections; bodies are capped at 1 MB), react-router 6 → 7 (open redirect via backslash paths; no navigation here uses a
+  user-supplied destination), firebase-admin 13 → 14 and the firebase web SDK (gRPC advisories; gRPC is not used in the browser).
+- Content-Security-Policy: pages send `frame-ancestors 'self'; base-uri 'self'; object-src 'none'`. A script/connect/frame allow-list
+  (Razorpay Checkout, Google sign-in, Firebase) needs a browser pass with live test payments before it is enforced.
+- Error alerts (api/_lib/opsAlert.ts) and backups (deploy/firebase-backups.sh, needs Blaze) are in place; see INCIDENT_RECOVERY.md.
+- One VM is a single point of failure, and the in-process crons assume one app container: run a second replica only with
+  `DISABLE_INTERNAL_CRON=true` on all but one.
+
 ## End-to-end check (2026-11-07, local emulators, headless Chromium at 390 px and 1280 px)
 
 Verified in the browser or against the running API: guest product page (EMI widget hidden without a key), add to cart, save for
@@ -337,6 +349,11 @@ MSG91 and Meta WhatsApp delivery.
   Finance order panel (`PrintReceiptButton`, mapping in `src/lib/orders/receipt.ts`). It shows seller GSTIN, "Tax invoice" or "Order
   receipt", masked phone, lines, CGST/SGST or IGST (from the invoice when issued), payment mode and reference, and any balance due. No PDF
   and no new dependency. Not verified on a physical printer.
+- Done: advance (partial) payments on staff orders (`advancePaise` on offline or payment-link orders, api/_lib/orderBalance.ts). The
+  advance starts production; the balance is taken in person (`RECORD_ORDER_PAYMENT`) or by a Razorpay link for exactly what is owed
+  (`SEND_BALANCE_LINK`), from the balance panel in Admin > Orders. Shipment creation and dispatch/delivery statuses are refused until
+  it is 0, so the GST invoice (issued at dispatch) always follows full payment; goods advances carry no GST of their own. The customer's
+  order page shows the balance and a Pay balance link. Not built: advances in the storefront checkout (staff orders only).
 
 - Done: catalogue photo upload in the product form (`src/lib/data/productImages.ts`): resized in the browser to 2000 px WebP, stored at
   `products/{productId}/` (public read, catalogue staff write, storage.rules).

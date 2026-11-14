@@ -100,6 +100,19 @@ export function OrderDetails({ order, email }: Props) {
         </span>
       </div>
 
+      {order.balanceDue ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm">
+          <span>
+            Advance received. <strong>{formatINR(order.balanceDue)}</strong> is due before dispatch.
+          </span>
+          {order.payBalanceUrl && (
+            <a href={order.payBalanceUrl} target="_blank" rel="noopener noreferrer" className="btn-primary py-2 print:hidden">
+              Pay balance <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            </a>
+          )}
+        </div>
+      ) : null}
+
       {(actions?.canCancel || canReturn || invoiceNumber) && (
         <div className="flex flex-wrap gap-2 border-t border-border pt-4 print:hidden">
           {invoiceNumber && <button type="button" onClick={onInvoice} className="btn-secondary py-2"><Download className="h-4 w-4" aria-hidden="true" /> Invoice</button>}

@@ -25,6 +25,10 @@ class FakeLinks implements PaymentLinkGateway {
     if (this.failWith) throw this.failWith;
     return { id: `plink_${this.calls.length}`, url: `https://rzp.io/i/x${this.calls.length}`, razorpayOrderId: null };
   }
+  cancelled: string[] = [];
+  async cancelPaymentLink(id: string) {
+    this.cancelled.push(id);
+  }
 }
 
 const ACTOR = 'ops@vernox.in';

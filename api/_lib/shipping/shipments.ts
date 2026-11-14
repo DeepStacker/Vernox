@@ -14,6 +14,7 @@
  *    A COD order records `codCollectedPaise` when delivered.
  */
 import { auditInTransaction, buildAuditEntry, recordAudit } from '../audit';
+import { balanceDueError, hasBalanceDue } from '../orderBalance';
 import { ApiError } from '../errors';
 import { applyInvoice, planInvoice } from '../gst/invoice';
 import { canTransition, type OrderStatus } from '../orderLifecycle';
@@ -44,6 +45,7 @@ async function issueInvoiceForDispatch(store: DocStore, orderId: string, config:
     const order = asOrder(await tx.get(orderPath(orderId)));
     if (!order) throw new ApiError(404, 'NOT_FOUND', 'Order not found.');
     if (order.status !== 'Packed') throw new ApiError(409, 'CONFLICT', `Only packed orders can be shipped (status is ${order.status}).`);
+    if (hasBalanceDue(order)) throw balanceDueError(order);
     const plan = await planInvoice(tx, order, config.seller, now);
     const fields = applyInvoice(tx, plan, order, config.seller, now);
     if (plan.reservation) {

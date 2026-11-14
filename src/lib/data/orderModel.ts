@@ -185,6 +185,8 @@ export function parsePublicOrder(order: Raw, fallbackOrderId = ''): PublicOrderS
     canCancel: order.canCancel === true,
     returnEligibleUntil: typeof order.returnEligibleUntil === 'number' ? order.returnEligibleUntil : null,
     codFee: Number.isFinite(codFee) ? codFee : 0,
+    balanceDue: typeof order.balanceDue === 'number' && order.balanceDue > 0 ? order.balanceDue : null,
+    payBalanceUrl: typeof order.payBalanceUrl === 'string' && order.payBalanceUrl.startsWith('https://') ? order.payBalanceUrl : null,
   };
 }
 

@@ -8,6 +8,8 @@
  *                 with `handover` (counter only) it is `Delivered` and the GST invoice is issued at once.
  *   payment_link  a Razorpay payment link is sent to the customer; the order is `Pending_Payment` until paid.
  *   cod           cash on delivery, with the storefront's COD rules (catalogue only, PIN, value and per-phone limits).
+ * Offline and payment-link orders may take an advance (`advancePaise`) instead of the total; the balance is then
+ * collected with RECORD_ORDER_PAYMENT or SEND_BALANCE_LINK, and dispatch waits for it (api/_lib/orderBalance.ts).
  * A counter handover needs no delivery address: the buyer is recorded at the seller's address, which makes the
  * sale intra-state for GST (place of supply of goods handed over at the counter is the seller's location).
  */
@@ -41,8 +43,14 @@ const paymentSchema = z.discriminatedUnion('method', [
     method: z.literal('offline'),
     mode: z.enum(OFFLINE_PAYMENT_MODES),
     reference: z.string().trim().max(80).default(''),
+    /** Part payment taken now (paise); the balance is collected later (orderBalance.ts). Omitted = paid in full. */
+    advancePaise: z.number().int().positive().optional(),
   }),
-  z.object({ method: z.literal('payment_link') }),
+  z.object({
+    method: z.literal('payment_link'),
+    /** The link asks for this advance (paise) instead of the total. */
+    advancePaise: z.number().int().positive().optional(),
+  }),
   z.object({ method: z.literal('cod') }),
 ]);
 
@@ -89,6 +97,9 @@ export const staffOrderSchema = z
   .superRefine((o, ctx) => {
     const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
     checkCustomLines(o.items, o.handover, issue);
+    if (o.handover && 'advancePaise' in o.payment && o.payment.advancePaise) {
+      issue(['payment', 'advancePaise'], 'A counter handover needs the full amount; take an advance only for pieces delivered later.');
+    }
     if (o.handover) {
       if (o.channel !== 'counter') issue(['handover'], 'Only a counter sale can be handed over at once.');
       if (o.payment.method !== 'offline') issue(['handover'], 'Take the payment before handing the pieces over.');
@@ -210,6 +221,7 @@ export async function createStaffOrder(deps: CheckoutDeps, input: StaffOrderInpu
         source: { channel: input.channel, by: actor },
         offlinePayment: payment.method === 'offline' ? { mode: payment.mode, reference: payment.reference, receivedBy: actor, at: now } : undefined,
         handover: input.handover,
+        advancePaise: payment.method === 'cod' ? undefined : payment.advancePaise,
         note: input.note,
       },
     },

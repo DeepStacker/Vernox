@@ -219,6 +219,9 @@ export interface PublicOrderSummary {
   returnEligibleUntil?: number | null;
   /** COD fee in rupees (0 for prepaid). */
   codFee?: number;
+  /** Advance-paid orders: rupees still owed, and the Razorpay link to pay it when staff sent one. */
+  balanceDue?: number | null;
+  payBalanceUrl?: string | null;
 }
 
 export interface StaffMember {

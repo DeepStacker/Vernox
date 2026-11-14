@@ -170,6 +170,12 @@ function Created({ result, phone, onNext }: { result: StaffOrderCreated; phone: 
       <div>
         <p className="font-display text-2xl">Order {result.orderNumber} created</p>
         <p className="text-sm text-muted-foreground">{STATUS_NOTE[result.status] ?? `Status: ${result.status.replace(/_/g, ' ')}.`}</p>
+        {result.advance !== null && result.balanceDue !== null && (
+          <p className="mt-1 text-sm">
+            Advance {formatInr(Math.round(result.advance * 100))}{link ? ' (on the link)' : ' received'}; balance {formatInr(Math.round(result.balanceDue * 100))} before dispatch.
+            Collect it from Admin &gt; Orders when the pieces are ready.
+          </p>
+        )}
       </div>
       {result.invoiceNumber && (
         <button type="button" onClick={() => void invoice()} disabled={downloading} className="btn-primary inline-flex items-center gap-1.5">
@@ -211,6 +217,9 @@ export function NewOrderConsole() {
   const [mode, setMode] = useState<OfflinePaymentMode>('cash');
   const [reference, setReference] = useState('');
   const [handover, setHandover] = useState(true);
+  // Advance: rupees as typed; empty = the full amount.
+  const [takeAdvance, setTakeAdvance] = useState(false);
+  const [advanceRupees, setAdvanceRupees] = useState('');
   const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [note, setNote] = useState('');
@@ -226,6 +235,8 @@ export function NewOrderConsole() {
   const hasCustom = items.some(i => i.productId === CUSTOM_PRODUCT_ID);
   const canHandover = channel === 'counter' && paymentMethod === 'offline' && !hasCustom;
   const handingOver = canHandover && handover;
+  const advanceAllowed = paymentMethod !== 'cod' && !handingOver;
+  const advancePaise = advanceAllowed && takeAdvance ? Math.round(Number(advanceRupees) * 100) : undefined;
   const productName = (id: string) => products.find(p => p.id === id)?.name ?? id;
   const itemLabel = (item: StaffOrderItem) => item.productId === CUSTOM_PRODUCT_ID
     ? `Custom piece ${item.widthMm} × ${item.heightMm} mm · ${DEFAULT_CUSTOM_FINISH_RATES[item.finish]?.label ?? item.finish} · design: ${item.customDesignRef}`
@@ -239,7 +250,7 @@ export function NewOrderConsole() {
     () => ({ items, couponCode: couponCode.trim() || undefined, customerEmail: customer.email.trim() || undefined, cod: paymentMethod === 'cod', handover: handingOver }),
     [items, couponCode, customer.email, paymentMethod, handingOver],
   );
-  useEffect(() => setIdempotencyKey(newKey()), [quoteInput, customer, channel, mode, reference]);
+  useEffect(() => setIdempotencyKey(newKey()), [quoteInput, customer, channel, mode, reference, advancePaise]);
 
   useEffect(() => {
     if (items.length === 0) { setQuote(null); setQuoteError(null); return; }
@@ -277,7 +288,7 @@ export function NewOrderConsole() {
   }, [phoneDigits]);
 
   const reset = () => {
-    setItems([]); setCustomer(EMPTY_CUSTOMER); setWhatsappOptIn(false); setCouponCode(''); setNote(''); setReference(''); setTradeEnquiryId('');
+    setItems([]); setCustomer(EMPTY_CUSTOMER); setTakeAdvance(false); setAdvanceRupees(''); setWhatsappOptIn(false); setCouponCode(''); setNote(''); setReference(''); setTradeEnquiryId('');
     setCreated(null); setError(null); setReturning(null); setIdempotencyKey(newKey());
   };
 
@@ -291,7 +302,9 @@ export function NewOrderConsole() {
         items,
         couponCode: couponCode.trim() || undefined,
         customer: trimmed as { name: string; phone: string },
-        payment: paymentMethod === 'offline' ? { method: 'offline', mode, reference: reference.trim() } : { method: paymentMethod },
+        payment: paymentMethod === 'offline'
+          ? { method: 'offline', mode, reference: reference.trim(), advancePaise }
+          : paymentMethod === 'payment_link' ? { method: 'payment_link', advancePaise } : { method: 'cod' },
         handover: handingOver,
         whatsappOptIn,
         idempotencyKey,
@@ -308,7 +321,11 @@ export function NewOrderConsole() {
   if (created) return <Created result={created} phone={customer.phone.trim()} onNext={reset} />;
 
   const needsReference = paymentMethod === 'offline' && mode !== 'cash';
-  const ready = items.length > 0 && customer.name.trim() && customer.phone.trim() && (!needsReference || reference.trim())
+  const totalPaise = quote?.totals.totalPaise ?? 0;
+  const advanceProblem = advancePaise === undefined ? null
+    : !Number.isFinite(advancePaise) || advancePaise < 100 ? 'Enter the advance in rupees (at least ₹1).'
+      : totalPaise && advancePaise >= totalPaise ? 'The advance must be less than the total; untick it to take the full amount.' : null;
+  const ready = items.length > 0 && customer.name.trim() && customer.phone.trim() && (!needsReference || reference.trim()) && !advanceProblem
     && (handingOver || (customer.address.trim() && customer.city.trim() && customer.state.trim() && customer.pincode.trim()));
   const input = (key: keyof typeof EMPTY_CUSTOMER, label: string, props: Record<string, unknown> = {}) => (
     <label className="block text-sm font-medium">{label}
@@ -389,6 +406,26 @@ export function NewOrderConsole() {
             <p className="text-xs text-muted-foreground">Razorpay sends the link by SMS and email. The pieces are held for {PAYMENT_LINK_TTL_HOURS} hours; the order confirms itself when paid.</p>
           )}
           {paymentMethod === 'cod' && <p className="text-xs text-muted-foreground">Same rules as the website: catalogue pieces only, the COD fee and order limit apply.</p>}
+          {advanceAllowed && (
+            <div className="space-y-2">
+              <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={takeAdvance} onChange={e => setTakeAdvance(e.target.checked)} className="h-5 w-5" />
+                {paymentMethod === 'payment_link' ? 'Ask for an advance only' : 'Take an advance only'} (the balance is collected before dispatch)
+              </label>
+              {takeAdvance && (
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="block text-sm font-medium">Advance (₹)
+                    <input value={advanceRupees} onChange={e => setAdvanceRupees(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" maxLength={10} className="field mt-1 w-36 font-mono font-normal" />
+                  </label>
+                  {totalPaise > 0 && [25, 50].map(pct => (
+                    <button key={pct} type="button" onClick={() => setAdvanceRupees(String(Math.round((totalPaise * pct) / 100) / 100))}
+                      className="min-h-11 rounded-lg bg-muted/50 px-3 text-sm font-semibold">{pct}%</button>
+                  ))}
+                </div>
+              )}
+              {advanceProblem && <p role="alert" className="text-xs text-destructive">{advanceProblem}</p>}
+            </div>
+          )}
           {canHandover && (
             <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
               <input type="checkbox" checked={handover} onChange={e => setHandover(e.target.checked)} className="h-5 w-5" />
@@ -458,7 +495,13 @@ export function NewOrderConsole() {
                 <div className="flex justify-between"><dt>GST</dt><dd className="font-mono">{formatInr(quote.totals.taxPaise)}</dd></div>
                 <div className="flex justify-between text-base font-semibold"><dt>Total</dt><dd className="font-mono">{formatInr(quote.totals.totalPaise)}</dd></div>
               </dl>
-              {paymentMethod === 'offline' && <p className="text-xs text-muted-foreground">Collect exactly this amount before creating the order.</p>}
+              {advancePaise && !advanceProblem ? (
+                <dl className="space-y-1 border-t border-border pt-2">
+                  <div className="flex justify-between font-semibold"><dt>{paymentMethod === 'payment_link' ? 'Link asks for' : 'Advance now'}</dt><dd className="font-mono">{formatInr(advancePaise)}</dd></div>
+                  <div className="flex justify-between"><dt>Balance before dispatch</dt><dd className="font-mono">{formatInr(totalPaise - advancePaise)}</dd></div>
+                </dl>
+              ) : null}
+              {paymentMethod === 'offline' && <p className="text-xs text-muted-foreground">Collect exactly {advancePaise && !advanceProblem ? 'the advance' : 'this amount'} before creating the order.</p>}
             </>
           )}
         </section>

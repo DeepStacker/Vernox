@@ -56,6 +56,11 @@ cash|upi|card|bank_transfer, reference, receivedBy, at } | null` (money taken in
 payment and counts as collected for refunds, which are manual), `paymentLink{ id, url, expiresAt } | null` (Razorpay link; stock is
 held until `expiresAt`). A counter handover has customer address "Collected at the counter" at the seller's city, state and PIN,
 `status: Delivered`, `deliveredAt` and its invoice from creation. `email` may be '' for walk-in and phone customers.
+Advance-paid staff orders (api/_lib/orderBalance.ts) add `advancePaise`, `balanceDuePaise` (set when the advance is in; 0 = settled),
+`payments[]{ id, kind: advance|balance, amountPaise, mode: cash|upi|card|bank_transfer|razorpay, reference, at, by }` (ids unique, so
+retries record once) and `balanceLink{ id, url, expiresAt, amountPaise } | null`. Collected = total − `balanceDuePaise`. Shipment
+creation, `Shipped`, `Out_For_Delivery` and `Delivered` are refused while `balanceDuePaise` > 0; flag `BALANCE_PAYMENT_MISMATCH` marks
+a balance payment that did not match the open link (still recorded).
 Phase 2: `paymentMethod` (`prepaid` | `cod` | `replacement`; absent = prepaid), `phoneKey` (10-digit mobile, COD limits),
 `leadTimeDays`, `amounts.codFeePaise`, `amounts.taxBreakdown{ lines[{ discountPaise, taxablePaise, gstRateBps, taxPaise }],
 charges[{ kind: shipping|cod_fee, taxablePaise, gstRateBps, taxPaise }] }`, per item `hsnCode`, `gstRateBps`, `discountPaise`,
