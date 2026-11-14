@@ -21,10 +21,11 @@ const json = (res: http.ServerResponse, status: number, body: unknown) => {
   res.end(JSON.stringify(body));
 };
 
-/** The vercel.json rewrites that the SPA needs server-side: link-preview pages and the sitemap. */
+/** The vercel.json rewrites that the SPA needs server-side: link-preview pages, the sitemap and robots.txt. */
 export function rewriteUrl(url: string): string {
   const [pathname] = url.split('?');
   if (pathname === '/sitemap.xml') return '/api/seo?kind=sitemap';
+  if (pathname === '/robots.txt') return '/api/seo?kind=robots';
   const product = /^\/product\/([^/]+)\/?$/.exec(pathname);
   if (product) return `/api/seo?kind=product&slug=${product[1]}`;
   return url;

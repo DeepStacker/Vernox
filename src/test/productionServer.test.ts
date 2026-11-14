@@ -67,6 +67,7 @@ describe('production server', () => {
     expect(rewriteUrl('/product/brass-lotus')).toBe('/api/seo?kind=product&slug=brass-lotus');
     expect(rewriteUrl('/product/brass-lotus/')).toBe('/api/seo?kind=product&slug=brass-lotus');
     expect(rewriteUrl('/sitemap.xml')).toBe('/api/seo?kind=sitemap');
+    expect(rewriteUrl('/robots.txt')).toBe('/api/seo?kind=robots');
     expect(rewriteUrl('/product/a/b')).toBe('/product/a/b');
     expect(cacheControlFor('/index.html')).toBe('no-cache');
   });

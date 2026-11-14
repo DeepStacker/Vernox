@@ -1,6 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -8,6 +8,7 @@ import { CartProvider } from "@/lib/cartContext";
 import { CatalogProvider } from "@/lib/catalogContext";
 import { CartDrawer } from "@/components/shop/CartDrawer";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 
 // Every route is code-split; heavy sections inside pages are split further.
 const Home = lazy(() => import("./pages/Home.tsx"));
@@ -47,6 +48,11 @@ const PageFallback = () => (
   </div>
 );
 
+// A crash on one page is cleared by navigating to another.
+const RouteErrorBoundary = ({ children }: { children: ReactNode }) => (
+  <AppErrorBoundary resetKey={useLocation().pathname}>{children}</AppErrorBoundary>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange storageKey="vernox-theme">
@@ -57,42 +63,44 @@ const App = () => (
             <BrowserRouter>
               {/* Universal Scroll Reset on Every Navigation */}
               <ScrollToTop />
-              <CartDrawer />
-              <Suspense fallback={<PageFallback />}>
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/shop" element={<Shop />} />
-                  <Route path="/shop/:category" element={<Shop />} />
-                  <Route path="/product/:slug" element={<ProductDetail />} />
-                  <Route path="/cart" element={<Cart />} />
-                  <Route path="/checkout" element={<Checkout />} />
-                  <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
-                  <Route path="/account" element={<Account />} />
-                  <Route path="/account/spaces" element={<Spaces />} />
-                  <Route path="/account/spaces/:spaceId" element={<SpaceDetail />} />
-                  <Route path="/account/consultations/:id" element={<ConsultationView />} />
-                  <Route path="/about" element={<About />} />
-                  <Route path="/trade" element={<Trade />} />
-                  <Route path="/b2b" element={<Navigate to="/trade" replace />} />
-                  <Route path="/shipping" element={<Shipping />} />
-                  <Route path="/returns" element={<Returns />} />
-                  <Route path="/faqs" element={<Faqs />} />
-                  <Route path="/contact" element={<Contact />} />
-                  <Route path="/newsletter/confirm" element={<NewsletterConfirm />} />
-                  <Route path="/newsletter/unsubscribe" element={<NewsletterUnsubscribe />} />
-                  <Route path="/track-order" element={<TrackOrder />} />
-                  <Route path="/customize" element={<Navigate to="/studio" replace />} />
-                  <Route path="/studio" element={<Index />} />
-                  <Route path="/admin" element={<Admin />} />
-                  <Route path="/notebook" element={<Notebook />} />
-                  <Route path="/privacy" element={<Legal defaultTab="privacy" />} />
-                  <Route path="/terms" element={<Legal defaultTab="terms" />} />
-                  <Route path="/shipping-returns" element={<Navigate to="/returns" replace />} />
-                  <Route path="/legal" element={<Legal defaultTab="privacy" />} />
-                  {/* CATCH-ALL 404 ROUTE */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
+              <RouteErrorBoundary>
+                <CartDrawer />
+                <Suspense fallback={<PageFallback />}>
+                  <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/shop" element={<Shop />} />
+                    <Route path="/shop/:category" element={<Shop />} />
+                    <Route path="/product/:slug" element={<ProductDetail />} />
+                    <Route path="/cart" element={<Cart />} />
+                    <Route path="/checkout" element={<Checkout />} />
+                    <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
+                    <Route path="/account" element={<Account />} />
+                    <Route path="/account/spaces" element={<Spaces />} />
+                    <Route path="/account/spaces/:spaceId" element={<SpaceDetail />} />
+                    <Route path="/account/consultations/:id" element={<ConsultationView />} />
+                    <Route path="/about" element={<About />} />
+                    <Route path="/trade" element={<Trade />} />
+                    <Route path="/b2b" element={<Navigate to="/trade" replace />} />
+                    <Route path="/shipping" element={<Shipping />} />
+                    <Route path="/returns" element={<Returns />} />
+                    <Route path="/faqs" element={<Faqs />} />
+                    <Route path="/contact" element={<Contact />} />
+                    <Route path="/newsletter/confirm" element={<NewsletterConfirm />} />
+                    <Route path="/newsletter/unsubscribe" element={<NewsletterUnsubscribe />} />
+                    <Route path="/track-order" element={<TrackOrder />} />
+                    <Route path="/customize" element={<Navigate to="/studio" replace />} />
+                    <Route path="/studio" element={<Index />} />
+                    <Route path="/admin" element={<Admin />} />
+                    <Route path="/notebook" element={<Notebook />} />
+                    <Route path="/privacy" element={<Legal defaultTab="privacy" />} />
+                    <Route path="/terms" element={<Legal defaultTab="terms" />} />
+                    <Route path="/shipping-returns" element={<Navigate to="/returns" replace />} />
+                    <Route path="/legal" element={<Legal defaultTab="privacy" />} />
+                    {/* CATCH-ALL 404 ROUTE */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
+              </RouteErrorBoundary>
             </BrowserRouter>
           </CartProvider>
         </CatalogProvider>

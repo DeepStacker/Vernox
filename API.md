@@ -446,4 +446,4 @@ Public, no auth; CDN-cached (`s-maxage` 10 minutes for pages, 1 hour for the sit
 `/product/:slug` and `/sitemap.xml` here. `kind=product` returns the deployed `index.html` with the product's title,
 description, image, URL and canonical link in the head, so WhatsApp and social previews show the product; the app then
 renders as usual. Unknown slugs get the plain page; if the lookup fails, the cached plain page is served. `kind=sitemap`
-returns `/sitemap.xml` built from the static routes (`src/lib/seo/sitemap.ts`) and every product slug in Firestore.
+returns `/sitemap.xml` built from the static routes (`src/lib/seo/sitemap.ts`) and every product slug in Firestore. `kind=robots` returns `/robots.txt`: admin, checkout, account, cart, order and newsletter pages disallowed, `Sitemap:` on `VITE_SITE_URL`.

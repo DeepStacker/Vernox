@@ -2,6 +2,7 @@
  * GET /api/seo?kind=product&slug=…  — index.html with the product's title, description and image in the
  *                                     head (vercel.json rewrites /product/:slug here) for link previews.
  * GET /api/seo?kind=sitemap         — /sitemap.xml from the products in Firestore.
+ * GET /api/seo?kind=robots          — /robots.txt pointing at this deployment's sitemap (SITE_URL, not a fixed domain).
  * Public, cached at the CDN; unknown slugs get the plain page (the app shows its own not-found view).
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -36,9 +37,20 @@ function sendBody(res: VercelResponse, body: string) {
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
+/** Private and transactional pages stay out of search results; everything else is crawlable. */
+export function robotsTxt(origin: string): string {
+  const disallow = ['/admin', '/checkout', '/account', '/cart', '/order-confirmation/', '/track-order', '/newsletter/', '/api/'];
+  return ['User-agent: *', 'Allow: /', ...disallow.map(p => `Disallow: ${p}`), '', `Sitemap: ${origin}/sitemap.xml`, ''].join('\n');
+}
+
 async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     assertMethod(req, res, ['GET', 'HEAD']);
+    if (req.query.kind === 'robots') {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+      return sendBody(res, robotsTxt(siteOrigin()));
+    }
     const store = getStore();
     if (req.query.kind === 'sitemap') {
       const products = await store.query('products', { limit: 5000 });
@@ -63,7 +75,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     }, siteOrigin()));
   } catch (err) {
     // A product page must still open when the lookup fails: serve the plain app shell if we have it.
-    if (req.query.kind !== 'sitemap' && template) {
+    if (req.query.kind !== 'sitemap' && req.query.kind !== 'robots' && template) {
       console.error('[seo] product meta failed, serving the plain page', err);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');

@@ -48,7 +48,7 @@ Payments still need Razorpay test keys in `.env.local`.
 npm is the only supported package manager (`package-lock.json` is the single lockfile; Dockerfiles use `npm ci`). Do not commit `bun.lock`, `bun.lockb` or `yarn.lock`.
 
 ### Configuration
-Copy `.env.example` to `.env`. `VITE_SITE_URL` is the canonical public origin (default `https://vernox.in`); it feeds canonical and Open Graph URLs, `index.html` and the sitemap. Also update the `Sitemap:` line in `public/robots.txt` when the domain changes.
+Copy `.env.example` to `.env`. `VITE_SITE_URL` is the canonical public origin (default `https://vernox.in`); it feeds canonical and Open Graph URLs, `index.html` and the sitemap. `/robots.txt` is served by `api/seo.ts` and points at that origin's sitemap.
 
 ### Fonts
 Cormorant Garamond, Plus Jakarta Sans and JetBrains Mono are self-hosted in `public/fonts/` (variable woff2, latin and latin-ext

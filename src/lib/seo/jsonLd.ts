@@ -7,7 +7,7 @@ export function organizationJsonLd(): JsonLd {
     "@type": "Organization",
     name: SITE_NAME,
     url: SITE_URL,
-    logo: absoluteUrl("/favicon.png"),
+    logo: absoluteUrl("/apple-touch-icon.png"),
     description: SITE_TAGLINE,
     areaServed: "IN",
   };
