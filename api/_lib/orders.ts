@@ -420,7 +420,7 @@ export function publicOrderSummary(order: OrderDoc, returnWindowDays?: number, n
       order.status === 'Delivered' && order.deliveredAt && returnWindowDays !== undefined
         ? order.deliveredAt + returnWindowDays * 24 * 3600_000
         : null,
-    shipTo: { name: order.customer?.name ?? order.shippingName, city: order.customer?.city ?? order.shippingCity },
+    shipTo: { name: order.customer?.name ?? order.shippingName, city: order.customer?.city ?? order.shippingCity, state: order.customer?.state ?? order.shippingState },
     /** Advance-paid orders: what is still owed (₹) and the open balance link, if staff sent one. */
     balanceDue: order.balanceDuePaise ? paiseToRupees(order.balanceDuePaise) : null,
     payBalanceUrl: order.balanceDuePaise && order.balanceLink && order.balanceLink.expiresAt > now ? order.balanceLink.url : null,

@@ -184,7 +184,7 @@ export function parsePublicOrder(order: Raw, fallbackOrderId = ''): PublicOrderS
       ? timeline.map((h: Raw) => ({ status: normalizeOrderStatus(h.status), at: toMillis(h.at) }))
       : undefined,
     shippingCity: order.shipTo?.city ?? order.shippingCity ?? order.city,
-    shippingState: order.shippingState ?? order.state,
+    shippingState: order.shipTo?.state ?? order.shippingState ?? order.state,
     paymentMethod: order.paymentMethod === 'cod' || order.paymentMethod === 'replacement' ? order.paymentMethod : 'prepaid',
     invoiceNumber: typeof order.invoiceNumber === 'string' ? order.invoiceNumber : null,
     canCancel: order.canCancel === true,
