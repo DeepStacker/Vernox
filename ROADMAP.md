@@ -314,6 +314,26 @@ asia-south1 with delete protection, rules and all 12 composite indexes deployed.
 plan and Storage "Get started" (Storage on new projects needs Blaze), Authentication "Get started" with the Email/Password and Google
 providers, the production domain under Authorized domains, and a service-account key for `install.sh`.
 
+## End-to-end audit (2026-11-14)
+
+Four read-only audits (API contracts, permissions and dead ends, data sync, validation and money) and their fixes, all on
+phase1-foundation with tests. Highlights:
+- Order writes: staff status moves rewrote `statusHistory` from a cached copy and skipped the in-production notification and the
+  hold/balance checks; they now go through `UPDATE_ORDER_STATUS`, tracking through `SET_ORDER_TRACKING` (http/https only), notes
+  through `ADD_ORDER_NOTE`. firestore.rules allow staff only `assignedTo` and `notes` on orders, product saves can no longer
+  overwrite `stock` (`ADJUST_STOCK` applies deltas), trade enquiries only change `status`.
+- Money: Razorpay refunds are capped at what that payment captured, the rest is `REFUND_MANUAL_DUE`; cancellation retires open
+  balance links; a failed refund retry no longer reads as recorded; refunds that never reached Razorpay are released by the cron;
+  courier booking takes a lease (no double booking); finance shows returns waiting for refund and the new flags; client collected
+  amounts, payment states and the IST revenue chart match the server.
+- Contracts and UX: Track order accepts the VX number; checkout retries get one key per distinct request and the address is in
+  the duplicate check; coupons, reviews and product fields can be cleared; friendly validation messages; password reset; a clear
+  message for staff with an unverified email; return to the page after sign-in; no dead-end palette, notification or CSV actions.
+- Verified in a browser on the emulators: empty checkout, password reset, sign-in return, staff order → In Design through the API
+  (in_production notification queued), Track order by lower-case VX number.
+- Still open (low): read-only coupon view for finance/support (they hold `coupons.read`), `LOG_AUDIT` accepts any staff role and
+  catalogue/settings audits are client-reported, `CONFIG_ERROR` is shared by seller and integration problems.
+
 ## Production readiness follow-ups (2026-11-14)
 
 - Dependencies: `npm audit fix` and moving `@vercel/node` (types only) to devDependencies took production advisories from 45 to 18;
