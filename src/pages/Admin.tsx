@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner';
 import { AdminCommandPalette } from '@/components/admin/AdminCommandPalette';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { ForgotPasswordButton } from '@/components/auth/ForgotPasswordButton';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { canAccessTab, formatRole, type AdminTabId, type StaffRole } from '@/lib/auth/permissions';
 import { useAdminData } from '@/lib/data/adminData';
@@ -282,6 +283,7 @@ function AdminLogin() {
             <span className="font-semibold">Password</span>
             <input type="password" required value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" className="field" />
           </label>
+          <div className="text-right"><ForgotPasswordButton email={email} /></div>
           <button type="submit" disabled={signingIn} className="btn-primary w-full">{signingIn ? 'Signing in…' : 'Sign in'}</button>
         </form>
         <div className="border-t border-border pt-4 text-center">

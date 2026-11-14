@@ -6,6 +6,7 @@ import { Phone, Tag, ShieldCheck, Truck } from 'lucide-react';
 import { SiteHeader } from '@/components/shop/SiteHeader';
 import { PageHeader } from '@/components/shop/PageHeader';
 import { SiteFooter } from '@/components/shop/SiteFooter';
+import { EmptyState } from '@/components/shop/StateViews';
 import { CodOtpStep, type CodOtpState } from '@/components/shop/CodOtpStep';
 import { ShapeThumb } from '@/components/shop/ShapeThumb';
 import { useCart } from '@/lib/cartContext';
@@ -258,6 +259,19 @@ export default function Checkout() {
   const set = (key: keyof AddressForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [key]: e.target.value }));
   const money = (n: number) => `${currency}${n.toFixed(2)}`;
+
+  // Opened from a stale link or Back after an order: say so instead of an address form that cannot be submitted.
+  if (items.length === 0 && phase === 'details' && !intent) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <SiteHeader />
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 py-10 md:py-14 w-full flex-1">
+          <EmptyState title="Your cart is empty" action={{ label: 'Shop designs', to: '/shop' }} />
+        </section>
+        <SiteFooter />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">

@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { SiteHeader } from '@/components/shop/SiteHeader';
 import { SiteFooter } from '@/components/shop/SiteFooter';
 import { useCatalog } from '@/lib/catalogContext';
+import { ForgotPasswordButton } from '@/components/auth/ForgotPasswordButton';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { useMyOrders } from '@/lib/data/orders';
 import { OrderDetails } from '@/components/shop/OrderDetails';
@@ -34,6 +35,11 @@ export default function Account() {
       setActiveTab(tab);
     }
   }, [searchParams]);
+  // Google accounts have no password to change: a ?tab=security link falls back to orders instead of a blank pane.
+  const googleOnly = Boolean(currentCustomer?.isGoogleUser);
+  useEffect(() => {
+    if (activeTab === 'security' && googleOnly) setActiveTab('orders');
+  }, [activeTab, googleOnly]);
   
   // Auth Modes: 'login' | 'register' | 'phone'
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'phone'>('login');
@@ -334,6 +340,7 @@ export default function Account() {
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
+                    <div className="text-right"><ForgotPasswordButton email={loginForm.emailOrPhone} /></div>
                   </div>
 
                   <button

@@ -5,7 +5,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  GoogleAuthProvider, createUserWithEmailAndPassword, getIdTokenResult, onAuthStateChanged,
+  GoogleAuthProvider, createUserWithEmailAndPassword, getIdTokenResult, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail,
   signInWithEmailAndPassword, signInWithPopup, signOut as firebaseSignOut, type User,
 } from 'firebase/auth';
 import { appFirestore } from '@/lib/appFirestore';
@@ -40,6 +40,8 @@ interface AuthCtx {
   updateProfile: (updates: Partial<CustomerAccount>) => Promise<void>;
   /** Signs in and succeeds only when the account carries a staff role claim. */
   staffSignIn: (email: string, password: string) => Promise<StaffRole>;
+  /** Emails a password-reset link (Firebase). Resolves the same for unknown addresses, so accounts cannot be probed. */
+  sendPasswordReset: (email: string) => Promise<void>;
   refreshClaims: () => Promise<StaffRole | null>;
 }
 
@@ -146,8 +148,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await firebaseSignOut(auth);
       throw new Error('This account does not have staff access.');
     }
+    // The API and rules refuse password accounts with an unverified email; say so here instead of empty screens.
+    if (!cred.user.emailVerified) {
+      await sendEmailVerification(cred.user).catch(() => undefined);
+      await firebaseSignOut(auth);
+      throw new Error(`Verify your email first: we sent a link to ${cred.user.email}. Open it, then sign in again.`);
+    }
     setStaffRole(role);
     return role;
+  }, []);
+
+  const sendPasswordReset = useCallback(async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+    } catch (err) {
+      // Unknown accounts resolve silently; only malformed input and rate limits are worth showing.
+      const code = (err as { code?: string }).code ?? '';
+      if (code === 'auth/invalid-email') throw new Error('Enter a valid email address.');
+      if (code === 'auth/too-many-requests') throw new Error('Too many attempts. Please try again in a few minutes.');
+      if (code !== 'auth/user-not-found') throw err;
+    }
   }, []);
 
   const value = useMemo<AuthCtx>(
@@ -155,9 +175,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, loading, profile, staffRole,
       permissions: staffRole ? ROLE_PERMISSIONS[staffRole] : null,
       isStaff: staffRole !== null,
-      signIn, signInWithGoogle, register, signOut, updateProfile, staffSignIn, refreshClaims,
+      signIn, signInWithGoogle, register, signOut, updateProfile, staffSignIn, refreshClaims, sendPasswordReset,
     }),
-    [user, loading, profile, staffRole, signIn, signInWithGoogle, register, signOut, updateProfile, staffSignIn, refreshClaims],
+    [user, loading, profile, staffRole, signIn, signInWithGoogle, register, signOut, updateProfile, staffSignIn, refreshClaims, sendPasswordReset],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
