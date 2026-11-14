@@ -25,7 +25,7 @@ export const purchaseRequestSchema = z.object({
   name: z.string().trim().min(1).max(120),
   phone: z.string().trim().regex(/^\+?[0-9][0-9\s-]{8,15}$/, 'must be a valid phone number'),
   state: z.string().trim().min(1).max(100),
-}) as unknown as z.ZodType<PurchaseRequest, z.ZodTypeDef, unknown>;
+}) as unknown as z.ZodType<PurchaseRequest>;
 
 export async function purchaseConsultation(
   deps: CheckoutDeps,

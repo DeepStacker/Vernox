@@ -17,7 +17,7 @@
  * See API.md.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { ZodType, ZodTypeDef } from 'zod';
+import type { ZodType } from 'zod';
 import { requireUser } from './_lib/auth';
 import { badRequest, sendError } from './_lib/errors';
 import { getAdminAuth, getPhotoStorage, getStore } from './_lib/firebaseAdmin';
@@ -38,7 +38,7 @@ interface ActionContext {
 }
 
 interface EngageAction<T> {
-  schema: ZodType<T, ZodTypeDef, unknown>;
+  schema: ZodType<T>;
   limit: RateLimitRule;
   run(ctx: ActionContext, input: T): Promise<Record<string, unknown>>;
 }

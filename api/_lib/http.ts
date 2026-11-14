@@ -2,7 +2,8 @@
  * Request helpers shared by the API handlers (method guard, client IP, body parsing).
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { ZodIssue, ZodType, ZodTypeDef } from 'zod';
+import type { ZodType } from 'zod';
+import type { $ZodIssue as ZodIssue } from 'zod/v4/core';
 import { ApiError, badRequest } from './errors';
 
 export function assertMethod(req: VercelRequest, res: VercelResponse, allowed: readonly string[]) {
@@ -49,8 +50,8 @@ const FIELD_LABELS: Record<string, string> = {
   productId: 'Product',
 };
 
-function fieldLabel(path: ReadonlyArray<string | number>): string | null {
-  const dotted = path.filter(p => typeof p === 'string').join('.');
+function fieldLabel(path: ReadonlyArray<PropertyKey>): string | null {
+  const dotted = path.filter((p): p is string => typeof p === 'string').join('.');
   if (FIELD_LABELS[dotted]) return FIELD_LABELS[dotted];
   const leaf = String(path[path.length - 1] ?? '');
   const inItem = path[0] === 'items' && typeof path[1] === 'number';
@@ -59,24 +60,26 @@ function fieldLabel(path: ReadonlyArray<string | number>): string | null {
 }
 
 /** "customer.name" -> "customer name" for fields without a label. */
-const humanPath = (path: ReadonlyArray<string | number>) =>
-  path.map(p => (typeof p === 'number' ? `#${p + 1}` : p.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase())).join(' ');
+const humanPath = (path: ReadonlyArray<PropertyKey>) =>
+  path.map(p => (typeof p === 'number' ? `#${p + 1}` : String(p).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase())).join(' ');
 
 function issueDetail(issue: ZodIssue): string {
   switch (issue.code) {
     case 'too_small':
-      if (issue.type === 'string') return issue.minimum === 1 ? 'is required' : `must be at least ${issue.minimum} characters`;
-      if (issue.type === 'array') return issue.minimum === 1 ? 'needs at least one entry' : `needs at least ${issue.minimum} entries`;
+      if (issue.origin === 'string') return issue.minimum === 1 ? 'is required' : `must be at least ${issue.minimum} characters`;
+      if (issue.origin === 'array') return issue.minimum === 1 ? 'needs at least one entry' : `needs at least ${issue.minimum} entries`;
       return `must be at least ${issue.minimum}`;
     case 'too_big':
-      if (issue.type === 'string') return `must be at most ${issue.maximum} characters`;
-      if (issue.type === 'array') return `can have at most ${issue.maximum} entries`;
+      if (issue.origin === 'string') return `must be at most ${issue.maximum} characters`;
+      if (issue.origin === 'array') return `can have at most ${issue.maximum} entries`;
       return `must be at most ${issue.maximum}`;
     case 'invalid_type':
-      return issue.received === 'undefined' ? 'is required' : `has the wrong type (expected ${issue.expected})`;
-    case 'invalid_string':
-      return issue.validation === 'email' ? 'must be a valid email address' : issue.message === 'Invalid' ? 'is not in the expected format' : issue.message;
-    case 'invalid_enum_value':
+      // Needs `reportInput: true` when parsing; zod 4 no longer exposes the received type on the issue.
+      return issue.input === undefined ? 'is required' : `has the wrong type (expected ${issue.expected})`;
+    case 'invalid_format':
+      // Built-in pattern failures read "Invalid string: must match ..."; custom messages already read as sentences.
+      return issue.format === 'email' ? 'must be a valid email address' : issue.message.startsWith('Invalid ') ? 'is not in the expected format' : issue.message;
+    case 'invalid_value':
       return 'is not one of the allowed options';
     default:
       return issue.message;
@@ -98,8 +101,8 @@ export function friendlyIssueMessage(issue: ZodIssue | undefined, fallbackPath: 
 }
 
 /** Validates the parsed JSON body against a schema; failures become 400 VALIDATION_ERROR. */
-export function parseBody<T>(req: VercelRequest, schema: ZodType<T, ZodTypeDef, unknown>): T {
-  const result = schema.safeParse(req.body ?? {});
+export function parseBody<T>(req: VercelRequest, schema: ZodType<T>): T {
+  const result = schema.safeParse(req.body ?? {}, { reportInput: true });
   if (!result.success) throw badRequest(friendlyIssueMessage(result.error.issues[0], 'request'));
   return result.data;
 }

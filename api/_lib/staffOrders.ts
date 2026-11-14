@@ -95,7 +95,7 @@ export const staffOrderSchema = z
     tradeEnquiryId: z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/).optional(),
   })
   .superRefine((o, ctx) => {
-    const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
+    const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: "custom", path, message });
     checkCustomLines(o.items, o.handover, issue);
     if (o.handover && 'advancePaise' in o.payment && o.payment.advancePaise) {
       issue(['payment', 'advancePaise'], 'A counter handover needs the full amount; take an advance only for pieces delivered later.');
@@ -128,7 +128,7 @@ export const staffQuoteSchema = z
     // The quote checks only what changes the price or the rules; the design reference is required at creation.
     if (!q.handover) return;
     q.items.forEach((item, i) => {
-      if (item.productId === CUSTOM_PRODUCT_ID) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', i], message: CUSTOM_HANDOVER_MESSAGE });
+      if (item.productId === CUSTOM_PRODUCT_ID) ctx.addIssue({ code: "custom", path: ['items', i], message: CUSTOM_HANDOVER_MESSAGE });
     });
   });
 export type StaffQuoteInput = z.infer<typeof staffQuoteSchema>;

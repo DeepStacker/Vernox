@@ -20,7 +20,7 @@ const bodySchema = z.object({
   orderId: orderIdSchema,
   email: optionalEmailSchema,
   reason: z.string().trim().max(300).optional(),
-}) as unknown as z.ZodType<{ orderId: string; email?: string; reason?: string }, z.ZodTypeDef, unknown>;
+}) as unknown as z.ZodType<{ orderId: string; email?: string; reason?: string }>;
 
 async function handler(req: VercelRequest, res: VercelResponse) {
   try {

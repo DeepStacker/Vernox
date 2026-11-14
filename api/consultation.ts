@@ -32,7 +32,7 @@ const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('PURCHASE') }).passthrough(),
   z.object({ action: z.literal('REQUEST_REVISION'), consultationId, message: z.string().trim().min(3).max(1000) }),
   z.object({ action: z.literal('CLOSE'), consultationId, outcome: z.enum(['accepted', 'declined']) }),
-]) as unknown as z.ZodType<Body, z.ZodTypeDef, unknown>;
+]) as unknown as z.ZodType<Body>;
 
 async function handler(req: VercelRequest, res: VercelResponse) {
   try {

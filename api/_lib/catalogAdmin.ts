@@ -59,12 +59,12 @@ export const productSchema = z
   .passthrough()
   .superRefine((p, ctx) => {
     for (const [i, s] of p.sizes.entries()) {
-      if (p.price + (s.priceDelta ?? 0) <= 0) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['sizes', i, 'priceDelta'], message: 'makes this size free or negative' });
+      if (p.price + (s.priceDelta ?? 0) <= 0) ctx.addIssue({ code: "custom", path: ['sizes', i, 'priceDelta'], message: 'makes this size free or negative' });
     }
     for (const key of ['imageUrl', 'lifestyleImage'] as const) {
       const url = p[key];
       // Rendered as <img src>: only web addresses and storage paths, never a script or inline data URL.
-      if (url && /^\s*(javascript|data|vbscript):/i.test(url)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: 'is not an image address' });
+      if (url && /^\s*(javascript|data|vbscript):/i.test(url)) ctx.addIssue({ code: "custom", path: [key], message: 'is not an image address' });
     }
   });
 export type ProductInput = z.infer<typeof productSchema>;
@@ -151,7 +151,7 @@ function assertNoNegativeNumbers(value: unknown, path: string) {
   }
 }
 
-export const settingsPatchSchema = z.record(z.unknown()).refine(v => Object.keys(v).length > 0, 'nothing to save');
+export const settingsPatchSchema = z.record(z.string(), z.unknown()).refine(v => Object.keys(v).length > 0, 'nothing to save');
 
 /** Top-level merge, as the settings screens apply it, validated as a whole before it is stored. */
 export async function saveSettings(store: DocStore, kind: 'store' | 'homepage', patch: Record<string, unknown>, actor: Actor, now = Date.now()) {

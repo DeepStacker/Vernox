@@ -24,7 +24,7 @@
   "dependencies": {
     "@countertype/clipper2-ts": "^1.5.4-3.9a869ba",
     "@google/model-viewer": "^4.4.0",
-    "@hookform/resolvers": "^3.10.0",
+    "@hookform/resolvers": "^5.9.2",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -88,7 +88,7 @@
     "three": "^0.183.2",
     "uuid": "^13.0.0",
     "vaul": "^0.9.9",
-    "zod": "^3.25.76",
+    "zod": "^4.6.7",
     "zundo": "^2.3.0",
     "zustand": "^5.0.16"
   },

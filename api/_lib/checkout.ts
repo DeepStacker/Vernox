@@ -101,7 +101,7 @@ export const customerSchema = z
   })
   .superRefine((c, ctx) => {
     if (INDIA.has(c.country.toLowerCase()) && !/^[1-9][0-9]{5}$/.test(c.pincode)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['pincode'], message: 'must be a 6-digit Indian PIN code' });
+      ctx.addIssue({ code: "custom", path: ['pincode'], message: 'must be a 6-digit Indian PIN code' });
     }
   });
 
@@ -120,10 +120,10 @@ const checkoutRequestObject = z
   .superRefine((body, ctx) => {
     const total = body.items.reduce((sum, i) => sum + (i.customDesignRef?.length ?? 0), 0);
     if (total > MAX_TOTAL_DESIGN_REF_CHARS) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items'], message: 'custom design data is too large' });
+      ctx.addIssue({ code: "custom", path: ['items'], message: 'custom design data is too large' });
     }
     if (body.paymentMethod === 'cod' && !INDIA.has(body.customer.country.toLowerCase())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['paymentMethod'], message: 'cash on delivery is available only in India' });
+      ctx.addIssue({ code: "custom", path: ['paymentMethod'], message: 'cash on delivery is available only in India' });
     }
   });
 
@@ -138,7 +138,7 @@ export interface CheckoutRequest {
 }
 
 // Explicit output type: the app tsconfig is non-strict, where z.infer would make every field optional.
-export const checkoutRequestSchema = checkoutRequestObject as unknown as z.ZodType<CheckoutRequest, z.ZodTypeDef, unknown>;
+export const checkoutRequestSchema = checkoutRequestObject as unknown as z.ZodType<CheckoutRequest>;
 
 export interface PrepaidCheckoutResponse {
   success: true;
@@ -532,7 +532,7 @@ export const couponPreviewSchema = z.object({
   code: z.string().trim().min(1).max(40),
   items: z.array(itemSchema).min(1).max(50),
   customerEmail: z.string().trim().toLowerCase().email().max(254).optional(),
-}) as unknown as z.ZodType<CouponPreviewRequest, z.ZodTypeDef, unknown>;
+}) as unknown as z.ZodType<CouponPreviewRequest>;
 
 /**
  * Coupon preview for /api/validate-coupon: same pricing and coupon engine as

@@ -31,7 +31,7 @@ const bodySchema = z.object({
   reason: z.enum(RETURN_REASONS),
   details: z.string().trim().max(2000).default(''),
   photoPaths: z.array(z.string().trim().regex(/^returns\/[A-Za-z0-9]{10,40}\/[A-Za-z0-9_.-]{1,120}$/)).max(6).default([]),
-}) as unknown as z.ZodType<ReturnRequestBody, z.ZodTypeDef, unknown>;
+}) as unknown as z.ZodType<ReturnRequestBody>;
 
 async function handler(req: VercelRequest, res: VercelResponse) {
   try {
