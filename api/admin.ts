@@ -15,6 +15,7 @@ import { STAFF_ROLES, isStaffRole, roleHasPermission, type Permission, type Staf
 import { auditInTransaction, buildAuditEntry, recordAudit } from './_lib/audit';
 import { requireStaff, type StaffUser } from './_lib/auth';
 import { cancelOrder } from './_lib/cancellation';
+import { categorySchema, deleteCatalogDoc, productSchema, saveProduct, saveSettings, saveSimpleDoc, settingsPatchSchema, topicSchema, type ProductInput } from './_lib/catalogAdmin';
 import { COD_UNVERIFIED_FLAG } from './_lib/codOtp';
 import { normaliseCouponCode } from './_lib/coupons';
 import { ApiError, badRequest, sendError } from './_lib/errors';
@@ -119,12 +120,6 @@ const idSchema = (key: string) => z.object({ [key]: z.string().trim().regex(/^[A
  * the permission the reporting role must hold. Everything else is audited by the API itself.
  */
 const CLIENT_AUDIT_EVENTS = {
-  PRODUCT_SAVED: { targetType: 'product', permission: 'catalog.write' },
-  PRODUCT_DELETED: { targetType: 'product', permission: 'catalog.write' },
-  CATEGORY_SAVED: { targetType: 'category', permission: 'catalog.write' },
-  CATEGORY_DELETED: { targetType: 'category', permission: 'catalog.write' },
-  HOMEPAGE_UPDATED: { targetType: 'settings', permission: 'settings.write' },
-  STORE_CONFIG_UPDATED: { targetType: 'settings', permission: 'settings.write' },
   ORDER_UPDATED: { targetType: 'order', permission: 'orders.update_status' },
   B2B_STATUS_UPDATED: { targetType: 'customer', permission: 'b2b.read' },
 } as const satisfies Record<string, { targetType: string; permission: Permission }>;
@@ -843,6 +838,80 @@ const ACTIONS: Record<string, ActionDefinition> = {
    * edits are deltas applied in a transaction, never an absolute value written back from a stale screen.
    * Direct client writes to `stock` are refused by firestore.rules.
    */
+  // ---------- catalogue and settings (api/_lib/catalogAdmin.ts: validated, audited; clients cannot write them) ----------
+
+  SAVE_PRODUCT: {
+    method: 'POST',
+    permission: 'catalog.write',
+    async run(ctx) {
+      const p = parse(productSchema, (ctx.params as { product?: unknown }).product);
+      return saveProduct(ctx.store, p as ProductInput, ctx.actor);
+    },
+  },
+
+  DELETE_PRODUCT: {
+    method: 'POST',
+    permission: 'catalog.write',
+    async run(ctx) {
+      const { id } = parse(z.object({ id: z.string().trim().regex(/^[A-Za-z0-9_-]{1,64}$/) }), ctx.params) as { id: string };
+      return deleteCatalogDoc(ctx.store, 'products', id, ctx.actor);
+    },
+  },
+
+  SAVE_CATEGORY: {
+    method: 'POST',
+    permission: 'catalog.write',
+    async run(ctx) {
+      const p = parse(categorySchema, (ctx.params as { category?: unknown }).category) as { id: string };
+      return saveSimpleDoc(ctx.store, 'categories', p, ctx.actor);
+    },
+  },
+
+  DELETE_CATEGORY: {
+    method: 'POST',
+    permission: 'catalog.write',
+    async run(ctx) {
+      const { id } = parse(z.object({ id: z.string().trim().regex(/^[A-Za-z0-9_-]{1,64}$/) }), ctx.params) as { id: string };
+      return deleteCatalogDoc(ctx.store, 'categories', id, ctx.actor);
+    },
+  },
+
+  SAVE_TOPIC: {
+    method: 'POST',
+    permission: 'catalog.write',
+    async run(ctx) {
+      const p = parse(topicSchema, (ctx.params as { topic?: unknown }).topic) as { id: string };
+      return saveSimpleDoc(ctx.store, 'topics', p, ctx.actor);
+    },
+  },
+
+  DELETE_TOPIC: {
+    method: 'POST',
+    permission: 'catalog.write',
+    async run(ctx) {
+      const { id } = parse(z.object({ id: z.string().trim().regex(/^[A-Za-z0-9_-]{1,64}$/) }), ctx.params) as { id: string };
+      return deleteCatalogDoc(ctx.store, 'topics', id, ctx.actor);
+    },
+  },
+
+  SAVE_STORE_SETTINGS: {
+    method: 'POST',
+    permission: 'settings.write',
+    async run(ctx) {
+      const updates = parse(settingsPatchSchema, (ctx.params as { updates?: unknown }).updates);
+      return saveSettings(ctx.store, 'store', updates, ctx.actor);
+    },
+  },
+
+  SAVE_HOMEPAGE: {
+    method: 'POST',
+    permission: 'settings.write',
+    async run(ctx) {
+      const updates = parse(settingsPatchSchema, (ctx.params as { updates?: unknown }).updates);
+      return saveSettings(ctx.store, 'homepage', updates, ctx.actor);
+    },
+  },
+
   ADJUST_STOCK: {
     method: 'POST',
     permission: 'inventory.write',

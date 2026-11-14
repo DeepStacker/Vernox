@@ -51,23 +51,21 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     });
   });
 
-  it('catalog is public read, catalog-role write', async () => {
+  it('catalogue is public read; every write goes through the API, even for catalogue staff', async () => {
     await assertSucceeds(getDoc(doc(guest(), 'products/p-01')));
-    await assertFails(updateDoc(doc(as('alice'), 'products/p-01'), { price: 1 }));
-    await assertSucceeds(updateDoc(doc(as('cm', { role: 'catalog_manager' }), 'products/p-01'), { price: 199 }));
-  });
-
-  it('catalog roles cannot write product stock directly but can create products with initial stock', async () => {
+    await assertSucceeds(getDoc(doc(guest(), 'categories/c1')));
     const cm = as('cm', { role: 'catalog_manager' });
-    await assertFails(updateDoc(doc(cm, 'products/p-01'), { stock: 99 }));
-    await assertFails(setDoc(doc(cm, 'products/p-01'), { name: 'Frame', price: 189, stock: 99 }));
-    await assertSucceeds(setDoc(doc(cm, 'products/p-01'), { name: 'Frame renamed', price: 189, stock: 10 }));
-    await assertSucceeds(setDoc(doc(cm, 'products/p-new'), { name: 'New', price: 50, stock: 5 }));
+    await assertFails(updateDoc(doc(as('alice'), 'products/p-01'), { price: 1 }));
+    await assertFails(updateDoc(doc(cm, 'products/p-01'), { price: 199 }));
+    await assertFails(setDoc(doc(cm, 'products/p-new'), { name: 'New', price: 50, stock: 5 }));
+    await assertFails(deleteDoc(doc(cm, 'products/p-01')));
+    await assertFails(setDoc(doc(cm, 'categories/c2'), { name: 'X' }));
+    await assertFails(setDoc(doc(cm, 'topics/t1'), { title: 'X' }));
   });
 
   it('roles from unverified password accounts are ignored', async () => {
     const db = env.authenticatedContext('x', { role: 'super_admin', email_verified: false, firebase: { sign_in_provider: 'password' as const } }).firestore();
-    await assertFails(updateDoc(doc(db, 'products/p-01'), { price: 1 }));
+    await assertFails(getDoc(doc(db, 'orders/o1')));
   });
 
   it('orders: owner/staff read, no client create, staff may only assign and annotate', async () => {
@@ -137,10 +135,10 @@ describe.skipIf(!emulator)('firestore.rules', () => {
     }
   });
 
-  it('settings/store is public read, settings-role write', async () => {
+  it('settings are public read; writes go through the API (SAVE_STORE_SETTINGS, SAVE_HOMEPAGE)', async () => {
     await assertSucceeds(getDoc(doc(guest(), 'settings/store')));
     await assertFails(setDoc(doc(as('alice'), 'settings/store'), { codFee: 0 }));
-    await assertSucceeds(setDoc(doc(as('a', { role: 'admin' }), 'settings/store'), { codFee: 49 }));
+    await assertFails(setDoc(doc(as('a', { role: 'admin' }), 'settings/store'), { codFee: 49 }));
   });
 
   it('reviews: no client create (the API verifies the purchase); moderation by moderators only', async () => {

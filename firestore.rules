@@ -40,8 +40,6 @@ service cloud.firestore {
 
     // ---------- permission helpers (mirror src/types/admin.ts) ----------
 
-    function canWriteCatalog()    { return hasRole(['super_admin', 'admin', 'catalog_manager']); }
-    function canWriteSettings()   { return hasRole(['super_admin', 'admin']); }
     function canReadOrders()      { return hasRole(['super_admin', 'admin', 'order_manager', 'production', 'shipping', 'finance', 'support']); }
     function canUpdateOrders()    { return hasRole(['super_admin', 'admin', 'order_manager', 'production', 'shipping']); }
     function canReadCoupons()     { return hasRole(['super_admin', 'admin', 'finance', 'support']); }
@@ -63,25 +61,27 @@ service cloud.firestore {
     // `stock` is moved by order reservations on the server, so a client save (a stale absolute value)
     // must never change it: staff adjust stock with the ADJUST_STOCK admin action. Creating a product
     // may still set its initial stock.
+    // Catalogue and settings are public reads; every write goes through the admin API (api/_lib/catalogAdmin.ts:
+    // SAVE_PRODUCT, SAVE_CATEGORY, SAVE_TOPIC, SAVE_STORE_SETTINGS, SAVE_HOMEPAGE, ADJUST_STOCK), which validates
+    // prices, seller GST details and stock and audits each change.
     match /products/{productId} {
       allow read: if true;
-      allow create, delete: if canWriteCatalog();
-      allow update: if canWriteCatalog() && !('stock' in changedKeys());
+      allow write: if false;
     }
 
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if canWriteCatalog();
+      allow write: if false;
     }
 
     match /topics/{topicId} {
       allow read: if true;
-      allow write: if canWriteCatalog();
+      allow write: if false;
     }
 
     match /config/{configDoc} {
       allow read: if true;
-      allow write: if canWriteSettings();
+      allow write: if false;
     }
 
     // settings/store holds tax, shipping, COD, seller (GSTIN) and contact details
@@ -89,7 +89,7 @@ service cloud.firestore {
     // (provider keys and webhook tokens are server environment variables).
     match /settings/{settingDoc} {
       allow read: if true;
-      allow write: if canWriteSettings();
+      allow write: if false;
     }
 
     // ---------- customers ----------

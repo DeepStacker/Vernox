@@ -25,6 +25,8 @@ and no development payment bypasses — use Razorpay test keys locally.
   the same transaction that marks the order `Paid`.
 - The Razorpay order amount is set by the server; `/api/verify-payment` accepts only the three Razorpay fields and verifies
   the signature with `timingSafeEqual`. Webhook captures are also checked against the order's amount and currency.
+- The catalogue (products, categories, topics) and settings are written only by the API (`SAVE_PRODUCT`, `SAVE_STORE_SETTINGS`,
+  …), which validates prices and seller GST details, never lets a save overwrite live stock, and audits each change.
 - Orders cannot be created, deleted, or have money fields changed by any client (rules). Staff browsers may write only
   `assignedTo` and `notes` (the QC/packing records); every status change goes through `UPDATE_ORDER_STATUS` (history, hold and
   balance checks, customer notification, audit) and tracking through `SET_ORDER_TRACKING` (`orders.tracking`, http(s) links only).

@@ -77,3 +77,53 @@ describe('SAVE_COUPON limits', () => {
     expect(res.body.message).toBe('Code must be at least 3 characters.');
   });
 });
+
+describe('catalogue and settings writes through the API', () => {
+  beforeEach(() => { store = seededStore(); });
+  const product = (over: Record<string, unknown> = {}) => ({
+    id: 'p-new', name: 'Om Panel', slug: 'om-panel', price: 1499, category: 'spiritual', finishes: ['brass'],
+    sizes: [{ label: 'Small', widthMm: 300, heightMm: 300, priceDelta: 0 }, { label: 'Large', widthMm: 600, heightMm: 600, priceDelta: 900 }],
+    stock: 7, description: 'Laser cut', ...over,
+  });
+
+  it('creates with stock, then replaces details while keeping the live stock', async () => {
+    expect((await call('catalog_manager', { action: 'SAVE_PRODUCT', product: product() })).status).toBe(200);
+    expect(store.read('products/p-new')).toMatchObject({ name: 'Om Panel', stock: 7 });
+    store.seed('products/p-new', { ...store.read('products/p-new')!, stock: 4 }); // a reservation committed meanwhile
+    const { description: _d, ...withoutDescription } = product({ name: 'Om Panel II', stock: 99 });
+    expect((await call('catalog_manager', { action: 'SAVE_PRODUCT', product: withoutDescription })).status).toBe(200);
+    const saved = store.read('products/p-new')!;
+    expect(saved).toMatchObject({ name: 'Om Panel II', stock: 4 });
+    expect(saved.description).toBeUndefined();
+    expect(store.collection('audit_logs').filter(a => a.data.action === 'PRODUCT_SAVED')).toHaveLength(2);
+  });
+
+  it('refuses what checkout could not price or the storefront should not render', async () => {
+    const bad = async (over: Record<string, unknown>) => (await call('catalog_manager', { action: 'SAVE_PRODUCT', product: product(over) })).status;
+    expect(await bad({ price: 0 })).toBe(400);
+    expect(await bad({ price: 10.005 })).toBe(400);
+    expect(await bad({ sizes: [{ label: 'Tiny', priceDelta: -1499 }] })).toBe(400);
+    expect(await bad({ imageUrl: 'javascript:alert(1)' })).toBe(400);
+    expect(await bad({ slug: 'Om Panel' })).toBe(400);
+    expect((await call('finance', { action: 'SAVE_PRODUCT', product: product() })).status).toBe(403);
+  });
+
+  it('validates the seller GST details and amounts on store settings, merging one level deep', async () => {
+    const save = (updates: Record<string, unknown>, role = 'admin') => call(role, { action: 'SAVE_STORE_SETTINGS', updates });
+    expect((await save({ seller: { legalName: 'Vernox LLP', gstin: '29ABCDE1234F1Z5', stateCode: '29', pincode: '560001' } })).status).toBe(200);
+    expect((await save({ seller: { gstin: 'NOTAGSTIN' } })).status).toBe(400);
+    expect((await save({ seller: { gstin: '29ABCDE1234F1Z5', stateCode: '27' } })).status).toBe(400);
+    expect((await save({ codFee: -10 })).status).toBe(400);
+    expect((await save({ codFee: 49 })).status).toBe(200);
+    expect(store.read('settings/store')).toMatchObject({ codFee: 49, seller: { gstin: '29ABCDE1234F1Z5' } });
+    expect((await save({ codFee: 49 }, 'catalog_manager')).status).toBe(403);
+  });
+
+  it('saves and deletes categories and topics with an audit entry', async () => {
+    expect((await call('catalog_manager', { action: 'SAVE_CATEGORY', category: { id: 'festive', name: 'Festive', description: '' } })).status).toBe(200);
+    expect((await call('catalog_manager', { action: 'DELETE_CATEGORY', id: 'festive' })).status).toBe(200);
+    expect((await call('catalog_manager', { action: 'DELETE_CATEGORY', id: 'festive' })).status).toBe(404);
+    expect((await call('catalog_manager', { action: 'SAVE_TOPIC', topic: { id: 't1', title: 'Care guide', content: 'Wipe dry.' } })).status).toBe(200);
+    expect(store.collection('audit_logs').map(a => a.data.action)).toEqual(expect.arrayContaining(['CATEGORY_SAVED', 'CATEGORY_DELETED', 'TOPIC_SAVED']));
+  });
+});

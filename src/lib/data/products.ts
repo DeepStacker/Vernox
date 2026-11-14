@@ -1,9 +1,9 @@
-/** Products and categories: public reads, claim-gated admin writes (enforced by Firestore rules). */
+/** Products and categories: public reads; writes go through the admin API (validated and audited server-side). */
 import { useQuery } from '@tanstack/react-query';
-import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firestoreDb';
 import type { CategoryDoc, Product } from '@/types/store';
-import { adminAction, logAudit } from './adminApi';
+import { adminAction } from './adminApi';
 import { toCategory, toProduct } from './catalogMappers';
 import { stripUndefined, useOptimisticMutation } from './optimistic';
 
@@ -31,18 +31,9 @@ export function useCategories() {
 export function useProductMutations() {
   const save = useOptimisticMutation<Product[], Product>({
     queryKey: PRODUCTS_KEY,
-    mutationFn: async product => {
-      const ref = doc(db, 'products', product.id);
-      if (!(await getDoc(ref)).exists()) {
-        await setDoc(ref, stripUndefined(product)); // creating: the initial stock is part of the document
-      } else {
-        // `stock` is also moved by order reservations, so a save must never write it back (rules refuse it);
-        // staff stock edits go through ADJUST_STOCK. Cleared optional fields are removed, not left behind.
-        const { stock: _stock, ...fields } = product;
-        await updateDoc(ref, Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v === undefined ? deleteField() : v])));
-      }
-      logAudit('PRODUCT_SAVED', 'product', product.id, { name: product.name });
-    },
+    // The API validates and audits; on an existing product it keeps the live stock (reservations move it) and
+    // replaces everything else, so cleared optional fields disappear. Stock edits go through ADJUST_STOCK.
+    mutationFn: async product => { await adminAction('SAVE_PRODUCT', { product: stripUndefined(product) }); },
     apply: (cur = [], product) =>
       cur.some(p => p.id === product.id) ? cur.map(p => (p.id === product.id ? product : p)) : [product, ...cur],
     failureMessage: 'Could not save product',
@@ -50,10 +41,7 @@ export function useProductMutations() {
 
   const remove = useOptimisticMutation<Product[], string>({
     queryKey: PRODUCTS_KEY,
-    mutationFn: async id => {
-      await deleteDoc(doc(db, 'products', id));
-      logAudit('PRODUCT_DELETED', 'product', id);
-    },
+    mutationFn: async id => { await adminAction('DELETE_PRODUCT', { id }); },
     apply: (cur = [], id) => cur.filter(p => p.id !== id),
     failureMessage: 'Could not delete product',
   });
@@ -67,10 +55,7 @@ export function useProductMutations() {
 
   const saveCategory = useOptimisticMutation<CategoryDoc[], CategoryDoc>({
     queryKey: CATEGORIES_KEY,
-    mutationFn: async category => {
-      await setDoc(doc(db, 'categories', category.id), stripUndefined(category));
-      logAudit('CATEGORY_SAVED', 'category', category.id);
-    },
+    mutationFn: async category => { await adminAction('SAVE_CATEGORY', { category: stripUndefined(category) }); },
     apply: (cur = [], category) =>
       cur.some(c => c.id === category.id) ? cur.map(c => (c.id === category.id ? category : c)) : [...cur, category],
     failureMessage: 'Could not save category',
@@ -78,10 +63,7 @@ export function useProductMutations() {
 
   const removeCategory = useOptimisticMutation<CategoryDoc[], string>({
     queryKey: CATEGORIES_KEY,
-    mutationFn: async id => {
-      await deleteDoc(doc(db, 'categories', id));
-      logAudit('CATEGORY_DELETED', 'category', id);
-    },
+    mutationFn: async id => { await adminAction('DELETE_CATEGORY', { id }); },
     apply: (cur = [], id) => cur.filter(c => c.id !== id),
     failureMessage: 'Could not delete category',
   });

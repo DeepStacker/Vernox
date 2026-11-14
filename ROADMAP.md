@@ -333,7 +333,8 @@ phase1-foundation with tests. Highlights:
   (in_production notification queued), Track order by lower-case VX number.
 - Done after the audit: read-only Discounts for finance and support (redemptions load again), `LOG_AUDIT` accepts only the
   known client-reported events from roles with the matching permission, missing seller details are `SELLER_DETAILS_MISSING`.
-  Still open (low): catalogue and settings changes are written by the browser and audited as `client_reported`, not by the API.
+  Catalogue and settings writes moved to the API too (api/_lib/catalogAdmin.ts): validated, audited server-side, and closed
+  to browsers in firestore.rules; only order assignment/QC notes and trade-enquiry status remain client-written and reported.
 
 ## Production readiness follow-ups (2026-11-14)
 

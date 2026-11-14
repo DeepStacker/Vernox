@@ -3,11 +3,11 @@
  * and journal topics. Defaults below are in-memory display fallbacks only and are never written back.
  */
 import { useQuery } from '@tanstack/react-query';
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firestoreDb';
 import type { HomepageSettings, StoreConfig, Topic } from '@/types/store';
 import { DEFAULT_HOMEPAGE_SETTINGS, DEFAULT_STORE_CONFIG, toHomepageSettings, toStoreConfig, toTopic } from './catalogMappers';
-import { logAudit } from './adminApi';
+import { adminAction } from './adminApi';
 import { stripUndefined, useOptimisticMutation } from './optimistic';
 
 export { DEFAULT_HERO_SLIDES, DEFAULT_HOMEPAGE_SETTINGS, DEFAULT_STORE_CONFIG } from './catalogMappers';
@@ -46,29 +46,22 @@ export function useTopics() {
 export function useSettingsMutations() {
   const storeConfig = useOptimisticMutation<StoreConfig, Partial<StoreConfig>>({
     queryKey: STORE_CONFIG_KEY,
-    mutationFn: async updates => {
-      await setDoc(doc(db, 'settings', 'store'), stripUndefined(updates), { merge: true });
-      logAudit('STORE_CONFIG_UPDATED', 'settings', 'store', updates as Record<string, unknown>);
-    },
+    // Validated (seller GSTIN, no negative amounts) and audited by the API.
+    mutationFn: async updates => { await adminAction('SAVE_STORE_SETTINGS', { updates: stripUndefined(updates) }); },
     apply: (cur, updates) => ({ ...(cur ?? DEFAULT_STORE_CONFIG), ...updates }),
     failureMessage: 'Could not save store settings',
   });
 
   const homepage = useOptimisticMutation<HomepageSettings, Partial<HomepageSettings>>({
     queryKey: HOMEPAGE_KEY,
-    mutationFn: async updates => {
-      await setDoc(doc(db, 'settings', 'homepage'), stripUndefined(updates), { merge: true });
-      logAudit('HOMEPAGE_UPDATED', 'settings', 'homepage');
-    },
+    mutationFn: async updates => { await adminAction('SAVE_HOMEPAGE', { updates: stripUndefined(updates) }); },
     apply: (cur, updates) => ({ ...(cur ?? DEFAULT_HOMEPAGE_SETTINGS), ...updates }),
     failureMessage: 'Could not save homepage settings',
   });
 
   const saveTopic = useOptimisticMutation<Topic[], Topic>({
     queryKey: TOPICS_KEY,
-    mutationFn: async topic => {
-      await setDoc(doc(db, 'topics', topic.id), stripUndefined(topic));
-    },
+    mutationFn: async topic => { await adminAction('SAVE_TOPIC', { topic: stripUndefined(topic) }); },
     apply: (cur = [], topic) =>
       cur.some(t => t.id === topic.id) ? cur.map(t => (t.id === topic.id ? topic : t)) : [topic, ...cur],
     failureMessage: 'Could not save topic',
@@ -76,9 +69,7 @@ export function useSettingsMutations() {
 
   const removeTopic = useOptimisticMutation<Topic[], string>({
     queryKey: TOPICS_KEY,
-    mutationFn: async id => {
-      await deleteDoc(doc(db, 'topics', id));
-    },
+    mutationFn: async id => { await adminAction('DELETE_TOPIC', { id }); },
     apply: (cur = [], id) => cur.filter(t => t.id !== id),
     failureMessage: 'Could not delete topic',
   });
