@@ -11,6 +11,9 @@
  * orders, a full refund of the refundable balance is requested (refunds.ts);
  * the order becomes Refunded when Razorpay confirms it. A refund that cannot be
  * started leaves the order Cancelled and flagged REFUND_NOT_STARTED for finance.
+ * Razorpay can only refund what it captured on the order's payment; money taken in person or through a balance
+ * link is flagged REFUND_MANUAL_DUE (with `manualRefundDuePaise`) for finance to pay back. An open balance link
+ * is cancelled so the customer cannot pay for a cancelled order.
  */
 import { auditInTransaction, buildAuditEntry } from './audit';
 import { ApiError } from './errors';
@@ -20,7 +23,9 @@ import { CUSTOMER_CANCELLABLE_STATUSES, canTransition } from './orderLifecycle';
 import { applyStatusChange, planStatusChange } from './orderTransitions';
 import { asOrder, orderPath, type OrderDoc } from './orders';
 import type { RefundGateway } from './razorpay';
-import { createRefund, refundCeilingPaise } from './refunds';
+import { cancelQuietly } from './orderBalance';
+import type { PaymentLinkGateway } from './razorpay';
+import { createRefund, onlineRefundCeilingPaise, refundCeilingPaise } from './refunds';
 import type { RefundDoc } from './refundRecords';
 import { arrayUnion, type DocStore } from './store';
 
@@ -35,7 +40,11 @@ export interface CancelResult {
 export async function cancelOrder(
   store: DocStore,
   gateway: RefundGateway | null,
-  params: { orderId: string; reason: string; initiatedBy: 'customer' | 'staff'; actor: Actor; refund?: boolean; ip?: string; now?: number },
+  params: {
+    orderId: string; reason: string; initiatedBy: 'customer' | 'staff'; actor: Actor; refund?: boolean; ip?: string; now?: number;
+    /** Cancels an open balance link (advance orders). */
+    paymentLinks?: PaymentLinkGateway | null;
+  },
 ): Promise<CancelResult> {
   const now = params.now ?? Date.now();
   const reason = params.reason.trim().slice(0, 300) || 'Cancelled';
@@ -67,6 +76,7 @@ export async function cancelOrder(
       cancelledAt: now,
       cancellationReason: reason,
       cancelledBy: params.initiatedBy,
+      ...(current.balanceLink ? { balanceLink: null } : {}),
       ...(restock.items.length > 0 ? { stockReservation: { ...current.stockReservation, status: 'released' } } : {}),
     });
     auditInTransaction(
@@ -84,13 +94,23 @@ export async function cancelOrder(
     );
     return { ...current, status: 'Cancelled' } as OrderDoc;
   });
+  if (order.balanceLink) await cancelQuietly(params.paymentLinks ?? null, order.balanceLink, order.id);
 
   const wantsRefund = params.refund !== false && order.paymentMethod === 'prepaid' && refundCeilingPaise(order) > 0;
   if (!wantsRefund) return { order, refund: null, refundError: null };
+  const onlinePaise = onlineRefundCeilingPaise(order);
+  const manualPaise = refundCeilingPaise(order) - onlinePaise;
+  if (manualPaise > 0) {
+    await store.update(orderPath(order.id), { flags: arrayUnion('REFUND_MANUAL_DUE'), manualRefundDuePaise: manualPaise, updatedAt: now });
+  }
+  const manualNote = manualPaise > 0 ? ` ₹${(manualPaise / 100).toFixed(2)} paid in person or by link will be returned by our team.` : '';
+  if (onlinePaise === 0) {
+    return { order, refund: null, refundError: manualPaise > 0 ? `No online payment to refund automatically.${manualNote}` : null };
+  }
   try {
     const refund = await createRefund(store, gateway, {
       orderId: order.id,
-      amountPaise: refundCeilingPaise(order),
+      amountPaise: onlinePaise,
       reason: `Cancellation: ${reason}`,
       method: 'razorpay',
       idempotencyKey: `cancel_${order.id}`,
@@ -100,7 +120,7 @@ export async function cancelOrder(
       ip: params.ip,
       now,
     });
-    return { order, refund, refundError: null };
+    return { order, refund, refundError: manualPaise > 0 ? manualNote.trim() : null };
   } catch (err) {
     console.error(`[cancellation] refund for cancelled order ${order.id} could not be started`, err);
     await store.update(orderPath(order.id), { flags: arrayUnion('REFUND_NOT_STARTED'), updatedAt: now });

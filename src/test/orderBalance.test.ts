@@ -8,7 +8,9 @@ import type { PaymentLinkGateway } from '../../api/_lib/razorpay';
 import { createStaffOrder, staffOrderSchema, type StaffOrderInput } from '../../api/_lib/staffOrders';
 import { processWebhookEvent } from '../../api/_lib/webhook';
 import type { MemoryStore } from './support/memoryStore';
-import { deps, NOW, seededStore, setStatus, STAFF_ACTOR } from './support/serverFixtures';
+import { deps, FakeRefundGateway, NOW, paidOrder, seededStore, setStatus, STAFF_ACTOR } from './support/serverFixtures';
+import { cancelOrder } from '../../api/_lib/cancellation';
+import { createRefund } from '../../api/_lib/refunds';
 
 class FakeLinks implements PaymentLinkGateway {
   calls: Parameters<PaymentLinkGateway['createPaymentLink']>[0][] = [];
@@ -156,5 +158,44 @@ describe('advance payments: collecting the balance', () => {
     await expect(store.runTransaction(async tx => planStatusChange(tx, order(store, id), { to: 'Shipped', by: ACTOR })))
       .rejects.toThrow(/still owed on this order/);
     await expect(store.runTransaction(async tx => planStatusChange(tx, order(store, id), { to: 'Quality_Check', by: ACTOR }))).resolves.toBeTruthy();
+  });
+});
+
+describe('cancelling and refunding orders not paid in one online payment', () => {
+  const cancel = (store: MemoryStore, id: string, gateway: FakeRefundGateway, links: FakeLinks | null = null) =>
+    cancelOrder(store, gateway, { orderId: id, reason: 'Customer changed mind', initiatedBy: 'staff', actor: STAFF_ACTOR, paymentLinks: links, now: NOW + 10 });
+
+  it('an advance taken in person is left for a manual refund, not attempted on Razorpay', async () => {
+    const { store, links, id } = await advanceOrder();
+    await sendBalanceLink(store, links, id, STAFF_ACTOR, NOW);
+    const gateway = new FakeRefundGateway();
+    const result = await cancel(store, id, gateway, links);
+    expect(gateway.calls).toHaveLength(0);
+    expect(links.cancelled).toEqual(['plink_1']);
+    const doc = order(store, id);
+    expect(doc.flags).toContain('REFUND_MANUAL_DUE');
+    expect(doc.manualRefundDuePaise).toBe(ADVANCE);
+    expect(doc.balanceLink).toBeNull();
+    expect(result.refundError).toMatch(/₹200.00 paid in person/);
+    // The customer pays the stale link anyway: the money is recorded and flagged for a refund.
+    expect(await processWebhookEvent(store, linkPaid(id, 'plink_1', 'pay_late', 1000, 'balance'), 'evt_c', NOW)).toBe('payment_discrepancy');
+    expect(order(store, id).flags).toContain('PAYMENT_FOR_CLOSED_ORDER');
+  });
+
+  it('Razorpay refunds only what it captured; a failed attempt is not reported as recorded on retry', async () => {
+    const store = seededStore();
+    const { orderId } = await paidOrder(store);
+    const total = order(store, orderId).amounts.totalPaise;
+    const gateway = new FakeRefundGateway();
+    const refund = (amountPaise: number, key: string) => createRefund(store, gateway, {
+      orderId, amountPaise, reason: 'Goodwill', method: 'razorpay', idempotencyKey: key, requestedBy: 'f', source: 'staff', actor: STAFF_ACTOR, now: NOW,
+    });
+    gateway.failWith = new Error('gateway down');
+    await expect(refund(1000, 'refund-key-01')).rejects.toThrow(/gateway down/);
+    gateway.failWith = null;
+    await expect(refund(1000, 'refund-key-01')).rejects.toThrow(/earlier attempt failed/);
+    await expect(refund(1000, 'refund-key-02')).resolves.toMatchObject({ amountPaise: 1000 });
+    expect(order(store, orderId).refundPendingPaise).toBe(1000);
+    expect(total).toBeGreaterThan(1000);
   });
 });

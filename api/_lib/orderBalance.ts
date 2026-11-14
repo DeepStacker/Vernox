@@ -156,7 +156,9 @@ export async function recordBalanceLinkPayment(
     if ((order.payments ?? []).some(p => p.id === params.razorpayPaymentId)) return 'duplicate_payment';
     const owed = order.balanceDuePaise ?? 0;
     const expected = order.balanceLink?.id === params.linkId ? order.balanceLink.amountPaise : undefined;
-    const mismatch = params.currency.toUpperCase() !== order.currency || expected === undefined || params.amountPaise !== expected || params.amountPaise > owed;
+    // Money on a cancelled or refunded order is still recorded, so finance sees it and refunds it.
+    const closed = !COLLECTABLE.includes(order.status);
+    const mismatch = closed || params.currency.toUpperCase() !== order.currency || expected === undefined || params.amountPaise !== expected || params.amountPaise > owed;
     const entry: OrderPaymentEntry = {
       id: params.razorpayPaymentId, kind: 'balance', amountPaise: params.amountPaise, mode: 'razorpay',
       reference: params.razorpayPaymentId, at: now, by: 'razorpay',
@@ -168,7 +170,7 @@ export async function recordBalanceLinkPayment(
       payments: arrayUnion(entry),
       balanceDuePaise: Math.max(0, owed - params.amountPaise),
       ...(order.balanceLink?.id === params.linkId ? { balanceLink: null } : {}),
-      ...(mismatch ? { flags: arrayUnion('BALANCE_PAYMENT_MISMATCH') } : {}),
+      ...(mismatch ? { flags: arrayUnion(...(closed ? ['BALANCE_PAYMENT_MISMATCH', 'PAYMENT_FOR_CLOSED_ORDER'] : ['BALANCE_PAYMENT_MISMATCH'])) } : {}),
       updatedAt: now,
     });
     auditInTransaction(store, tx, buildAuditEntry({
@@ -179,7 +181,8 @@ export async function recordBalanceLinkPayment(
   });
 }
 
-async function cancelQuietly(links: PaymentLinkGateway | null, link: PaymentLinkRecord, orderId: string) {
+/** Stops a balance link from taking money; failures are logged (a payment on it is still recorded and flagged). */
+export async function cancelQuietly(links: PaymentLinkGateway | null, link: PaymentLinkRecord, orderId: string) {
   if (!links) return;
   try {
     await links.cancelPaymentLink(link.id);

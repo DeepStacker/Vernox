@@ -12,7 +12,7 @@ import { sendError } from './_lib/errors';
 import { getAdminAuth, getStore } from './_lib/firebaseAdmin';
 import { assertMethod, clientIp, parseBody } from './_lib/http';
 import { loadCustomerOrder, optionalEmailSchema, orderIdSchema } from './_lib/orderAccess';
-import { createRazorpayRefundGateway } from './_lib/razorpay';
+import { createRazorpayPaymentLinkGateway, createRazorpayRefundGateway } from './_lib/razorpay';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
 import { withStoredIntegrations } from './_lib/withIntegrations';
 
@@ -32,6 +32,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     const order = await loadCustomerOrder(store, body.orderId, body.email, user);
 
     const result = await cancelOrder(store, order.paymentMethod === 'prepaid' ? createRazorpayRefundGateway() : null, {
+      paymentLinks: createRazorpayPaymentLinkGateway(),
       orderId: order.id,
       reason: body.reason || 'Cancelled by customer',
       initiatedBy: 'customer',

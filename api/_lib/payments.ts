@@ -296,6 +296,17 @@ export function collectedPaise(order: OrderDoc): number {
   return order.razorpayPaymentId || order.offlinePayment ? order.amounts.totalPaise - (order.balanceDuePaise ?? 0) : 0;
 }
 
+/**
+ * What Razorpay holds on `razorpayPaymentId`, the only payment an automatic refund can go back to: the advance when
+ * an advance link was paid, otherwise the whole order. Money taken in person or through a balance link is refunded
+ * manually.
+ */
+export function razorpayCapturedPaise(order: OrderDoc): number {
+  if (!order.razorpayPaymentId || order.paymentMethod !== 'prepaid') return 0;
+  const entry = (order.payments ?? []).find(p => p.id === order.razorpayPaymentId);
+  return entry ? entry.amountPaise : order.advancePaise ?? order.amounts.totalPaise;
+}
+
 export type RecordRefundOutcome = 'recorded' | 'duplicate';
 
 /**

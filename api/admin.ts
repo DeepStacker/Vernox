@@ -683,6 +683,7 @@ const ACTIONS: Record<string, ActionDefinition> = {
       const order = asOrder(await ctx.store.get(orderPath(p.orderId)));
       const gateway = p.refund && order?.paymentMethod === 'prepaid' ? createRazorpayRefundGateway() : null;
       const result = await cancelOrder(ctx.store, gateway, {
+        paymentLinks: createRazorpayPaymentLinkGateway(),
         orderId: p.orderId,
         reason: p.reason,
         initiatedBy: 'staff',

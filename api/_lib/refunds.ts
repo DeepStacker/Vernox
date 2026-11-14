@@ -17,7 +17,7 @@
 import { auditInTransaction, buildAuditEntry } from './audit';
 import { ApiError } from './errors';
 import { asOrder, orderPath, type OrderDoc } from './orders';
-import { collectedPaise, recordRefund } from './payments';
+import { collectedPaise, razorpayCapturedPaise, recordRefund } from './payments';
 import type { RefundGateway } from './razorpay';
 import { refundPath, type RefundDoc, type RefundMethod } from './refundRecords';
 import { increment, type DocStore } from './store';
@@ -42,6 +42,12 @@ export function refundCeilingPaise(order: OrderDoc): number {
   return Math.max(0, collectedPaise(order) - (order.refundedPaise ?? 0) - (order.refundPendingPaise ?? 0));
 }
 
+/** Largest automatic (Razorpay) refund: the refundable balance, but never more than that payment captured. */
+export function onlineRefundCeilingPaise(order: OrderDoc): number {
+  const online = razorpayCapturedPaise(order) - (order.refundedPaise ?? 0) - (order.refundPendingPaise ?? 0);
+  return Math.max(0, Math.min(refundCeilingPaise(order), online));
+}
+
 export async function createRefund(store: DocStore, gateway: RefundGateway | null, params: CreateRefundParams): Promise<RefundDoc> {
   const now = params.now ?? Date.now();
   const id = params.idempotencyKey ? `rf_${params.idempotencyKey}` : store.newId('refunds');
@@ -51,6 +57,10 @@ export async function createRefund(store: DocStore, gateway: RefundGateway | nul
     if (existing) {
       if (existing.orderId !== params.orderId || existing.amountPaise !== params.amountPaise) {
         throw new ApiError(409, 'CONFLICT', 'This idempotency key was already used for a different refund.');
+      }
+      // A retry of a failed attempt must not read as success: nothing was refunded and nothing is pending.
+      if (existing.status === 'failed') {
+        throw new ApiError(409, 'CONFLICT', `The earlier attempt failed${existing.error ? ` (${existing.error.slice(0, 120)})` : ''}. Start a new refund to try again.`);
       }
       return { refund: existing, created: false, order: null };
     }
@@ -65,6 +75,10 @@ export async function createRefund(store: DocStore, gateway: RefundGateway | nul
     const ceiling = refundCeilingPaise(order);
     if (params.amountPaise <= 0 || params.amountPaise > ceiling) {
       throw new ApiError(409, 'CONFLICT', `Refund amount exceeds the refundable balance of ₹${(ceiling / 100).toFixed(2)}.`);
+    }
+    const online = onlineRefundCeilingPaise(order);
+    if (params.method === 'razorpay' && params.amountPaise > online) {
+      throw new ApiError(409, 'CONFLICT', `Razorpay can refund at most ₹${(online / 100).toFixed(2)} on this order's online payment; refund the rest manually (it was paid in person or by a balance link).`);
     }
     const refund: RefundDoc = {
       id,
@@ -84,7 +98,12 @@ export async function createRefund(store: DocStore, gateway: RefundGateway | nul
       creditNoteNumber: null,
     };
     tx.create(refundPath(id), refund as unknown as Record<string, unknown>);
-    tx.update(orderPath(order.id), { refundPendingPaise: increment(params.amountPaise), updatedAt: now });
+    tx.update(orderPath(order.id), {
+      refundPendingPaise: increment(params.amountPaise),
+      // A manual refund pays back what cancellation left for finance (REFUND_MANUAL_DUE).
+      ...(params.method === 'manual' && order.manualRefundDuePaise ? { manualRefundDuePaise: Math.max(0, order.manualRefundDuePaise - params.amountPaise) } : {}),
+      updatedAt: now,
+    });
     auditInTransaction(
       store,
       tx,

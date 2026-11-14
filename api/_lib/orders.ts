@@ -148,6 +148,8 @@ export interface OrderDoc {
   refundedPaise: number;
   /** Refunds requested from the provider but not yet processed (counted against the refund ceiling). */
   refundPendingPaise?: number;
+  /** Set on cancellation when money taken in person or by a balance link must be paid back manually (REFUND_MANUAL_DUE). */
+  manualRefundDuePaise?: number;
   paymentMethod: PaymentMethod;
   /** Normalised 10-digit mobile number, for COD abuse limits. */
   phoneKey: string;
