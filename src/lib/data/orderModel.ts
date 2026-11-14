@@ -96,6 +96,19 @@ export function normalizeOrder(id: string, raw: Raw): Order {
     adminNotes: raw.notes ?? raw.adminNotes,
     statusHistory: history,
     ops: normalizeOps(raw),
+    ...(raw.offlinePayment && typeof raw.offlinePayment === 'object'
+      ? { offlinePayment: { mode: raw.offlinePayment.mode, reference: String(raw.offlinePayment.reference ?? '') } }
+      : {}),
+    ...(typeof raw.balanceDuePaise === 'number' ? { balanceDuePaise: raw.balanceDuePaise } : {}),
+    ...(Array.isArray(raw.payments)
+      ? {
+          payments: raw.payments.map((p: Raw) => ({
+            id: String(p.id ?? ''), kind: p.kind === 'balance' ? 'balance' as const : 'advance' as const, amountPaise: paise(p.amountPaise),
+            mode: String(p.mode ?? ''), reference: String(p.reference ?? ''), at: toMillis(p.at),
+          })),
+        }
+      : {}),
+    ...(raw.source && typeof raw.source === 'object' && raw.source.channel ? { channel: raw.source.channel } : {}),
   };
 }
 

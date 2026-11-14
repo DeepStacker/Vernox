@@ -24,6 +24,8 @@ export function collectedPaise(order: Order): number {
   if (!ops) return 0;
   if (ops.paymentMethod === 'cod') return ops.codCollectedPaise;
   if (ops.paymentMethod === 'replacement') return 0;
+  // Staff orders paid in person are collected in full (mirrors api/_lib/payments.ts).
+  if (order.offlinePayment) return totalPaise(order);
   return ops.razorpayPaymentId ? totalPaise(order) : 0;
 }
 
@@ -35,7 +37,7 @@ export function refundCeilingPaise(order: Order): number {
 
 export type PaymentState = 'prepaid_captured' | 'prepaid_unpaid' | 'cod_collected' | 'cod_pending' | 'replacement';
 
-const NOT_PAYABLE: readonly string[] = ['Cancelled', 'Expired', 'Payment_Failed', 'RTO_Delivered', 'Refunded'];
+export const NOT_PAYABLE: readonly string[] = ['Cancelled', 'Expired', 'Payment_Failed', 'RTO_Delivered', 'Refunded'];
 
 export function paymentState(order: Order): PaymentState {
   const method = order.ops?.paymentMethod ?? 'prepaid';

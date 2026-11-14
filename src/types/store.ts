@@ -115,6 +115,7 @@ export interface StoreConfig {
 }
 
 import type { ConsultationSettings } from './consultation';
+import type { OfflinePaymentMode, StaffOrderChannel } from './staffOrders';
 import type { SellerSettings } from './settings';
 export type { SellerSettings, StoreSettingsDoc } from './settings';
 
@@ -186,6 +187,13 @@ export interface Order {
   hold?: OrderHold | null;
   /** Staff-only money, payment and shipment fields; present when the document carries them (orderOps.ts). */
   ops?: OrderOps;
+  /** Payment taken in person on a staff-entered order (api/_lib/orders.ts OfflinePayment); `reference` is '' for cash. */
+  offlinePayment?: { mode: OfflinePaymentMode; reference: string };
+  /** Partial payments (OrderDoc.balanceDuePaise / payments): amount still owed (absent or 0 = fully paid) and the payments taken. */
+  balanceDuePaise?: number;
+  payments?: Array<{ id: string; kind: 'advance' | 'balance'; amountPaise: number; mode: string; reference: string; at: number }>;
+  /** Channel of a staff-entered order; absent for storefront checkouts. */
+  channel?: StaffOrderChannel;
 }
 
 /** Server response for GET /api/order-status (public, no PII beyond the caller's own email). */
