@@ -26,12 +26,14 @@ import seoHandler from '../api/seo';
 import runtimeConfigHandler from '../api/runtime-config';
 import catalogHandler from '../api/catalog';
 import whatsappWebhookHandler from '../api/whatsapp-webhook';
+import cspReportHandler from '../api/csp-report';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown;
 const ROUTES: Record<string, Handler> = {
   '/api/checkout-intent': checkoutIntentHandler,
+  '/api/csp-report': cspReportHandler,
   '/api/verify-payment': verifyPaymentHandler,
   '/api/validate-coupon': validateCouponHandler,
   '/api/order-status': orderStatusHandler,
@@ -72,10 +74,29 @@ export function setSecurityHeaders(res: http.ServerResponse) {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  // Only directives that cannot break Razorpay Checkout or Google sign-in pop-ups. A script/connect allow-list
-  // needs a browser pass against live payments first (ROADMAP, production readiness).
+  // Enforced: only directives that cannot break Razorpay Checkout or Google sign-in pop-ups.
   res.setHeader('Content-Security-Policy', "frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
+  // The full allow-list is report-only until a browser pass with live test payments shows no violations
+  // (/api/csp-report logs them); then it moves into the enforced header (ROADMAP, production readiness).
+  res.setHeader('Content-Security-Policy-Report-Only', CSP_REPORT_ONLY);
 }
+
+export const CSP_REPORT_ONLY = [
+  "default-src 'self'",
+  "script-src 'self' https://checkout.razorpay.com https://cdn.razorpay.com https://apis.google.com https://www.gstatic.com",
+  // Inline styles: chart theming (src/components/ui/chart.tsx), motion and Razorpay Checkout set style attributes.
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.razorpay.com",
+  "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://*.firebaseapp.com https://accounts.google.com",
+  "worker-src 'self' blob:",
+  "form-action 'self' https://api.razorpay.com",
+  "frame-ancestors 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  'report-uri /api/csp-report',
+].join('; ');
 
 function setSecurityAndCorsHeaders(req: http.IncomingMessage, res: http.ServerResponse) {
   const origin = (req.headers.origin as string) || '';

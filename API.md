@@ -122,6 +122,11 @@ open or waiting ticket (`waiting` reopens to `open`); media is stored as "[photo
 downloaded. Other types (reactions, buttons) are acknowledged. `200`: `{ "received": true, "messages": <count> }`. Missing
 `WHATSAPP_VERIFY_TOKEN` / `WHATSAPP_APP_SECRET`: 500 CONFIG_ERROR.
 
+## `POST /api/csp-report`
+
+Content-Security-Policy-Report-Only violation reports (`application/csp-report` or Reporting API JSON). Always 204; nothing is
+stored, each directive and blocked origin is logged once an hour (SECURITY.md).
+
 ## `GET /api/cron/release-reservations`
 
 Vercel Cron, every 5 minutes (`vercel.json`). Requires `Authorization: Bearer $CRON_SECRET`. Expires up to 200 overdue

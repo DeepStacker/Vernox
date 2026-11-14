@@ -37,6 +37,7 @@ describe('production server', () => {
     expect(res.headers.get('cache-control')).toBe('no-cache');
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(res.headers.get('content-security-policy')).toBe("frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
+    expect(res.headers.get('content-security-policy-report-only')).toContain('report-uri /api/csp-report');
   });
 
   it('serves hashed assets as immutable for a year and other files for an hour', async () => {

@@ -342,8 +342,9 @@ phase1-foundation with tests. Highlights:
   firebase-admin 14 (image on Node 24: Node 20 reached end of life in April 2026; `engines` is now >=22) and React Router 7 took them
   to 8. Left: zod 3 → 4 (memory exhaustion on oversized constrained collections; request bodies are capped at 1 MB) and the firebase
   web SDK (gRPC advisories; gRPC is not used in the browser), each a separate change with a full test pass.
-- Content-Security-Policy: pages send `frame-ancestors 'self'; base-uri 'self'; object-src 'none'`. A script/connect/frame allow-list
-  (Razorpay Checkout, Google sign-in, Firebase) needs a browser pass with live test payments before it is enforced.
+- Content-Security-Policy: pages enforce `frame-ancestors 'self'; base-uri 'self'; object-src 'none'` and send the full allow-list
+  (Razorpay, Google sign-in, Firebase) as report-only, with violations logged by `/api/csp-report` (SECURITY.md). Enforce it after a
+  browser pass with live test payments leaves no `[csp]` log lines.
 - Error alerts (api/_lib/opsAlert.ts) and backups (deploy/firebase-backups.sh, needs Blaze) are in place; see INCIDENT_RECOVERY.md.
 - One VM is a single point of failure, and the in-process crons assume one app container: run a second replica only with
   `DISABLE_INTERNAL_CRON=true` on all but one.

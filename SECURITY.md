@@ -113,11 +113,16 @@ Errors returned to clients never include provider responses or internal details;
 
 ## Content-Security-Policy origins
 
-The repository sets no CSP header yet. If one is added (Vercel `headers` in `vercel.json`), the storefront needs: scripts from
-`cdn.razorpay.com` (Affordability Widget on product and cart pages, loaded lazily; `checkout.razorpay.com` for Checkout), connections to
-`api.razorpay.com` and `lumberjack.razorpay.com`, frames from `api.razorpay.com` and `checkout.razorpay.com`, and images/styles the
-widget injects (verify against the current widget in a browser, Razorpay does not publish a CSP list). Fonts are self-hosted
-(`/fonts`), so no Google Fonts origins are needed. `img-src` needs `data:` for Studio previews.
+The Node server (`server/apiRouter.ts` `setSecurityHeaders`, every page and API response) enforces
+`frame-ancestors 'self'; base-uri 'self'; object-src 'none'` and sends the full allow-list as
+`Content-Security-Policy-Report-Only` (`CSP_REPORT_ONLY`). Browsers post violations to `POST /api/csp-report`, which logs each
+directive and blocked origin once an hour per process (`[csp] ...` in the app logs; origins only, no paths or query strings).
+The allow-list covers Razorpay (`checkout.razorpay.com`, `cdn.razorpay.com` for the Affordability Widget, `*.razorpay.com`
+connections, `api.razorpay.com` / `checkout.razorpay.com` frames), Firebase (`*.googleapis.com`, `*.firebaseio.com`, the
+`*.firebaseapp.com` sign-in frame) and Google sign-in (`apis.google.com`, `accounts.google.com`). Scripts are never inline;
+styles are (chart theming, motion, Razorpay). Fonts are self-hosted. To enforce it: open checkout with live test payments, a
+Google sign-in and the EMI widget, confirm the logs show no `[csp]` lines, then move `CSP_REPORT_ONLY` into the enforced header.
+The Vercel deployment (`vercel.json`) sets no page security headers; the Docker image is the production path.
 
 ## Known gaps
 

@@ -80,7 +80,7 @@ A missing required variable makes the affected endpoint return `CONFIG_ERROR` an
 
 The Razorpay key id also drives the EMI / pay-in-instalments message (Razorpay Affordability Widget) on product and cart pages: enable
 it in the Razorpay Dashboard (Affordability > Others > Enable Widget; Owner, Admin or Manager role). It loads `cdn.razorpay.com` lazily
-after the page is idle; unset key or a blocked script shows nothing. If you add a CSP, allow that origin (SECURITY.md, "Content-Security-Policy origins").
+after the page is idle; unset key or a blocked script shows nothing. It is in the CSP allow-list (SECURITY.md, "Content-Security-Policy origins").
 
 ## 3a. Provider setup (after the first start)
 1. Rules and indexes (`install.sh` and `update.sh --rules` run `firebase deploy --only firestore,storage`; the rules, indexes, and the storage rules for return, QC, review, catalogue, space and consultation photos) and configure TTL policies
