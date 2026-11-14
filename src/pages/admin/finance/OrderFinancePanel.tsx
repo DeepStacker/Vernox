@@ -57,6 +57,9 @@ export function OrderFinancePanel({ order }: { order: Order }) {
         <Row label="Collected" value={formatInr(collectedPaise(order))} />
         <Row label="Refunded" value={formatInr(order.ops?.refundedPaise ?? 0)} />
         <Row label="Refund in progress" value={formatInr(order.ops?.refundPendingPaise ?? 0)} />
+        {(order.ops?.manualRefundDuePaise ?? 0) > 0 && (
+          <Row label="To refund by hand (paid in person or by link)" value={formatInr(order.ops!.manualRefundDuePaise)} />
+        )}
         <div className="flex justify-between gap-3 border-t border-border pt-1 font-semibold"><dt>Refundable now</dt><dd className="font-mono">{formatInr(ceiling)}</dd></div>
         {order.ops?.razorpayPaymentId && <p className="pt-1 text-xs text-muted-foreground">Razorpay payment <span className="font-mono">{order.ops.razorpayPaymentId}</span></p>}
         {(order.ops?.flags.length ?? 0) > 0 && <p className="pt-1 text-xs text-destructive">Flags: {order.ops?.flags.join(', ')}</p>}

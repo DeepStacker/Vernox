@@ -40,6 +40,8 @@ export function OrderDetails({ order, email }: Props) {
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['order-lookup'] });
     void queryClient.invalidateQueries({ queryKey: ['order-actions'] });
+    // The Account list (useMyOrders, ['orders', 'mine', uid]) shows the same order's status.
+    void queryClient.invalidateQueries({ queryKey: ['orders', 'mine'] });
   };
 
   const offPath = isOffPathStatus(order.status);

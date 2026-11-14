@@ -36,6 +36,8 @@ export interface OrderOps {
   refundedPaise: number;
   /** Requested from the provider but not yet confirmed by the refund webhook. */
   refundPendingPaise: number;
+  /** Money taken in person or by a balance link that cancellation left for a manual refund (REFUND_MANUAL_DUE). */
+  manualRefundDuePaise: number;
   refunds: OrderRefundEntry[];
   codCollectedPaise: number;
   codCollectedAt: number | null;

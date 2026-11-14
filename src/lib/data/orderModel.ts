@@ -135,6 +135,7 @@ function normalizeOps(raw: Raw): OrderOps {
     totalPaise: paise(a.totalPaise),
     refundedPaise: paise(raw.refundedPaise),
     refundPendingPaise: paise(raw.refundPendingPaise),
+    manualRefundDuePaise: paise(raw.manualRefundDuePaise),
     refunds: Array.isArray(raw.refunds)
       ? raw.refunds.map((r: Raw) => ({ refundId: String(r.refundId ?? ''), amountPaise: paise(r.amountPaise), at: toMillis(r.at) }))
       : [],

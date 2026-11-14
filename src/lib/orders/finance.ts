@@ -72,7 +72,10 @@ export function paymentTotals(orders: readonly Order[]): PaymentTotals {
 }
 
 /** Order flags that mean money needs a human look. */
-export const RECONCILIATION_FLAGS = ['AMOUNT_MISMATCH', 'DUPLICATE_PAYMENT', 'REFUND_NOT_STARTED', 'INVOICE_PENDING_SELLER_SETTINGS'] as const;
+export const RECONCILIATION_FLAGS = [
+  'AMOUNT_MISMATCH', 'DUPLICATE_PAYMENT', 'REFUND_NOT_STARTED', 'REFUND_MANUAL_DUE', 'BALANCE_PAYMENT_MISMATCH', 'PAYMENT_FOR_CLOSED_ORDER',
+  'INVOICE_PENDING_SELLER_SETTINGS',
+] as const;
 
 export interface Reconciliation {
   /** Prepaid orders past payment with no payment of any kind on record (no Razorpay id, in-person payment or instalment). */
@@ -83,6 +86,8 @@ export interface Reconciliation {
   refundsPending: Order[];
   /** Delivered COD orders with no cash recorded as collected. */
   codNotCollected: Order[];
+  /** Returns received back at the workshop: the refund is finance's next step (the order moves on when refunded). */
+  returnsAwaitingRefund: Order[];
 }
 
 export function reconcile(orders: readonly Order[]): Reconciliation {
@@ -92,6 +97,7 @@ export function reconcile(orders: readonly Order[]): Reconciliation {
     flagged: orders.filter(o => o.status === 'Payment_Discrepancy' || (o.ops?.flags ?? []).some(f => (RECONCILIATION_FLAGS as readonly string[]).includes(f))),
     refundsPending: orders.filter(o => (o.ops?.refundPendingPaise ?? 0) > 0),
     codNotCollected: orders.filter(o => o.ops?.paymentMethod === 'cod' && o.status === 'Delivered' && (o.ops.codCollectedPaise ?? 0) === 0),
+    returnsAwaitingRefund: orders.filter(o => o.status === 'Returned'),
   };
 }
 

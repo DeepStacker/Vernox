@@ -5,7 +5,7 @@ import type { Order } from '@/types/store';
 
 const ops: OrderOps = {
   paymentMethod: 'prepaid', razorpayPaymentId: null, paidAt: null, subtotalPaise: 100000, discountPaise: 10000, shippingPaise: 0, codFeePaise: 0,
-  taxPaise: 16200, totalPaise: 106200, refundedPaise: 0, refundPendingPaise: 0, refunds: [], codCollectedPaise: 0, codCollectedAt: null,
+  taxPaise: 16200, totalPaise: 106200, refundedPaise: 0, refundPendingPaise: 0, manualRefundDuePaise: 0, refunds: [], codCollectedPaise: 0, codCollectedAt: null,
   deliveredAt: null, invoiceNumber: null, flags: [], shipment: null, parentOrderId: null,
 };
 const config = {

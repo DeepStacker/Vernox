@@ -69,7 +69,7 @@ export function FinanceConsole() {
   const views: Array<{ id: View; label: string; count?: number }> = [
     { id: 'payments', label: 'Payments' },
     { id: 'refunds', label: 'Refunds', count: withRefunds.length },
-    { id: 'reconciliation', label: 'Reconciliation', count: recon.paidWithoutPaymentId.length + recon.flagged.length + recon.refundsPending.length + recon.codNotCollected.length },
+    { id: 'reconciliation', label: 'Reconciliation', count: recon.paidWithoutPaymentId.length + recon.flagged.length + recon.refundsPending.length + recon.codNotCollected.length + recon.returnsAwaitingRefund.length },
     ...(permissions?.canExportReports ? [{ id: 'export' as const, label: 'Export' }] : []),
   ];
 
@@ -93,6 +93,9 @@ export function FinanceConsole() {
     if (view === 'reconciliation') {
       return (
         <div className="space-y-5">
+          <AdminSection title="Returns received, refund due" count={recon.returnsAwaitingRefund.length}>
+            <OrderList orders={recon.returnsAwaitingRefund} selectedId={selectedId} onSelect={setSelectedId} empty="No returned orders are waiting for a refund" />
+          </AdminSection>
           <AdminSection title="Paid without a payment id" count={recon.paidWithoutPaymentId.length}>
             <OrderList orders={recon.paidWithoutPaymentId} selectedId={selectedId} onSelect={setSelectedId} empty="All prepaid orders have a payment id" />
           </AdminSection>
