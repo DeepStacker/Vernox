@@ -47,12 +47,13 @@ Two supported ways to run production. Both use Firebase (Auth, Firestore, Storag
 **Operations**
 - Logs: `docker compose --env-file .env.production logs -f app` (`sudo` if your user is not in the `docker` group).
 - Update: `./update.sh` (`git pull --ff-only`, rebuild, restart, wait for `/readyz`; Caddy holds requests for up to 15 s meanwhile). Without git: `./update.sh --tarball release.tgz`. Add `--rules` after a change to `firestore.rules`, `storage.rules` or `firestore.indexes.json`. Roll back with `git checkout <commit> && ./update.sh`.
-- **Backup**: the data lives in Firestore, not on the VM. Take managed exports to a Cloud Storage bucket (Firestore backup needs billing enabled):
-  ```bash
-  gcloud firestore export gs://<project>-backups/$(date +%F) --project <project>
-  gcloud firestore import gs://<project>-backups/<date> --project <project>   # restore
-  ```
-  or schedule daily backups: `gcloud firestore backups schedules create --database='(default)' --recurrence=daily --retention=14d`. Enable Storage object versioning too. **Back up `.env.production`** somewhere safe: it holds `SECRETS_ENCRYPTION_KEY`; without it the keys saved in the admin cannot be decrypted and must be entered again. See INCIDENT_RECOVERY.md.
+- **Backup**: the data lives in Firestore, not on the VM. Once the project is on the Blaze plan, run
+  `./deploy/firebase-backups.sh <project-id>` from a machine with the Firebase CLI: it turns on point-in-time recovery
+  (7 days) and daily managed backups kept 14 days, and is safe to re-run. Until then there are no backups. Enable
+  Storage object versioning too. **Back up `.env.production`** somewhere safe: it holds `SECRETS_ENCRYPTION_KEY`;
+  without it the keys saved in the admin cannot be decrypted and must be entered again. Restores: INCIDENT_RECOVERY.md.
+- **Error alerts**: unexpected server errors are e-mailed (throttled) to `ALERT_EMAIL`, else `ADMIN_EMAIL`, once the
+  Resend key and sender are set. Roll back a bad release with `git checkout <previous commit> && ./update.sh`.
 - Rotate `CRON_SECRET`: edit `.env.production`, then `docker compose --env-file .env.production up -d app`.
 - Never use `docker-compose.dev.yml` for production: it runs a Firestore emulator (DOCKER.md).
 
@@ -71,7 +72,7 @@ until then the store degrades instead of failing (manual shipping without Shipro
 no emails or SMS without Resend / MSG91).
 The authoritative list with comments is `.env.example`.
 - **Bootstrap (install time)**: `DOMAIN`, `ADMIN_EMAIL`, `FIREBASE_SERVICE_ACCOUNT_BASE64` (or `GOOGLE_APPLICATION_CREDENTIALS`), `FIREBASE_PROJECT_ID`, `FIREBASE_WEB_*` (public Firebase web config), `VITE_SITE_URL`, and the two generated secrets `SECRETS_ENCRYPTION_KEY` (32 bytes; encrypts keys stored in the database; do not lose it) and `CRON_SECRET`. Optional: `DISABLE_INTERNAL_CRON`, `FIREBASE_STORAGE_BUCKET`, the `STORE_*` defaults (GST, shipping, COD, lead times, return window, HSN).
-- **Entered in the app (Admin > Settings > Integrations), or as environment variables**: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, Shiprocket (`SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_PICKUP_LOCATION`, `SHIPROCKET_PICKUP_PINCODE`, `SHIPROCKET_WEBHOOK_TOKEN`), notifications (`RESEND_API_KEY`, `NOTIFY_FROM_EMAIL`, `MSG91_AUTH_KEY`, `MSG91_TEMPLATES`, `MSG91_OTP_TEMPLATE_ID`) and WhatsApp (`WHATSAPP_*`). A value in the real environment wins over one stored in the app.
+- **Entered in the app (Admin > Settings > Integrations), or as environment variables**: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, Shiprocket (`SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_PICKUP_LOCATION`, `SHIPROCKET_PICKUP_PINCODE`, `SHIPROCKET_WEBHOOK_TOKEN`), notifications (`RESEND_API_KEY`, `NOTIFY_FROM_EMAIL`, `ALERT_EMAIL`, `MSG91_AUTH_KEY`, `MSG91_TEMPLATES`, `MSG91_OTP_TEMPLATE_ID`) and WhatsApp (`WHATSAPP_*`). A value in the real environment wins over one stored in the app.
 Without Shiprocket the manual courier flow is used; without notification keys messages are skipped (logged), never failing an order.
 A missing required variable makes the affected endpoint return `CONFIG_ERROR` and logs which variable is missing.
 

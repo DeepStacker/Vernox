@@ -32,8 +32,13 @@ if [ -n "$TARBALL" ]; then
   tar -xzf "$TARBALL" --strip-components=1
 elif [ -d .git ]; then
   command -v git >/dev/null 2>&1 || die "git is required to update from a clone"
-  info "Pulling the latest code"
-  git pull --ff-only
+  if git symbolic-ref -q HEAD >/dev/null; then
+    info "Pulling the latest code"
+    git pull --ff-only
+  else
+    # A rollback (`git checkout <previous commit>`) leaves HEAD detached: rebuild that commit as it is.
+    info "Pinned to $(git rev-parse --short HEAD); rebuilding it without pulling (git switch main to follow updates again)"
+  fi
 else
   die "this folder is not a git clone: use ./update.sh --tarball <release.tgz>"
 fi
