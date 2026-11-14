@@ -54,7 +54,7 @@ const App = () => (
         <Sonner />
         <CatalogProvider>
           <CartProvider>
-            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <BrowserRouter>
               {/* Universal Scroll Reset on Every Navigation */}
               <ScrollToTop />
               <CartDrawer />
