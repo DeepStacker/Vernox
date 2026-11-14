@@ -19,6 +19,7 @@ import { formatInr } from '@/lib/orders/finance';
 import { CUSTOM_PIECE_LIMITS, DEFAULT_CUSTOM_FINISH_RATES } from '@/lib/pricing/customPiece';
 import { CUSTOM_PRODUCT_ID } from '@/types/products';
 import { useAuth } from '@/lib/auth/AuthProvider';
+import { PrintReceiptButton } from './PrintReceiptButton';
 import {
   OFFLINE_PAYMENT_MODES, OFFLINE_PAYMENT_MODE_LABELS, PAYMENT_LINK_TTL_HOURS, STAFF_ORDER_CHANNELS, STAFF_ORDER_CHANNEL_LABELS,
   type OfflinePaymentMode, type StaffOrderChannel, type StaffPaymentMethod,
@@ -175,6 +176,7 @@ function Created({ result, phone, onNext }: { result: StaffOrderCreated; phone: 
           <FileText className="h-4 w-4" /> {downloading ? 'Loading…' : `Tax invoice ${result.invoiceNumber} (PDF)`}
         </button>
       )}
+      <PrintReceiptButton orderId={result.orderId} />
       {link && (
         <div className="space-y-2 rounded-lg bg-muted/40 p-3 text-sm">
           <p>Razorpay has sent this payment link to the customer by SMS and email (when given). It expires {new Date(link.expiresAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}; the order confirms itself when paid.</p>

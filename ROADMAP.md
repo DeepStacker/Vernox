@@ -332,8 +332,11 @@ MSG91 and Meta WhatsApp delivery.
   support and admins): counter sale with handover and on-the-spot GST invoice, phone / WhatsApp / email / trade orders paid in person
   (cash, UPI, card, bank transfer), by Razorpay payment link, or COD. Custom (Studio) pieces can be added from the staff screen (width x height in mm, finish, quantity; server-priced; a
   typed design reference replaces the Studio design, shown on the job sheet; not handed over at the counter, no COD). Not built:
-  attaching a design file or Studio design from admin (no storage rule or design id exists for it), partial
-  or advance payments, and a thermal-printer receipt format (the A4 GST invoice is the receipt).
+  attaching a design file or Studio design from admin (no storage rule or design id exists for it).
+- Done: thermal receipt (80 mm, or 58 mm remembered per browser) printed with `window.print()` from the New order success screen and the
+  Finance order panel (`PrintReceiptButton`, mapping in `src/lib/orders/receipt.ts`). It shows seller GSTIN, "Tax invoice" or "Order
+  receipt", masked phone, lines, CGST/SGST or IGST (from the invoice when issued), payment mode and reference, and any balance due. No PDF
+  and no new dependency. Not verified on a physical printer.
 
 - Done: catalogue photo upload in the product form (`src/lib/data/productImages.ts`): resized in the browser to 2000 px WebP, stored at
   `products/{productId}/` (public read, catalogue staff write, storage.rules).

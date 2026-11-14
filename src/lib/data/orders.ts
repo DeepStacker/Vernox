@@ -8,7 +8,7 @@ import {
   useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData,
 } from '@tanstack/react-query';
 import {
-  collection, doc, getDocs, limit, orderBy, query, startAfter, updateDoc, where,
+  collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter, updateDoc, where,
   type DocumentData, type QueryDocumentSnapshot, type QueryConstraint,
 } from 'firebase/firestore';
 import { toast } from 'sonner';
@@ -47,6 +47,18 @@ export function useMyOrders(uid: string | undefined) {
 }
 
 // ---------------------------------------------------------------- staff reads
+
+/** One order by id for staff (e.g. printing a receipt right after the order is created). */
+export function useStaffOrder(orderId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['admin', 'order', orderId ?? ''] as const,
+    enabled: enabled && Boolean(orderId),
+    queryFn: async () => {
+      const snap = await getDoc(doc(db, 'orders', orderId as string));
+      return snap.exists() ? normalizeOrder(snap.id, snap.data()) : null;
+    },
+  });
+}
 
 export const adminOrdersKey = (status?: OrderStatus) => ['admin', 'orders', status ?? 'all'] as const;
 

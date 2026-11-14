@@ -7,6 +7,7 @@ import { downloadTaxDocument, opsApi, useOpsRunner, useOrderDocuments, type Refu
 import { collectedPaise, formatInr, paymentState, refundCeilingPaise, totalPaise } from '@/lib/orders/finance';
 import type { Order } from '@/types/store';
 import { Badge, StatusBadge, type BadgeTone } from '../shared/badges';
+import { PrintReceiptButton } from '../orders/PrintReceiptButton';
 import { RefundDialog } from './RefundDialog';
 
 const REFUND_TONE: Record<RefundView['status'], BadgeTone> = { processed: 'good', pending: 'warn', failed: 'bad' };
@@ -48,6 +49,7 @@ export function OrderFinancePanel({ order }: { order: Order }) {
         <h3 className="font-mono text-lg font-bold">{order.orderNumber ?? order.id}</h3>
         <StatusBadge status={order.status} />
         <Badge tone="info">{PAYMENT_LABEL[paymentState(order)]}</Badge>
+        <PrintReceiptButton order={order} />
       </header>
 
       <dl className="space-y-1 rounded-lg border border-border bg-card p-3 text-sm">
