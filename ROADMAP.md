@@ -304,8 +304,9 @@ the emulators (static caching, SPA fallback, product link previews, sitemap, COR
 server with runtime Firebase config; Integrations in the browser (super admin only, format errors, ••••last4, no plaintext in the page or
 the database, audit with names only, Check reaches Razorpay and reports a rejected key, the browser receives the key id at runtime,
 Launch setup turns Razorpay "set · test mode"). Not verified here: a full `./install.sh` on a fresh VM with a real domain and Firebase
-project (Let's Encrypt, rules deployment with the service account's roles), and `update.sh` against a running stack. Follow-up: a
-server-only dependency set would shrink the 1 GB image.
+project (Let's Encrypt, rules deployment with the service account's roles), and `update.sh` against a running stack. Done (2026-11-14):
+the image installs only the server's runtime packages (scripts/server-package.mjs reads the esbuild metafile: firebase-admin, pdf-lib,
+razorpay, zod), 1.03 GB → 335 MB; checked read-only with all capabilities dropped (healthz, SPA, runtime config, CSP, admin script).
 
 Firebase project (2026-11-07): the old `vernox-1b5d5` is not reachable from any account on hand, so production moves to `vernox-shop`
 (owner Google account svm.singh.01, `.firebaserc` default). Done from the CLI: web app "Vernox Web", Firestore `(default)` in
