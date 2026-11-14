@@ -319,7 +319,8 @@ providers, the production domain under Authorized domains, and a service-account
 - Dependencies: `npm audit fix` and moving `@vercel/node` (types only) to devDependencies took production advisories from 45 to 18.
   The rest need major upgrades, each a separate change with a full test pass: zod 3 → 4 (memory exhaustion on oversized constrained
   collections; bodies are capped at 1 MB), react-router 6 → 7 (open redirect via backslash paths; no navigation here uses a
-  user-supplied destination), firebase-admin 13 → 14 and the firebase web SDK (gRPC advisories; gRPC is not used in the browser).
+  user-supplied destination), and the firebase web SDK (gRPC advisories; gRPC is not used in the browser). Done 2026-11-14: firebase-admin 14 with the image on
+  Node 24 (Node 20 reached end of life in April 2026; `engines` is now >=22), 10 production advisories left.
 - Content-Security-Policy: pages send `frame-ancestors 'self'; base-uri 'self'; object-src 'none'`. A script/connect/frame allow-list
   (Razorpay Checkout, Google sign-in, Firebase) needs a browser pass with live test payments before it is enforced.
 - Error alerts (api/_lib/opsAlert.ts) and backups (deploy/firebase-backups.sh, needs Blaze) are in place; see INCIDENT_RECOVERY.md.

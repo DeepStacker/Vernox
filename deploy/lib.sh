@@ -4,7 +4,7 @@
 
 ENV_FILE="${ENV_FILE:-.env.production}"
 FIREBASE_TOOLS_VERSION="${FIREBASE_TOOLS_VERSION:-latest}"
-NODE_IMAGE="${NODE_IMAGE:-node:20-alpine}"
+NODE_IMAGE="${NODE_IMAGE:-node:24-alpine}"
 
 if [ -t 1 ]; then BOLD=$'\033[1m'; RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RESET=$'\033[0m'; else BOLD=''; RED=''; GREEN=''; YELLOW=''; RESET=''; fi
 info() { printf '%s==>%s %s\n' "$BOLD" "$RESET" "$*"; }

@@ -20,7 +20,7 @@ docker compose --env-file .env.production ps
 
 | Service | Image | Ports | Memory limit |
 | :--- | :--- | :--- | :--- |
-| `app` | built from `Dockerfile` (Node 20 alpine, non-root, read-only filesystem) | 3001, internal only | 640 MB (Node heap capped at 384 MB) |
+| `app` | built from `Dockerfile` (Node 24 alpine, non-root, read-only filesystem) | 3001, internal only | 640 MB (Node heap capped at 384 MB) |
 | `caddy` | `caddy:2-alpine` | 80, 443 (TCP and UDP) | 128 MB |
 
 The `app` process (`server/production.ts`) serves the SPA, the API, `/runtime-config.js`, `/healthz` and `/readyz`, and runs the two

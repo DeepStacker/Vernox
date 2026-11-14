@@ -4,7 +4,7 @@
 # on any domain. Built by docker-compose.yml; see DEPLOYMENT.md.
 
 # ---- build: SPA + bundled server ------------------------------------------------------------------------
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -17,21 +17,21 @@ ENV VERNOX_RUNTIME_CONFIG=true \
     VITE_SITE_URL=__VERNOX_SITE_URL__
 RUN npm run build \
  && npx esbuild server/production.ts scripts/grant-super-admin.ts \
-      --bundle --platform=node --format=esm --target=node20 --packages=external --entry-names=[name] --outdir=dist-server \
+      --bundle --platform=node --format=esm --target=node24 --packages=external --entry-names=[name] --outdir=dist-server \
       --metafile=dist-server/meta.json \
  && node scripts/server-package.mjs dist-server/meta.json \
  && rm dist-server/meta.json
 
 # ---- the server's runtime packages only (scripts/server-package.mjs) ---------------------------------------
 # The lockfile keeps the versions identical to the build; storefront-only packages are not installed.
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 COPY --from=build /app/dist-server/package.json ./package.json
 COPY package-lock.json ./
 RUN npm install --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
 
 # ---- runtime ---------------------------------------------------------------------------------------------------
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3001 \
