@@ -135,7 +135,7 @@ POST body / GET query: `{ "action": "...", ... }` → `200 { "success": true, ..
 | Action | Method | Permission | Params → result |
 |---|---|---|---|
 | `GET_AUDIT_LOGS` | GET | `audit.read` | `targetType?` → `{ logs }` (latest 100) |
-| `LOG_AUDIT` | POST | any staff | `eventAction, targetType, targetId?, details?` (stored with `source: 'client_reported'`) |
+| `LOG_AUDIT` | POST | per event | `eventAction, targetType, targetId?, details?` (stored with `source: 'client_reported'`). Only the changes the consoles write directly: `PRODUCT_SAVED`/`PRODUCT_DELETED`/`CATEGORY_SAVED`/`CATEGORY_DELETED` (`catalog.write`), `HOMEPAGE_UPDATED`/`STORE_CONFIG_UPDATED` (`settings.write`), `ORDER_UPDATED` (`orders.update_status`), `B2B_STATUS_UPDATED` (`b2b.read`); other events 400, other roles 403 |
 | `LIST_STAFF` | GET | `staff.read` | → `{ staff: StaffMember[] }` |
 | `SET_STAFF_ROLE` | POST | `staff.manage` | `email` or `uid`, `role: StaffRole \| null` → `{ staff }`; cannot change own role |
 | `ADD_ORDER_NOTE` | POST | `orders.read` | `orderId, note (1–500)` | `{ orderId, notes }` — appends `[YYYY-MM-DD HH:mm IST <email>] note` to `orders.notes` in a transaction and keeps the `#vernox:v1` block; every free-text staff note goes through it, so concurrent notes never overwrite each other. 400 when `notes` would exceed 20 000 characters |

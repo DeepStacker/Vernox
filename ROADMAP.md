@@ -331,8 +331,9 @@ phase1-foundation with tests. Highlights:
   message for staff with an unverified email; return to the page after sign-in; no dead-end palette, notification or CSV actions.
 - Verified in a browser on the emulators: empty checkout, password reset, sign-in return, staff order → In Design through the API
   (in_production notification queued), Track order by lower-case VX number.
-- Still open (low): read-only coupon view for finance/support (they hold `coupons.read`), `LOG_AUDIT` accepts any staff role and
-  catalogue/settings audits are client-reported, `CONFIG_ERROR` is shared by seller and integration problems.
+- Done after the audit: read-only Discounts for finance and support (redemptions load again), `LOG_AUDIT` accepts only the
+  known client-reported events from roles with the matching permission, missing seller details are `SELLER_DETAILS_MISSING`.
+  Still open (low): catalogue and settings changes are written by the browser and audited as `client_reported`, not by the API.
 
 ## Production readiness follow-ups (2026-11-14)
 

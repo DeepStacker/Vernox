@@ -86,3 +86,16 @@ describe('SET_ORDER_TRACKING and UPDATE_ORDER_STATUS (the only ways staff change
     expect((await call('production', { action: 'UPDATE_ORDER_STATUS', orderId, status: 'Packed' })).status).toBe(409);
   });
 });
+
+describe('LOG_AUDIT (changes the consoles write directly)', () => {
+  beforeEach(() => { store = seededStore(); });
+
+  it('records known events from roles that could make the change, and nothing else', async () => {
+    const ok = await call('catalog_manager', { action: 'LOG_AUDIT', eventAction: 'PRODUCT_SAVED', targetType: 'product', targetId: 'p-01' });
+    expect(ok.status).toBe(200);
+    expect(store.collection('audit_logs').some(a => a.data.action === 'PRODUCT_SAVED' && a.data.source === 'client_reported')).toBe(true);
+    expect((await call('designer', { action: 'LOG_AUDIT', eventAction: 'PRODUCT_SAVED', targetType: 'product' })).status).toBe(403);
+    expect((await call('admin', { action: 'LOG_AUDIT', eventAction: 'ROLE_GRANTED', targetType: 'staff' })).status).toBe(400);
+    expect((await call('admin', { action: 'LOG_AUDIT', eventAction: 'PRODUCT_SAVED', targetType: 'order' })).status).toBe(400);
+  });
+});

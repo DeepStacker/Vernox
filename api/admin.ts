@@ -114,6 +114,22 @@ const reviewSchema = z.object({
 
 const idSchema = (key: string) => z.object({ [key]: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/) });
 
+/**
+ * Changes the consoles write straight to Firestore and then report (LOG_AUDIT, stored as `client_reported`), with
+ * the permission the reporting role must hold. Everything else is audited by the API itself.
+ */
+const CLIENT_AUDIT_EVENTS = {
+  PRODUCT_SAVED: { targetType: 'product', permission: 'catalog.write' },
+  PRODUCT_DELETED: { targetType: 'product', permission: 'catalog.write' },
+  CATEGORY_SAVED: { targetType: 'category', permission: 'catalog.write' },
+  CATEGORY_DELETED: { targetType: 'category', permission: 'catalog.write' },
+  HOMEPAGE_UPDATED: { targetType: 'settings', permission: 'settings.write' },
+  STORE_CONFIG_UPDATED: { targetType: 'settings', permission: 'settings.write' },
+  ORDER_UPDATED: { targetType: 'order', permission: 'orders.update_status' },
+  B2B_STATUS_UPDATED: { targetType: 'customer', permission: 'b2b.read' },
+} as const satisfies Record<string, { targetType: string; permission: Permission }>;
+type ClientAuditEvent = keyof typeof CLIENT_AUDIT_EVENTS;
+
 const orderIdField = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
 /** Links shown to customers and staff as <a href>: http(s) only, so a `javascript:` URL can never be stored. */
 const webUrlField = z.string().trim().url().max(500).refine(v => /^https?:\/\//i.test(v), 'must start with https:// or http://');
@@ -159,17 +175,21 @@ const ACTIONS: Record<string, ActionDefinition> = {
 
   LOG_AUDIT: {
     method: 'POST',
-    permission: null,
+    permission: null, // checked per event below
     async run(ctx) {
       const p = parse(
         z.object({
-          eventAction: z.string().trim().min(1).max(80),
+          eventAction: z.enum(Object.keys(CLIENT_AUDIT_EVENTS) as [ClientAuditEvent, ...ClientAuditEvent[]]),
           targetType: z.enum(['coupon', 'order', 'product', 'category', 'customer', 'settings', 'auth', 'admin', 'staff', 'review', 'inventory', 'config']),
           targetId: z.string().trim().max(128).default('global'),
           details: z.record(z.unknown()).optional(),
         }),
         ctx.params,
       );
+      const rule = CLIENT_AUDIT_EVENTS[p.eventAction as ClientAuditEvent];
+      if (p.targetType !== rule.targetType) throw badRequest(`${p.eventAction} is recorded against ${rule.targetType}.`);
+      // Only someone who could have made the change may report it, so the log cannot be filled with invented events.
+      if (!roleHasPermission(ctx.actor.role, rule.permission)) throw new ApiError(403, 'FORBIDDEN', 'Your role cannot report this change.');
       const details = p.details && JSON.stringify(p.details).length <= 10_000 ? p.details : {};
       await recordAudit(ctx.store, { ...audit(ctx, p.eventAction, p.targetType, p.targetId, details), source: 'client_reported' });
       return {};
