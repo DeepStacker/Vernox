@@ -4,7 +4,7 @@ import type { Order } from '@/types/store';
 import type { OrderStatus } from '../orderStateMachine';
 import {
   buildCodCsv, buildOrdersCsv, buildRefundsCsv, collectedPaise, csvCell, gstSplit, istRange, parseRupeesToPaise, paymentTotals, reconcile,
-  refundAmountError, refundCeilingPaise,
+  refundAmountError, refundCeilingPaise, paymentState, parseReportAmountPaise,
 } from '../finance';
 
 const baseOps: OrderOps = {
@@ -126,5 +126,42 @@ describe('CSV export', () => {
     expect(r && new Date(r.to).toISOString()).toBe('2026-11-05T18:29:59.999Z');
     expect(istRange('2026-11-06', '2026-11-05')).toBeNull();
     expect(istRange('x', '2026-11-05')).toBeNull();
+  });
+});
+
+describe('advance-paid and in-person orders', () => {
+  const counter = (id: string, extra: Partial<Order> = {}) =>
+    order(id, 'Packed', { razorpayPaymentId: null }, { offlinePayment: { mode: 'cash', reference: '' }, ...extra });
+
+  it('collects the total less the balance still owed, which caps the refund ceiling', () => {
+    const advance = counter('a', { balanceDuePaise: 8000 });
+    expect(collectedPaise(advance)).toBe(3800);
+    expect(refundCeilingPaise(advance)).toBe(3800);
+    expect(collectedPaise(order('b', 'Paid', {}, { balanceDuePaise: 2000 }))).toBe(9800);
+  });
+
+  it('treats an in-person payment as captured, and an advance with a balance as partial', () => {
+    expect(paymentState(counter('a'))).toBe('prepaid_captured');
+    expect(paymentState(counter('b', { balanceDuePaise: 5000 }))).toBe('prepaid_partial');
+    expect(paymentState(order('c', 'Paid', { razorpayPaymentId: null }, { payments: [{ id: 'p', kind: 'advance', amountPaise: 1, mode: 'upi', reference: 'r', at: 1 }] }))).toBe('prepaid_captured');
+    expect(paymentState(order('d', 'Packed', { razorpayPaymentId: null }))).toBe('prepaid_unpaid');
+  });
+
+  it('counts counter orders in prepaid totals and keeps them out of the paid-without-id list', () => {
+    const orders = [counter('a'), counter('b', { balanceDuePaise: 5000 }), order('c', 'Packed', { razorpayPaymentId: null })];
+    expect(paymentTotals(orders).prepaidCapturedPaise).toBe(11800 + 6800);
+    expect(reconcile(orders).paidWithoutPaymentId.map(o => o.id)).toEqual(['c']);
+  });
+});
+
+describe('report amount cells', () => {
+  it('reads empty as 0, strips commas and the rupee sign, and rejects text', () => {
+    expect(parseReportAmountPaise('')).toBe(0);
+    expect(parseReportAmountPaise('₹1,000.50')).toBe(100050);
+    expect(parseReportAmountPaise('n/a')).toBeNull();
+  });
+
+  it('rejects a third decimal instead of rounding it', () => {
+    expect(parseRupeesToPaise('1.005')).toBeNull();
   });
 });

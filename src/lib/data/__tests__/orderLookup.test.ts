@@ -38,6 +38,23 @@ describe('customer order summary', () => {
     expect(Object.keys(summary).sort()).toEqual(Object.keys(parsePublicOrder(apiOrder)).sort());
   });
 
+  it('does not offer cancel on a service order, like the server', () => {
+    const order = normalizeOrder('o5', { status: 'Paid', kind: 'service', email: 'a@b.in', placedAt: 5, pricing: { total: 1 } });
+    expect(toPublicSummary(order).canCancel).toBe(false);
+  });
+
+  it('keeps the advance, open balance link, payment recorder and status notes for staff views', () => {
+    const order = normalizeOrder('o6', {
+      status: 'Paid', email: 'a@b.in', placedAt: 5, pricing: { total: 100 }, advancePaise: 4000, balanceDuePaise: 6000,
+      balanceLink: { id: 'pl_1', url: 'https://rzp.io/x', expiresAt: 99, amountPaise: 6000 },
+      payments: [{ id: 'adv_1', kind: 'advance', amountPaise: 4000, mode: 'cash', reference: '', at: 1, by: 'staff@vernox.in' }],
+      statusHistory: [{ status: 'Paid', at: 1, by: 'staff@vernox.in', note: 'advance paid by cash' }],
+    });
+    expect(order).toMatchObject({ advancePaise: 4000, balanceLink: { url: 'https://rzp.io/x', expiresAt: 99, amountPaise: 6000 } });
+    expect(order.payments?.[0].by).toBe('staff@vernox.in');
+    expect(order.statusHistory[0].note).toBe('advance paid by cash');
+  });
+
   it('computes the return deadline from delivery only when the window is supplied', () => {
     const order = normalizeOrder('o4', { status: 'Delivered', email: 'a@b.in', placedAt: 5, deliveredAt: 1_000_000, pricing: { total: 1 } });
     expect(toPublicSummary(order, 7).returnEligibleUntil).toBe(1_000_000 + 7 * 24 * 3600_000);

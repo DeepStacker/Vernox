@@ -58,7 +58,7 @@ export function normalizeOrder(id: string, raw: Raw): Order {
   const items = Array.isArray(raw.items) ? raw.items.map(normalizeItem) : [];
   const total = Number(pricing.total ?? raw.total) || 0;
   const history: StatusHistoryEntry[] = Array.isArray(raw.statusHistory)
-    ? raw.statusHistory.map((h: Raw) => ({ status: normalizeOrderStatus(h.status), at: toMillis(h.at), by: String(h.by ?? 'system') }))
+    ? raw.statusHistory.map((h: Raw) => ({ status: normalizeOrderStatus(h.status), at: toMillis(h.at), by: String(h.by ?? 'system'), ...(typeof h.note === 'string' && h.note ? { note: h.note } : {}) }))
     : [];
 
   return {
@@ -100,11 +100,15 @@ export function normalizeOrder(id: string, raw: Raw): Order {
       ? { offlinePayment: { mode: raw.offlinePayment.mode, reference: String(raw.offlinePayment.reference ?? '') } }
       : {}),
     ...(typeof raw.balanceDuePaise === 'number' ? { balanceDuePaise: raw.balanceDuePaise } : {}),
+    ...(typeof raw.advancePaise === 'number' ? { advancePaise: raw.advancePaise } : {}),
+    ...(raw.balanceLink && typeof raw.balanceLink === 'object' && typeof raw.balanceLink.url === 'string'
+      ? { balanceLink: { url: raw.balanceLink.url, expiresAt: toMillis(raw.balanceLink.expiresAt), amountPaise: paise(raw.balanceLink.amountPaise) } }
+      : {}),
     ...(Array.isArray(raw.payments)
       ? {
           payments: raw.payments.map((p: Raw) => ({
             id: String(p.id ?? ''), kind: p.kind === 'balance' ? 'balance' as const : 'advance' as const, amountPaise: paise(p.amountPaise),
-            mode: String(p.mode ?? ''), reference: String(p.reference ?? ''), at: toMillis(p.at),
+            mode: String(p.mode ?? ''), reference: String(p.reference ?? ''), at: toMillis(p.at), ...(typeof p.by === 'string' && p.by ? { by: p.by } : {}),
           })),
         }
       : {}),

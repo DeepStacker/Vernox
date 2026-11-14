@@ -149,12 +149,13 @@ export function serializeNotes({ text, data }: ParsedNotes): string {
   return body ? `${body}\n${block}` : block;
 }
 
-const stamp = (at: number) => new Date(at).toISOString().slice(0, 16).replace('T', ' ');
+/** Notes are read by Indian staff, so they are stamped in IST (and say so). */
+const stamp = (at: number) => new Date(at + 5.5 * 3600_000).toISOString().slice(0, 16).replace('T', ' ');
 
 /** Appends an attributed free-text note, keeping any structured block intact. */
 export function appendNote(raw: string | undefined, note: string, by: string, at: number): string {
   const parsed = parseNotes(raw);
-  const line = `[${stamp(at)} UTC ${by}] ${note.trim().replace(/\s*\n\s*/g, ' ')}`;
+  const line = `[${stamp(at)} IST ${by}] ${note.trim().replace(/\s*\n\s*/g, ' ')}`;
   return serializeNotes({ ...parsed, text: parsed.text ? `${parsed.text}\n${line}` : line });
 }
 

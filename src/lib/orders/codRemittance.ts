@@ -6,7 +6,7 @@
  */
 import { parseCsv } from '@/lib/csv/parseCsv';
 import type { Order } from '@/types/store';
-import { totalPaise } from './finance';
+import { parseReportAmountPaise, totalPaise } from './finance';
 
 export const MAX_REMITTANCE_ROWS = 20_000;
 
@@ -41,12 +41,9 @@ export class RemittanceFileError extends Error {}
 
 const normaliseHeader = (h: string) => h.trim().toLowerCase().replace(/[_.]+/g, ' ').replace(/\s+/g, ' ');
 const normaliseAwb = (awb: string) => awb.trim().toUpperCase();
-const toPaise = (raw: string) => {
-  const n = Number(raw.replace(/[₹,\s]/g, ''));
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
-};
 
-export function parseRemittanceCsv(text: string): { lines: RemittanceLine[]; truncated: boolean } {
+/** Rows with an amount that is not a number are left out of `lines` and described in `rowErrors`, never read as 0. */
+export function parseRemittanceCsv(text: string): { lines: RemittanceLine[]; truncated: boolean; rowErrors: string[] } {
   const csv = parseCsv(text, { maxRows: MAX_REMITTANCE_ROWS });
   const headers = csv.headers.map(normaliseHeader);
   const col: Partial<Record<Column, number>> = {};
@@ -58,10 +55,19 @@ export function parseRemittanceCsv(text: string): { lines: RemittanceLine[]; tru
     throw new RemittanceFileError('This does not look like a COD remittance report: it needs an AWB column and an amount column.');
   }
   const cell = (row: string[], c: Column) => (col[c] === undefined ? '' : row[col[c]!] ?? '');
-  const lines = csv.rows
-    .map(row => ({ awb: normaliseAwb(cell(row, 'awb')), amountPaise: toPaise(cell(row, 'amount')), utr: cell(row, 'utr').trim(), date: cell(row, 'date').trim() }))
-    .filter(l => l.awb);
-  return { lines, truncated: csv.truncated || csv.inputTruncated };
+  const lines: RemittanceLine[] = [];
+  const rowErrors: string[] = [];
+  csv.rows.forEach((row, index) => {
+    const awb = normaliseAwb(cell(row, 'awb'));
+    if (!awb) return;
+    const amountPaise = parseReportAmountPaise(cell(row, 'amount'));
+    if (amountPaise === null) {
+      rowErrors.push(`Row ${index + 2} (AWB ${awb}): the amount is not a number.`);
+      return;
+    }
+    lines.push({ awb, amountPaise, utr: cell(row, 'utr').trim(), date: cell(row, 'date').trim() });
+  });
+  return { lines, truncated: csv.truncated || csv.inputTruncated, rowErrors };
 }
 
 export function reconcileRemittance(lines: readonly RemittanceLine[], orders: readonly Order[], truncated = false): RemittanceReport {

@@ -6,7 +6,7 @@
  */
 import { parseCsv } from '@/lib/csv/parseCsv';
 import type { Order } from '@/types/store';
-import { collectedPaise } from './finance';
+import { collectedPaise, parseReportAmountPaise } from './finance';
 
 /** Settlement files hold one row per payment, refund or adjustment; a busy month is a few thousand rows. */
 export const MAX_SETTLEMENT_ROWS = 20_000;
@@ -60,11 +60,6 @@ export interface SettlementReport {
 
 export class SettlementFileError extends Error {}
 
-const rupeesToPaise = (raw: string) => {
-  const value = Number(raw.replace(/[₹,\s]/g, ''));
-  return Number.isFinite(value) ? Math.round(value * 100) : 0;
-};
-
 function columnIndex(headers: readonly string[]): Partial<Record<Column, number>> {
   const lower = headers.map(h => h.trim().toLowerCase());
   const out: Partial<Record<Column, number>> = {};
@@ -83,29 +78,30 @@ const lineType = (raw: string, id: string): SettlementLine['type'] => {
   return 'other';
 };
 
-export function parseSettlementCsv(text: string): { lines: SettlementLine[]; truncated: boolean } {
+/** Rows with an amount that is not a number are left out of `lines` and described in `rowErrors`, never read as 0. */
+export function parseSettlementCsv(text: string): { lines: SettlementLine[]; truncated: boolean; rowErrors: string[] } {
   const csv = parseCsv(text, { maxRows: MAX_SETTLEMENT_ROWS });
   const col = columnIndex(csv.headers);
   if (col.id === undefined || col.amount === undefined) {
     throw new SettlementFileError('This does not look like a Razorpay settlement report: it needs entity_id and amount columns.');
   }
   const cell = (row: string[], c: Column) => (col[c] === undefined ? '' : row[col[c]!] ?? '');
-  const lines = csv.rows
-    .map(row => {
-      const id = cell(row, 'id').trim();
-      const credit = rupeesToPaise(cell(row, 'amount'));
-      const debit = rupeesToPaise(cell(row, 'debit'));
-      return {
-        id,
-        type: lineType(cell(row, 'type'), id),
-        amountPaise: credit || debit,
-        feePaise: rupeesToPaise(cell(row, 'fee')),
-        taxPaise: rupeesToPaise(cell(row, 'tax')),
-        settlementId: cell(row, 'settlementId').trim(),
-      };
-    })
-    .filter(l => l.id);
-  return { lines, truncated: csv.truncated || csv.inputTruncated };
+  const lines: SettlementLine[] = [];
+  const rowErrors: string[] = [];
+  csv.rows.forEach((row, index) => {
+    const id = cell(row, 'id').trim();
+    if (!id) return;
+    const credit = parseReportAmountPaise(cell(row, 'amount'));
+    const debit = parseReportAmountPaise(cell(row, 'debit'));
+    const fee = parseReportAmountPaise(cell(row, 'fee'));
+    const tax = parseReportAmountPaise(cell(row, 'tax'));
+    if (credit === null || debit === null || fee === null || tax === null) {
+      rowErrors.push(`Row ${index + 2} (${id}): an amount is not a number.`);
+      return;
+    }
+    lines.push({ id, type: lineType(cell(row, 'type'), id), amountPaise: credit || debit, feePaise: fee, taxPaise: tax, settlementId: cell(row, 'settlementId').trim() });
+  });
+  return { lines, truncated: csv.truncated || csv.inputTruncated, rowErrors };
 }
 
 export function reconcileSettlement(lines: readonly SettlementLine[], orders: readonly Order[], truncated = false): SettlementReport {

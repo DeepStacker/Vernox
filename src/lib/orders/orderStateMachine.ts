@@ -21,9 +21,13 @@ import {
 
 export { ORDER_STATUSES, ORDER_TRANSITIONS, type OrderStatus };
 
-/** Current status for a stored value (legacy Designing/Finished mapped); unknown values read as Pending_Payment. */
+/**
+ * Current status for a stored value (legacy Designing/Finished mapped). A value this build does not know
+ * (a newer server, a corrupt document) reads as Payment_Discrepancy, "Payment Under Review": it is not
+ * counted as unpaid or as revenue, offers no payment actions, and lands in the finance review list for a human.
+ */
 export function normalizeOrderStatus(raw: unknown): OrderStatus {
-  return toOrderStatus(raw) ?? 'Pending_Payment';
+  return toOrderStatus(raw) ?? 'Payment_Discrepancy';
 }
 
 type PermissionKey = keyof RolePermissions;

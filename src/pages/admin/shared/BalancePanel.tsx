@@ -8,7 +8,7 @@ import { Copy, IndianRupee, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminAction } from '@/lib/data/adminApi';
 import { useOpsRunner } from '@/lib/data/orderOps';
-import { formatInr } from '@/lib/orders/finance';
+import { formatInr, parseRupeesToPaise } from '@/lib/orders/finance';
 import { OFFLINE_PAYMENT_MODES, OFFLINE_PAYMENT_MODE_LABELS, type OfflinePaymentMode } from '@/types/staffOrders';
 import type { Order } from '@/types/store';
 
@@ -24,13 +24,17 @@ export function BalancePanel({ order, canCollect }: { order: Order; canCollect: 
   const [reference, setReference] = useState('');
   const [rupees, setRupees] = useState('');
   const [idempotencyKey, setIdempotencyKey] = useState(newKey);
-  const [link, setLink] = useState<string | null>(null);
+  const [sentLink, setSentLink] = useState<string | null>(null);
   const owed = order.balanceDuePaise ?? 0;
+  // A link sent in this session shows at once; otherwise the open link stored on the order (until it expires).
+  const open = order.balanceLink && order.balanceLink.expiresAt > Date.now() ? order.balanceLink : null;
+  const link = sentLink ?? (owed > 0 ? open?.url ?? null : null);
   const payments = order.payments ?? [];
   if (owed <= 0 && payments.length === 0) return null;
 
-  const amountPaise = rupees ? Math.round(Number(rupees) * 100) : owed;
-  const problem = !Number.isFinite(amountPaise) || amountPaise < 1 ? 'Enter an amount in rupees.'
+  const parsed = rupees ? parseRupeesToPaise(rupees) : owed;
+  const amountPaise = parsed ?? 0;
+  const problem = parsed === null ? 'Enter an amount in rupees, with at most two decimals.'
     : amountPaise > owed ? `Only ${formatInr(owed)} is owed.`
       : mode !== 'cash' && !reference.trim() ? 'Enter the UPI, card or bank reference.' : null;
 
@@ -40,12 +44,12 @@ export function BalancePanel({ order, canCollect }: { order: Order; canCollect: 
     }));
     if (!result.ok) { toast.error(result.error); return; }
     toast.success(result.value.balanceDuePaise ? `Recorded. ${formatInr(result.value.balanceDuePaise)} still owed.` : 'Balance paid in full. The order can be dispatched.');
-    setRupees(''); setReference(''); setLink(null); setIdempotencyKey(newKey());
+    setRupees(''); setReference(''); setSentLink(null); setIdempotencyKey(newKey());
   };
   const sendLink = async () => {
     const result = await run(() => adminAction<{ link: { url: string } }>('SEND_BALANCE_LINK', { orderId: order.id }));
     if (!result.ok) { toast.error(result.error); return; }
-    setLink(result.value.link.url);
+    setSentLink(result.value.link.url);
     toast.success('Razorpay sent the balance link by SMS and email (when given).');
   };
 
@@ -60,7 +64,7 @@ export function BalancePanel({ order, canCollect }: { order: Order; canCollect: 
           {payments.map(p => (
             <li key={p.id}>
               {p.kind === 'advance' ? 'Advance' : 'Balance'} {formatInr(p.amountPaise)} · {p.mode === 'razorpay' ? 'Razorpay' : OFFLINE_PAYMENT_MODE_LABELS[p.mode as OfflinePaymentMode] ?? p.mode}
-              {p.reference ? ` (${p.reference})` : ''} · {new Date(p.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+              {p.reference ? ` (${p.reference})` : ''}{p.by ? ` · by ${p.by}` : ''} · {new Date(p.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
             </li>
           ))}
         </ul>
@@ -83,13 +87,14 @@ export function BalancePanel({ order, canCollect }: { order: Order; canCollect: 
           {problem && rupees !== '' && <p role="alert" className="text-xs text-destructive">{problem}</p>}
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={busy || Boolean(problem)} onClick={() => void record()} className="btn-primary min-h-11">
-              Record {formatInr(Number.isFinite(amountPaise) ? amountPaise : 0)} received
+              Record {formatInr(amountPaise)} received
             </button>
             <button type="button" disabled={busy} onClick={() => void sendLink()} className="btn-secondary min-h-11">Send payment link for {formatInr(owed)}</button>
           </div>
           {link && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="break-all font-mono text-xs">{link}</span>
+              {!sentLink && open && <span className="text-xs text-muted-foreground">open link, expires {new Date(open.expiresAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>}
               <button type="button" className="btn-secondary inline-flex min-h-11 items-center gap-1" onClick={() => void navigator.clipboard.writeText(link).then(() => toast.success('Link copied'))}>
                 <Copy className="h-4 w-4" /> Copy
               </button>

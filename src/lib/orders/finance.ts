@@ -18,15 +18,15 @@ export const formatInr = (paise: number): string =>
 /** Order total in paise: the server value, else the rupee display copy. */
 export const totalPaise = (order: Order): number => order.ops?.totalPaise || Math.round(order.total * 100);
 
-/** Money actually collected: the captured online payment, or the COD cash recorded on delivery. */
+/** Money actually collected: the captured online payment, or the COD cash recorded on delivery, less any balance still owed. */
 export function collectedPaise(order: Order): number {
   const ops = order.ops;
   if (!ops) return 0;
   if (ops.paymentMethod === 'cod') return ops.codCollectedPaise;
   if (ops.paymentMethod === 'replacement') return 0;
-  // Staff orders paid in person are collected in full (mirrors api/_lib/payments.ts).
-  if (order.offlinePayment) return totalPaise(order);
-  return ops.razorpayPaymentId ? totalPaise(order) : 0;
+  // Staff orders paid in person count as collected; an advance-paid order has collected the total less
+  // what is still owed (mirrors api/_lib/payments.ts).
+  return ops.razorpayPaymentId || order.offlinePayment ? totalPaise(order) - (order.balanceDuePaise ?? 0) : 0;
 }
 
 /** Largest refund the server will accept now: collected minus refunded minus refunds in flight. */
@@ -35,7 +35,7 @@ export function refundCeilingPaise(order: Order): number {
   return Math.max(0, collectedPaise(order) - (ops?.refundedPaise ?? 0) - (ops?.refundPendingPaise ?? 0));
 }
 
-export type PaymentState = 'prepaid_captured' | 'prepaid_unpaid' | 'cod_collected' | 'cod_pending' | 'replacement';
+export type PaymentState = 'prepaid_captured' | 'prepaid_partial' | 'prepaid_unpaid' | 'cod_collected' | 'cod_pending' | 'replacement';
 
 export const NOT_PAYABLE: readonly string[] = ['Cancelled', 'Expired', 'Payment_Failed', 'RTO_Delivered', 'Refunded'];
 
@@ -43,8 +43,13 @@ export function paymentState(order: Order): PaymentState {
   const method = order.ops?.paymentMethod ?? 'prepaid';
   if (method === 'replacement') return 'replacement';
   if (method === 'cod') return order.ops && order.ops.codCollectedPaise > 0 ? 'cod_collected' : 'cod_pending';
-  return order.ops?.razorpayPaymentId ? 'prepaid_captured' : 'prepaid_unpaid';
+  if (!hasPaymentOnRecord(order)) return 'prepaid_unpaid';
+  return (order.balanceDuePaise ?? 0) > 0 ? 'prepaid_partial' : 'prepaid_captured';
 }
+
+/** A Razorpay payment id, an in-person payment (staff orders) or a recorded instalment: money was taken some way. */
+const hasPaymentOnRecord = (order: Order): boolean =>
+  Boolean(order.ops?.razorpayPaymentId || order.offlinePayment || (order.payments?.length ?? 0) > 0);
 
 export interface PaymentTotals {
   prepaidCapturedPaise: number;
@@ -58,7 +63,7 @@ export function paymentTotals(orders: readonly Order[]): PaymentTotals {
   const t: PaymentTotals = { prepaidCapturedPaise: 0, codCollectedPaise: 0, codPendingPaise: 0, refundedPaise: 0 };
   for (const o of orders) {
     const state = paymentState(o);
-    if (state === 'prepaid_captured') t.prepaidCapturedPaise += totalPaise(o);
+    if (state === 'prepaid_captured' || state === 'prepaid_partial') t.prepaidCapturedPaise += collectedPaise(o);
     if (state === 'cod_collected') t.codCollectedPaise += collectedPaise(o);
     if (state === 'cod_pending' && !NOT_PAYABLE.includes(o.status) && o.status !== 'Pending_Payment') t.codPendingPaise += totalPaise(o);
     t.refundedPaise += o.ops?.refundedPaise ?? 0;
@@ -70,7 +75,7 @@ export function paymentTotals(orders: readonly Order[]): PaymentTotals {
 export const RECONCILIATION_FLAGS = ['AMOUNT_MISMATCH', 'DUPLICATE_PAYMENT', 'REFUND_NOT_STARTED', 'INVOICE_PENDING_SELLER_SETTINGS'] as const;
 
 export interface Reconciliation {
-  /** Prepaid orders past payment with no Razorpay payment id on record. */
+  /** Prepaid orders past payment with no payment of any kind on record (no Razorpay id, in-person payment or instalment). */
   paidWithoutPaymentId: Order[];
   /** Payment_Discrepancy orders and orders carrying a payment or refund flag. */
   flagged: Order[];
@@ -83,7 +88,7 @@ export interface Reconciliation {
 export function reconcile(orders: readonly Order[]): Reconciliation {
   const paidStatuses: readonly string[] = PAID_STATUSES;
   return {
-    paidWithoutPaymentId: orders.filter(o => (o.ops?.paymentMethod ?? 'prepaid') === 'prepaid' && paidStatuses.includes(o.status) && !o.ops?.razorpayPaymentId),
+    paidWithoutPaymentId: orders.filter(o => (o.ops?.paymentMethod ?? 'prepaid') === 'prepaid' && paidStatuses.includes(o.status) && !hasPaymentOnRecord(o)),
     flagged: orders.filter(o => o.status === 'Payment_Discrepancy' || (o.ops?.flags ?? []).some(f => (RECONCILIATION_FLAGS as readonly string[]).includes(f))),
     refundsPending: orders.filter(o => (o.ops?.refundPendingPaise ?? 0) > 0),
     codNotCollected: orders.filter(o => o.ops?.paymentMethod === 'cod' && o.status === 'Delivered' && (o.ops.codCollectedPaise ?? 0) === 0),
@@ -197,6 +202,17 @@ export function parseRupeesToPaise(input: string): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
   const paise = Math.round(Number(cleaned) * 100);
   return paise > 0 ? paise : null;
+}
+
+/**
+ * Amount cell of a gateway or courier report (rupees, may carry commas or a rupee sign) to paise: 0 for an
+ * empty cell, null when the text is not a number, so the caller can report the row instead of reading it as 0.
+ */
+export function parseReportAmountPaise(raw: string): number | null {
+  const cleaned = raw.replace(/[₹,\s]/g, '');
+  if (!cleaned) return 0;
+  const value = Number(cleaned);
+  return Number.isFinite(value) ? Math.round(value * 100) : null;
 }
 
 /** Why a refund amount cannot be submitted, or null when it is within the ceiling. The server re-checks. */

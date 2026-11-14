@@ -21,6 +21,7 @@ type View = 'payments' | 'refunds' | 'reconciliation' | 'export';
 
 const STATE_BADGE: Record<PaymentState, { label: string; tone: BadgeTone }> = {
   prepaid_captured: { label: 'Captured', tone: 'good' },
+  prepaid_partial: { label: 'Advance paid', tone: 'warn' },
   prepaid_unpaid: { label: 'No payment', tone: 'neutral' },
   cod_collected: { label: 'COD collected', tone: 'good' },
   cod_pending: { label: 'COD pending', tone: 'warn' },
@@ -83,7 +84,7 @@ export function FinanceConsole() {
             <StatTile label="Refunded" value={formatInr(totals.refundedPaise)} />
           </div>
           <Segmented<"all" | PaymentState> label="Payment filter" value={filter} onChange={setFilter}
-            options={[{ id: 'all', label: 'All' }, { id: 'prepaid_captured', label: 'Prepaid' }, { id: 'cod_collected', label: 'COD collected' }, { id: 'cod_pending', label: 'COD pending' }]} />
+            options={[{ id: 'all', label: 'All' }, { id: 'prepaid_captured', label: 'Prepaid' }, { id: 'prepaid_partial', label: 'Advance paid' }, { id: 'cod_collected', label: 'COD collected' }, { id: 'cod_pending', label: 'COD pending' }]} />
           <OrderList orders={payments} selectedId={selectedId} onSelect={setSelectedId} empty="No orders match" />
         </div>
       );

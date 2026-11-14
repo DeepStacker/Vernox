@@ -14,6 +14,15 @@ const FILE = [
   'rfnd_1,refund,200,0,200,INR,0,0,setl_1,07/11/2026',
 ].join('\n');
 
+describe('settlement file row errors', () => {
+  it('reports a row whose amount is not a number instead of reading it as 0', () => {
+    const { lines, rowErrors } = parseSettlementCsv('entity_id,type,amount,fee,tax\npay_A,payment,12x,1,0\npay_B,payment,10,,0');
+    expect(lines.map(l => l.id)).toEqual(['pay_B']);
+    expect(rowErrors).toHaveLength(1);
+    expect(rowErrors[0]).toContain('pay_A');
+  });
+});
+
 describe('Razorpay settlement reconciliation', () => {
   it('matches payments by id and reports mismatches, unknown payments and unsettled captures', () => {
     const { lines } = parseSettlementCsv(FILE);

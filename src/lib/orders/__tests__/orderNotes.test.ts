@@ -22,7 +22,7 @@ describe('order notes structured block', () => {
     notes = recordPackage(notes, { lengthCm: 60, widthCm: 40, heightCm: 8, weightKg: 3.2 }, 'q@vernox.in', AT);
     expect(notes.split('\n').pop()?.startsWith(NOTES_MARKER)).toBe(true);
     const parsed = parseNotes(notes);
-    expect(parsed.text).toBe('[2026-11-05 14:02 UTC a@vernox.in] Started cutting');
+    expect(parsed.text).toBe('[2026-11-05 19:32 IST a@vernox.in] Started cutting');
     expect(parsed.data.qc.i1.outcome).toBe('pass');
     expect(parsed.data.package).toMatchObject({ lengthCm: 60, weightKg: 3.2 });
     expect(allItemsPassedQc(['i1'], parsed.data)).toBe(true);
