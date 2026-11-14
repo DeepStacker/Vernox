@@ -68,7 +68,7 @@ export default function TrackOrder() {
         <PageHeader title="Track order" crumbs={[{ label: 'Track order' }]} />
         <form onSubmit={submit} className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-6">
           <label className="block text-sm font-medium">Order number
-            <input required value={orderInput} onChange={e => setOrderInput(e.target.value)} className="field mt-1 font-normal" autoComplete="off" />
+            <input required value={orderInput} onChange={e => setOrderInput(e.target.value)} className="field mt-1 font-normal uppercase" autoComplete="off" placeholder="e.g. VX-20261114-AB12CD" />
           </label>
           <label className="block text-sm font-medium">Email used at checkout
             <input required type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)} className="field mt-1 font-normal" autoComplete="email" />

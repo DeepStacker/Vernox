@@ -44,7 +44,9 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       orderId: result.order.id,
       status: result.order.status,
       refund: result.refund ? { status: result.refund.status, amount: result.refund.amountPaise / 100 } : null,
-      message: result.refundError ?? (result.refund ? 'Your order is cancelled. The refund has been initiated.' : 'Your order is cancelled.'),
+      message: result.refund ? 'Your order is cancelled. The refund has been initiated.' : 'Your order is cancelled.',
+      // Separate from `message` so the page can show it as a warning, not a success.
+      refundNotice: result.refundError,
     });
   } catch (err) {
     return sendError(res, err, 'order-cancel');

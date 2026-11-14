@@ -83,7 +83,8 @@ without the write.
 ## `GET /api/order-status?orderId=...&email=...`
 
 Guest-safe order summary for confirmation / track-order pages. Authorised when `email` matches the order (case-insensitive) or the
-bearer token's uid owns the order. Unknown order and wrong email both return `NOT_FOUND` 404.
+bearer token's uid owns the order. Unknown order and wrong email both return `NOT_FOUND` 404. `orderId` may be the internal id or
+the customer-facing order number (`VX-YYYYMMDD-XXXXXX`, any letter case); the response's `orderId` is always the internal id.
 
 `200`: `{ "success": true, "order": { orderId, orderNumber, status, placedAt, currency, couponCode,
 pricing: { subtotal, discount, shipping, tax, total }, items: [{ productId, name, unitPrice, quantity, lineTotal, sizeLabel, finish, isCustom }],
@@ -198,7 +199,9 @@ Body `{ "orderId", "email"?, "reason"? }`; access like order-status (owner beare
 Allowed only in `Paid` or `Confirmed_COD` (before production), else `409 CONFLICT`. Returns stock; for prepaid orders requests a
 full Razorpay refund (the order moves `Cancelled → Refunded` when `refund.processed` arrives).
 `200`: `{ "success": true, "orderId", "status": "Cancelled", "refund": { status: "pending" | "processed", amount /* ₹ */ } | null,
-"message" }`. If the refund cannot be started the order is still cancelled, flagged `REFUND_NOT_STARTED`, and `message` says so.
+"message", "refundNotice": string | null }`. If the refund cannot be started the order is still cancelled, flagged
+`REFUND_NOT_STARTED`, and `refundNotice` says so; money taken in person or by a balance link is flagged `REFUND_MANUAL_DUE`
+(`manualRefundDuePaise`) and `refundNotice` says the team will return it.
 
 ### `POST /api/return-request`
 

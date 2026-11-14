@@ -53,11 +53,14 @@ export async function fetchOrderActionState(orderId: string, email?: string): Pr
   };
 }
 
-export async function cancelOrder(orderId: string, email: string | undefined, reason: string): Promise<string> {
+export async function cancelOrder(orderId: string, email: string | undefined, reason: string): Promise<{ message: string; refundNotice: string | null }> {
   const body = await readJson(await fetch('/api/order-cancel', {
     method: 'POST', headers: await headers(), body: JSON.stringify({ orderId, email, reason: reason || undefined }),
   }));
-  return (body.message as string) || 'Your order has been cancelled.';
+  return {
+    message: (body.message as string) || 'Your order has been cancelled.',
+    refundNotice: typeof body.refundNotice === 'string' && body.refundNotice ? body.refundNotice : null,
+  };
 }
 
 /** Uploads up to 3 images to `returns/{orderId}/...` (storage.rules: owner or verified email, images up to 5 MB) and returns their paths. */

@@ -135,7 +135,9 @@ function CancelDialog({ open, onClose, order, email, onDone }: DialogProps) {
   const submit = async () => {
     setBusy(true);
     try {
-      toast.success(await cancelOrder(order.orderId, email, reason.trim()));
+      const result = await cancelOrder(order.orderId, email, reason.trim());
+      toast.success(result.message);
+      if (result.refundNotice) toast.warning(result.refundNotice, { duration: 10_000 });
       onDone();
       onClose();
     } catch (err) {

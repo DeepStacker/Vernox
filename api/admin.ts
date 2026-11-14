@@ -188,7 +188,8 @@ const ACTIONS: Record<string, ActionDefinition> = {
     async run(ctx) {
       const p = parse(
         z.object({
-          email: z.string().trim().toLowerCase().email().optional(),
+          // '' when the staff row has no email (phone sign-in): the uid identifies them.
+          email: z.string().trim().toLowerCase().email().optional().or(z.literal('').transform(() => undefined)),
           uid: z.string().trim().min(1).max(128).optional(),
           role: z.enum(STAFF_ROLES).nullable(),
         }).refine(v => v.email || v.uid, { message: 'email or uid is required', path: ['email'] }),
@@ -653,7 +654,7 @@ const ACTIONS: Record<string, ActionDefinition> = {
         z.object({
           orderId: orderIdField,
           status: z.enum(['Shipped', 'Out_For_Delivery', 'Delivered', 'RTO_Initiated', 'RTO_Delivered']),
-          note: z.string().trim().max(200).optional(),
+          note: z.string().trim().max(300).optional(),
         }),
         ctx.params,
       );

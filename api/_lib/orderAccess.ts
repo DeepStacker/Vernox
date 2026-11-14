@@ -13,6 +13,26 @@ import { asOrder, orderPath, type OrderDoc } from './orders';
 import type { DocStore } from './store';
 
 export const orderIdSchema = z.string().trim().regex(/^[A-Za-z0-9]{10,40}$/);
+/** The number customers see on emails, invoices and receipts (orders.ts generateOrderNumber), any letter case. */
+export const ORDER_NUMBER_PATTERN = /^VX-\d{8}-[A-Z0-9]{6}$/;
+
+/**
+ * Accepts the internal order id or the customer-facing order number and returns the internal id (null when a
+ * number matches no order). Access is still decided by the caller (email or owner token).
+ */
+export async function resolveOrderReference(store: DocStore, reference: string): Promise<string | null> {
+  const ref = reference.trim();
+  const number = ref.toUpperCase().replace(/\s+/g, '');
+  if (!ORDER_NUMBER_PATTERN.test(number)) return ref;
+  const found = await store.query('orders', { where: [{ field: 'orderNumber', op: '==', value: number }], limit: 1 });
+  return found[0]?.id ?? null;
+}
+
+export const orderReferenceSchema = z.string().trim().max(40).refine(
+  v => /^[A-Za-z0-9]{10,40}$/.test(v) || ORDER_NUMBER_PATTERN.test(v.toUpperCase().replace(/\s+/g, '')),
+  'Enter the order number from your confirmation, e.g. VX-20261114-AB12CD',
+);
+
 export const optionalEmailSchema = z.string().trim().toLowerCase().email().max(254).optional();
 
 export function sameEmail(a: string, b: string): boolean {
