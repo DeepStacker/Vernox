@@ -176,7 +176,12 @@ export function cutWorkFromDesignRef(ref: string | null | undefined): DesignCutW
   } catch {
     return { kind: 'invalid', problem: 'malformed' };
   }
-  if (!isRecord(parsed) || parsed.production === undefined) return { kind: 'none' };
+  if (!isRecord(parsed)) return { kind: 'none' };
+  if (parsed.production === undefined) {
+    // Every studio cart line freezes its contours (studio/api.ts toCartLine). A full studio document without them
+    // would be priced by area only and then cut in full: treat it as damaged rather than as a size-only piece.
+    return typeof parsed.schemaVersion === 'number' && Array.isArray(parsed.objects) ? { kind: 'invalid', problem: 'malformed' } : { kind: 'none' };
+  }
   const production = parsed.production;
   if (!isRecord(production) || !Array.isArray(production.contours)) return { kind: 'invalid', problem: 'malformed' };
   const contours: CutContourInput[] = [];

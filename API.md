@@ -60,7 +60,8 @@ Item rules:
   `includedCutMetres + includedCutMetresPerM2 × plate m²`, × `cutRatePerMetre`; engraving = score-line metres × `scoreRatePerMetre`;
   holes = closed contours (pierces) beyond `includedPierces`, × `pierceRate`; the three are multiplied by the finish's
   `thicknessFactors[production.thicknessMm]` (default 1). A line with no snapshot (a plain-text staff reference, a legacy design)
-  is priced by size and finish only. `400 INVALID_ITEM` when the snapshot is damaged (anything but absolute `M`/`L`/`Z`
+  is priced by size and finish only; a full studio document (`schemaVersion` + `objects`) without its snapshot is refused as damaged,
+  so a stripped design cannot be bought at the size-only price and cut in full. `400 INVALID_ITEM` when the snapshot is damaged (anything but absolute `M`/`L`/`Z`
   polylines with role `inner`/`outer`/`score`), too complex (over 20,000 contours or 200,000 path characters), or its contours
   extend more than 1 mm beyond `widthMm` × `heightMm`. The order line keeps the parts as `customPricing` (DATABASE.md).
 - `quantity` 1–100, at most 50 lines, `customDesignRef` ≤ 200 000 chars (≤ 700 000 total). Indian addresses need a 6-digit PIN.

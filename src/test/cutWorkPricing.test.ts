@@ -219,3 +219,12 @@ describe('server prices custom lines from the frozen geometry', () => {
     expect('unitPricePaise' in shared && shared.unitPricePaise).toBe(priceCustomLine(customLine(ref), config).unitPricePaise);
   });
 });
+
+describe('design without its frozen contours', () => {
+  it('refuses a studio document stripped of production instead of pricing it by area', async () => {
+    const { cutWorkFromDesignRef } = await import('../lib/pricing/cutWork');
+    expect(cutWorkFromDesignRef(JSON.stringify({ schemaVersion: 4, objects: [], plate: {} }))).toEqual({ kind: 'invalid', problem: 'malformed' });
+    expect(cutWorkFromDesignRef('WhatsApp file IMG_2041.jpg')).toEqual({ kind: 'none' });
+    expect(cutWorkFromDesignRef(JSON.stringify({ note: 'legacy' }))).toEqual({ kind: 'none' });
+  });
+});
