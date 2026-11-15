@@ -114,12 +114,14 @@ export interface StoreConfig {
   consultation?: Partial<ConsultationSettings>;
   /** Bulk discount tiers, validated (toStoreConfig); display and nudges only, the server computes the amount. */
   volumeDiscounts: VolumeDiscountTier[];
+  /** Saved custom piece rate overrides (rupees, metres); absent = the placeholder defaults in customPiece.ts. */
+  customPieces?: StoreSettingsDoc['customPieces'];
 }
 
 import type { ConsultationSettings } from './consultation';
 import type { VolumeDiscountTier } from '../lib/pricing/volumeDiscount';
 import type { DesignFile, OfflinePaymentMode, StaffOrderChannel } from './staffOrders';
-import type { SellerSettings } from './settings';
+import type { SellerSettings, StoreSettingsDoc } from './settings';
 export type { SellerSettings, StoreSettingsDoc } from './settings';
 
 export interface OrderItem {

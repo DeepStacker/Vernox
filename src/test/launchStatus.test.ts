@@ -61,4 +61,11 @@ describe('launch status', () => {
     expect(after.find(i => i.id === 'catalogue')?.ready).toBe(true);
     expect(after.find(i => i.id === 'designer')?.ready).toBe(true);
   });
+
+  it('asks the owner to confirm the placeholder custom piece rates until they are saved', async () => {
+    const store = new MemoryStore();
+    expect((await launchStatus(store, FULL)).find(i => i.id === 'custom-rates')).toMatchObject({ ready: false, required: true });
+    store.seed('settings/store', { customPieces: { finishes: {} } });
+    expect((await launchStatus(store, FULL)).find(i => i.id === 'custom-rates')?.ready).toBe(true);
+  });
 });

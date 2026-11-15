@@ -8,6 +8,7 @@ import { isPlaceholderSeller, isPlaceholderValue, type SellerSettings } from '@/
 import type { StoreConfig } from '@/types/store';
 import { DEFAULT_CONSULTATION_SETTINGS } from '@/types/consultation';
 import { parseVolumeDiscounts, type VolumeDiscountTier } from '@/lib/pricing/volumeDiscount';
+import { DEFAULT_CUSTOM_FINISH_RATES, customPiecesSettingsProblem, resolveCustomFinishRates, type CustomFinishRate } from '@/lib/pricing/customPiece';
 
 import { GSTIN_PATTERN } from '@/types/gstStateCodes';
 
@@ -36,6 +37,32 @@ export interface BusinessDraft {
   consultation: { enabled: boolean; priceInr: string; creditTowardsOrder: boolean; creditValidityDays: string; turnaroundDays: string; sacCode: string; gstRatePercent: string };
   /** Bulk discount tiers as typed; an empty list switches the discount off. */
   volumeDiscounts: Array<{ minUnits: string; percent: string }>;
+  /** Studio piece rates per finish, as typed (rupees, metres). Saved only once `customRatesConfirmed` is ticked. */
+  customRates: Record<string, Record<CustomRateField, string>>;
+  customRatesConfirmed: boolean;
+}
+
+/** Editable custom piece rates, in the units settings/store uses (src/types/settings.ts customPieces). */
+export const CUSTOM_RATE_FIELDS = [
+  { key: 'setupFee', label: 'Setup per piece (₹)' },
+  { key: 'ratePerCm2', label: 'Plate (₹ per cm²)' },
+  { key: 'minimum', label: 'Minimum price (₹)' },
+  { key: 'cutRatePerMetre', label: 'Cutting (₹ per m)' },
+  { key: 'includedCutMetres', label: 'Cutting included (m)' },
+  { key: 'includedCutMetresPerM2', label: 'Plus included per m² of plate (m)' },
+  { key: 'pierceRate', label: 'Each extra cut-out (₹)' },
+  { key: 'includedPierces', label: 'Cut-outs included' },
+  { key: 'scoreRatePerMetre', label: 'Engraving (₹ per m)' },
+] as const;
+export type CustomRateField = (typeof CUSTOM_RATE_FIELDS)[number]['key'];
+
+/** A resolved rate (paise, millimetres) in the settings units the form edits. */
+function rateToSettings(r: CustomFinishRate): Record<CustomRateField, number> {
+  return {
+    setupFee: r.setupFeePaise / 100, ratePerCm2: r.ratePaisePerCm2 / 100, minimum: r.minimumPaise / 100,
+    cutRatePerMetre: r.cutPaisePerMetre / 100, includedCutMetres: r.includedCutMm / 1000, includedCutMetresPerM2: r.includedCutMmPerM2 / 1000,
+    pierceRate: r.piercePaise / 100, includedPierces: r.includedPierces, scoreRatePerMetre: r.scorePaisePerMetre / 100,
+  };
 }
 
 export type BusinessErrors = Partial<Record<string, string>>;
@@ -70,7 +97,26 @@ export function draftFromConfig(config: StoreConfig): BusinessDraft {
       gstRatePercent: str(config.consultation?.gstRatePercent ?? DEFAULT_CONSULTATION_SETTINGS.gstRatePercent),
     },
     volumeDiscounts: (config.volumeDiscounts ?? []).map(t => ({ minUnits: str(t.minUnits), percent: str(t.percent) })),
+    customRates: Object.fromEntries(Object.entries(resolveCustomFinishRates(config.customPieces)).map(([id, rate]) => {
+      const values = rateToSettings(rate);
+      return [id, Object.fromEntries(CUSTOM_RATE_FIELDS.map(f => [f.key, str(Math.round(values[f.key] * 10000) / 10000)]))];
+    })) as BusinessDraft['customRates'],
+    customRatesConfirmed: Boolean(config.customPieces && Object.keys(config.customPieces).length > 0),
   };
+}
+
+/** The typed rates as settings/store.customPieces, keeping each finish's label and thickness factors. */
+export function draftCustomPieces(d: BusinessDraft, config: StoreConfig): NonNullable<StoreConfig['customPieces']> {
+  const saved = config.customPieces ?? {};
+  return Object.fromEntries(Object.entries(d.customRates).map(([id, values]) => {
+    const base = DEFAULT_CUSTOM_FINISH_RATES[id];
+    const kept = saved[id] ?? {};
+    return [id, {
+      label: kept.label ?? base?.label ?? id,
+      ...Object.fromEntries(CUSTOM_RATE_FIELDS.map(f => [f.key, Number(values[f.key])])),
+      ...(kept.thicknessFactors ? { thicknessFactors: kept.thicknessFactors } : {}),
+    }];
+  }));
 }
 
 /** The typed tiers, checked by the server's own parser (api/_lib/catalogAdmin.ts saveSettings runs it again). */
@@ -131,13 +177,21 @@ export function validateBusiness(d: BusinessDraft): BusinessErrors {
   if (c.gstRatePercent.trim() !== '' && !(Number(c.gstRatePercent) >= 0 && Number(c.gstRatePercent) <= 100)) errors.consultationGst = 'Enter a GST rate between 0 and 100.';
   const tiers = draftVolumeDiscounts(d);
   if ('error' in tiers) errors.volumeDiscounts = tiers.error;
+  for (const [id, values] of Object.entries(d.customRates)) {
+    for (const f of CUSTOM_RATE_FIELDS) {
+      const v = values[f.key];
+      if (v.trim() === '' || !(Number(v) >= 0) || (f.key === 'includedPierces' && !Number.isInteger(Number(v)))) {
+        errors.customRates = `${DEFAULT_CUSTOM_FINISH_RATES[id]?.label ?? id}: ${f.label} must be ${f.key === 'includedPierces' ? 'a whole number' : 'a number'} of zero or more.`;
+      }
+    }
+  }
   return errors;
 }
 
 const num = (raw: string): number | undefined => (raw.trim() === '' ? undefined : Number(raw));
 
 /** The fields to merge into `settings/store`. Empty numbers are omitted so the server default stays in force. */
-export function toStorePatch(d: BusinessDraft): Partial<StoreConfig> {
+export function toStorePatch(d: BusinessDraft, config?: StoreConfig): Partial<StoreConfig> {
   const patch: Partial<StoreConfig> = {
     seller: {
       ...Object.fromEntries(SELLER_FIELDS.map(f => [f, d.seller[f].trim()])),
@@ -164,6 +218,11 @@ export function toStorePatch(d: BusinessDraft): Partial<StoreConfig> {
   };
   const tiers = draftVolumeDiscounts(d);
   if ('tiers' in tiers) patch.volumeDiscounts = tiers.tiers;
+  // Rates are written only once the owner confirms them, so the launch checklist cannot tick itself on another save.
+  if (d.customRatesConfirmed && config) {
+    const customPieces = draftCustomPieces(d, config);
+    if (!customPiecesSettingsProblem(customPieces)) patch.customPieces = customPieces;
+  }
   const optional: Array<[keyof StoreConfig, number | undefined]> = [
     ['codFee', num(d.codFee)], ['codMaxOrderValue', num(d.codMaxOrderValue)], ['defaultLeadTimeDays', num(d.defaultLeadTimeDays)],
     ['customLeadTimeDays', num(d.customLeadTimeDays)], ['returnWindowDays', num(d.returnWindowDays)],

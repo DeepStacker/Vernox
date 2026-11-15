@@ -142,16 +142,19 @@ const MAX_THICKNESS_FACTOR = 20;
  * Settings keys of one `settings/store.customPieces[finishId]` entry, in rupees / metres as
  * staff write them, and how each maps onto CustomFinishRate.
  */
+// Rupee rates may have decimals (₹1.10/cm²); rounding to a micro-paisa keeps float noise (1.1 × 100 = 110.00000000000001) out.
+const rupeeRateToPaise = (n: number) => Math.round(n * 100 * 1e6) / 1e6;
+
 const NUMERIC_SETTINGS = {
   setupFee: { field: 'setupFeePaise', toInternal: rupeesToPaise },
-  ratePerCm2: { field: 'ratePaisePerCm2', toInternal: (n: number) => n * 100 },
+  ratePerCm2: { field: 'ratePaisePerCm2', toInternal: rupeeRateToPaise },
   minimum: { field: 'minimumPaise', toInternal: rupeesToPaise },
-  cutRatePerMetre: { field: 'cutPaisePerMetre', toInternal: (n: number) => n * 100 },
-  includedCutMetres: { field: 'includedCutMm', toInternal: (n: number) => n * 1000 },
-  includedCutMetresPerM2: { field: 'includedCutMmPerM2', toInternal: (n: number) => n * 1000 },
-  pierceRate: { field: 'piercePaise', toInternal: (n: number) => n * 100 },
+  cutRatePerMetre: { field: 'cutPaisePerMetre', toInternal: rupeeRateToPaise },
+  includedCutMetres: { field: 'includedCutMm', toInternal: (n: number) => Math.round(n * 1000 * 1e3) / 1e3 },
+  includedCutMetresPerM2: { field: 'includedCutMmPerM2', toInternal: (n: number) => Math.round(n * 1000 * 1e3) / 1e3 },
+  pierceRate: { field: 'piercePaise', toInternal: rupeeRateToPaise },
   includedPierces: { field: 'includedPierces', toInternal: (n: number) => Math.floor(n) },
-  scoreRatePerMetre: { field: 'scorePaisePerMetre', toInternal: (n: number) => n * 100 },
+  scoreRatePerMetre: { field: 'scorePaisePerMetre', toInternal: rupeeRateToPaise },
 } as const satisfies Record<string, { field: keyof CustomFinishRate; toInternal: (n: number) => number }>;
 
 type NumericSetting = keyof typeof NUMERIC_SETTINGS;

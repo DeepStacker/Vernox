@@ -128,9 +128,10 @@ export function environmentItems(env: NodeJS.ProcessEnv = process.env): LaunchIt
 }
 
 export async function launchStatus(store: DocStore, env: NodeJS.ProcessEnv = process.env): Promise<LaunchItem[]> {
-  const [samples, designers] = await Promise.all([
+  const [samples, designers, settings] = await Promise.all([
     store.query('products', { where: [{ field: 'isSample', op: '==', value: true }], limit: 500 }),
     store.query('staff', { where: [{ field: 'role', op: '==', value: 'designer' }], limit: 1 }),
+    store.get('settings/store'),
   ]);
   return [
     ...environmentItems(env),
@@ -140,6 +141,14 @@ export async function launchStatus(store: DocStore, env: NodeJS.ProcessEnv = pro
       ready: samples.length === 0,
       detail: samples.length ? `${samples.length} sample piece${samples.length === 1 ? '' : 's'} left` : undefined,
       help: 'Replace the sample pieces with your products, photos and prices (Products), or delete them. Sample pieces are marked in the product list.',
+    },
+    {
+      // The code defaults (src/lib/pricing/customPiece.ts) are placeholders; saving them once in Settings means the
+      // owner has looked at the plate, cutting and cut-out rates the Studio charges.
+      id: 'custom-rates', group: 'catalogue', required: true,
+      label: 'Custom piece and cutting rates',
+      ready: Boolean(settings?.customPieces && typeof settings.customPieces === 'object'),
+      help: 'Studio pieces are priced from placeholder rates (plate area, cut length, cut-outs). Check them with your workshop and tick "I have checked these rates" in Settings > Business > Custom piece rates (Studio).',
     },
     {
       id: 'designer', group: 'catalogue', required: false,

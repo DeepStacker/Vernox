@@ -163,6 +163,7 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | CD-13 | Price follows the cutting work | House name plate template (420 x 190 mm, black) | Note the price (₹1,628); open Patterns and Fill plate with Hexagon; wait a moment; click the price | The price rises (about ₹2,041 at default rates) within a second of the change; "Price breakdown" lists Metal plate, Extra cutting (metres of cutting and how much is included) and Extra cut-outs (count and included) in plain words, and the rows add up to the price; undo the fill and the price returns to ₹1,628 | |
 | CD-14 | Studio price = cart = checkout | CD-13 with the fill | Add to cart; open the cart; go to checkout | The cart line, the cart total (server quote) and the checkout amount use the same unit price as the studio, to the rupee | |
 | CD-15 | Staff custom piece stays size-priced | Admin > New order, Custom piece | Read the note under "Custom piece"; add 420 x 190 black | The note says the piece is priced by size and finish only (no cutting charge, no Studio geometry); the price is ₹1,628, as the plain plate in the studio | |
+| CD-16 | Confirm custom piece rates | Super admin, fresh settings | Admin home shows "Custom piece and cutting rates" missing; Settings > Business > Custom piece rates: change Brass cutting to 35, tick "I have checked these rates", save; open the Studio with a brass jali design | Checklist item clears; the Studio price breakdown uses ₹35/m; a negative or fractional cut-out count is refused before saving | |
 
 ## 2. Customer (signed in)
 

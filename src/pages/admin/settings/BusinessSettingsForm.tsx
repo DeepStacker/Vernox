@@ -6,7 +6,8 @@ import type { StoreConfig } from '@/types/store';
 import { stateForGstCode } from '@/types/gstStateCodes';
 import { isPlaceholderSeller } from '@/types/settings';
 import { VOLUME_DISCOUNT_LIMITS } from '@/lib/pricing/volumeDiscount';
-import { describeSellerFields, draftFromConfig, missingSellerFields, toStorePatch, validateBusiness, type BusinessDraft } from './settingsForm';
+import { CUSTOM_RATE_FIELDS, describeSellerFields, draftFromConfig, missingSellerFields, toStorePatch, validateBusiness, type BusinessDraft, type CustomRateField } from './settingsForm';
+import { DEFAULT_CUSTOM_FINISH_RATES } from '@/lib/pricing/customPiece';
 
 const SELLER_TEXT: Array<{ key: keyof BusinessDraft['seller']; label: string; error?: string; hint?: string; mono?: boolean }> = [
   { key: 'legalName', label: 'Legal name' },
@@ -46,6 +47,8 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
     setDraft(d => ({ ...d, consultation: { ...d.consultation, [key]: value } }));
   const setTier = (index: number, key: 'minUnits' | 'percent', value: string) =>
     setDraft(d => ({ ...d, volumeDiscounts: d.volumeDiscounts.map((t, i) => (i === index ? { ...t, [key]: value } : t)) }));
+  const setRate = (finishId: string, key: CustomRateField, value: string) =>
+    setDraft(d => ({ ...d, customRates: { ...d.customRates, [finishId]: { ...d.customRates[finishId], [key]: value } } }));
   const setSeller = (key: keyof BusinessDraft['seller'], value: string) =>
     setDraft(d => {
       const seller = { ...d.seller, [key]: value };
@@ -61,7 +64,7 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
     e.preventDefault();
     if (hasErrors) return;
     setSaving(true);
-    const ok = await updateStoreConfig(toStorePatch(draft));
+    const ok = await updateStoreConfig(toStorePatch(draft, config));
     setSaving(false);
     if (ok) toast.success('Business settings saved.');
   };
@@ -161,6 +164,43 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
           </div>
         )}
       </Section>
+
+      <fieldset className="space-y-3">
+        <legend className="font-display text-xl">Custom piece rates (Studio)</legend>
+        <p className="text-sm text-muted-foreground">
+          What the Studio charges per finish, including GST: setup and plate area, plus cutting beyond the included length and
+          cut-outs beyond the included count (so detailed and jali designs cost more), and engraving. Thicker sheets multiply
+          the cutting part. These start as placeholders: check them with your workshop.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[56rem] text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="py-1 pr-2 font-medium">Finish</th>
+                {CUSTOM_RATE_FIELDS.map(f => <th key={f.key} className="py-1 pr-2 font-medium">{f.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(draft.customRates).map(([id, values]) => (
+                <tr key={id} className="border-t border-border">
+                  <td className="py-1 pr-2">{DEFAULT_CUSTOM_FINISH_RATES[id]?.label ?? id}</td>
+                  {CUSTOM_RATE_FIELDS.map(f => (
+                    <td key={f.key} className="py-1 pr-2">
+                      <input inputMode="decimal" aria-label={`${DEFAULT_CUSTOM_FINISH_RATES[id]?.label ?? id}: ${f.label}`} value={values[f.key]}
+                        onChange={e => setRate(id, f.key, e.target.value)} className="field w-24 font-mono" />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {errors.customRates && <p role="alert" className="text-sm text-destructive">{errors.customRates}</p>}
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" checked={draft.customRatesConfirmed} onChange={e => set('customRatesConfirmed', e.target.checked)} className="h-4 w-4" />
+          I have checked these rates with the workshop (saves them and clears the launch checklist item)
+        </label>
+      </fieldset>
 
       <Section title="Lead times and returns">
         <Field label="Standard lead time (days)" hint="Production days for catalogue items without their own." error={errors.defaultLeadTimeDays}>

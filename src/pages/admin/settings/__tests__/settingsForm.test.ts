@@ -76,3 +76,31 @@ describe('launch checklist', () => {
     expect(launchChecklist(real)).toEqual([]);
   });
 });
+
+describe('custom piece rates', () => {
+  it('saves nothing until the owner confirms, then saves rates that resolve exactly to the defaults', async () => {
+    const { DEFAULT_STORE_CONFIG } = await import('@/lib/data/catalogMappers');
+    const { DEFAULT_CUSTOM_FINISH_RATES, resolveCustomFinishRates, customPiecesSettingsProblem } = await import('@/lib/pricing/customPiece');
+    const draft = draftFromConfig(DEFAULT_STORE_CONFIG);
+    expect(draft.customRatesConfirmed).toBe(false);
+    expect(toStorePatch(draft, DEFAULT_STORE_CONFIG).customPieces).toBeUndefined();
+
+    const saved = toStorePatch({ ...draft, customRatesConfirmed: true }, DEFAULT_STORE_CONFIG).customPieces;
+    expect(customPiecesSettingsProblem(saved)).toBeNull();
+    const resolved = resolveCustomFinishRates(saved);
+    for (const [id, rate] of Object.entries(DEFAULT_CUSTOM_FINISH_RATES)) {
+      expect(resolved[id]).toMatchObject({
+        setupFeePaise: rate.setupFeePaise, ratePaisePerCm2: rate.ratePaisePerCm2, minimumPaise: rate.minimumPaise,
+        cutPaisePerMetre: rate.cutPaisePerMetre, includedCutMm: rate.includedCutMm, piercePaise: rate.piercePaise, includedPierces: rate.includedPierces,
+      });
+    }
+  });
+
+  it('refuses a negative or non-whole rate', async () => {
+    const { DEFAULT_STORE_CONFIG } = await import('@/lib/data/catalogMappers');
+    const draft = draftFromConfig(DEFAULT_STORE_CONFIG);
+    const [id] = Object.keys(draft.customRates);
+    expect(validateBusiness({ ...draft, customRates: { ...draft.customRates, [id]: { ...draft.customRates[id], pierceRate: '-1' } } }).customRates).toBeTruthy();
+    expect(validateBusiness({ ...draft, customRates: { ...draft.customRates, [id]: { ...draft.customRates[id], includedPierces: '2.5' } } }).customRates).toBeTruthy();
+  });
+});
