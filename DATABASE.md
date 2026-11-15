@@ -25,7 +25,11 @@ fields; `npm run seed` writes the same defaults). **Public document: never store
 Every rupee amount here and on products (`price`, size `priceDelta`, `mrp`, custom-piece rates, fees, thresholds, coupon flat
 amounts) is **GST-inclusive**: what the customer pays (since 2026-11-15; see ROADMAP.md "Business and tax decisions").
 `gstRatePercent` (goods, default 5), `shippingFee` (₹, default 150), `freeShippingThreshold` (₹, free when subtotal ≥ it, default 1,499),
-`customPieces: { [finishId]: { label, setupFee (₹), ratePerCm2 (₹), minimum (₹) } }` merged over the built-in defaults,
+`customPieces: { [finishId]: { label, setupFee (₹), ratePerCm2 (₹), minimum (₹), cutRatePerMetre (₹), includedCutMetres,
+includedCutMetresPerM2, pierceRate (₹), includedPierces (whole), scoreRatePerMetre (₹), thicknessFactors: { "<mm>": factor } } }`
+merged over the built-in defaults (formula and defaults: `src/lib/pricing/customPiece.ts`, ROADMAP.md "Business and tax
+decisions"; a save with an unknown key, a negative or malformed value, or a new finish without `setupFee`, `ratePerCm2` and
+`minimum` is refused with a message),
 `codEnabled`, `codOtpRequired` (default true; SMS code before COD, effective only when MSG91 OTP is configured), `codFee` (₹), `codMaxOrderValue` (₹), `codMaxOpenOrdersPerPhone`, `returnWindowDays`, `defaultLeadTimeDays`,
 `customLeadTimeDays`, `manualTransitDays`, `defaultHsnCode`,
 `volumeDiscounts: [{ minUnits, percent }]` (bulk discount by pieces per order; absent = 10+ 5%, 25+ 10%, 50+ 15%; `[]` = off;
@@ -50,7 +54,7 @@ The admin Settings screen edits `seller`, the contact fields, `codEnabled`, `cod
 `id`, `orderNumber` (`VX-YYYYMMDD-XXXXXX`, also the Razorpay receipt), `status` (see lifecycle), `statusHistory[{ status, at, by,
 note? }]`, `userId` (Firebase uid or null for guests), `email` (lower-case), `customer{ email, name, phone, address, city, state,
 pincode, country, companyName?, gstin? }` (the last two only for a business purchase; printed on the B2B tax invoice), `items[{ productId, name, category, sizeLabel, widthMm, heightMm, finish, quantity, unitPricePaise,
-lineTotalPaise, isCustom, customDesignRef, designFiles? }]` (frozen snapshot; `designFiles[{ path, name, contentType }]` only on a custom line of a staff-entered order: up to 5 Storage paths `staff-designs/{draftId}/{file}` of SVG, DXF, PDF, PNG, JPEG or WebP, uploaded from Admin > New order before the order existed; order staff read them, never overwritten or deleted; offered as downloads only, never inlined, because SVG can carry script), `amounts{ subtotalPaise, discountPaise, shippingPaise, taxPaise,
+lineTotalPaise, isCustom, customDesignRef, customPricing?, designFiles? }]` (frozen snapshot; `customPricing{ platePaise, cuttingPaise, engravingPaise, holesPaise, minimumTopUpPaise, work{ cutLengthMm, includedCutMm, pierces, includedPierces, scoreLengthMm, thicknessFactor } | null }` on custom lines priced from 2026-11-15: how the unit price was made up, `work: null` when priced by size only; `designFiles[{ path, name, contentType }]` only on a custom line of a staff-entered order: up to 5 Storage paths `staff-designs/{draftId}/{file}` of SVG, DXF, PDF, PNG, JPEG or WebP, uploaded from Admin > New order before the order existed; order staff read them, never overwritten or deleted; offered as downloads only, never inlined, because SVG can carry script), `amounts{ subtotalPaise, discountPaise, shippingPaise, taxPaise,
 totalPaise, gstRateBps }`, `coupon{ id, code, discountPaise } | null`, `stockReservation{ status: held|released|committed|none,
 items[{ productId, quantity }] }`, `reservationExpiresAt` (ms, placed + 15 min), `idempotencyKey`, `razorpayOrderId`,
 `pricesIncludeTax: true` (every order created since 2026-11-15: item, shipping and COD fee amounts include GST, `amounts.taxPaise`

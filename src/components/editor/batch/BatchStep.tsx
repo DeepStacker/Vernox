@@ -76,7 +76,8 @@ function useBatchQuote(model: ReturnType<typeof useBatchModel>, priced: boolean)
     for (const v of variants) {
       const r = results.get(v.key);
       if (r?.state !== 'ok' || !r.size) continue;
-      for (const quantity of splitQuantity(v.quantity)) items.push({ productId: CUSTOM_PRODUCT_ID, widthMm: r.size.widthMm, heightMm: r.size.heightMm, finish, quantity });
+      // The snapshot travels with each line so the server prices the cutting work exactly as at checkout.
+      for (const quantity of splitQuantity(v.quantity)) items.push({ productId: CUSTOM_PRODUCT_ID, widthMm: r.size.widthMm, heightMm: r.size.heightMm, finish, quantity, customDesignRef: r.pricingRef });
     }
     // More lines than one order takes: the batch goes to the cart in rounds, and checkout prices each order.
     return items.length > 0 && items.length <= ORDER_LIMITS.maxLines ? { items } : null;

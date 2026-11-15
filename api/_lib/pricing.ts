@@ -3,8 +3,9 @@
  *
  * Catalog prices come from Firestore `products/{id}` documents (rupees, as staff
  * edit them) converted to paise by productFromDoc(). Crafting Studio pieces
- * (productId CUSTOM_PRODUCT_ID) are priced from their dimensions and finish via
- * StoreConfig.customPieces. Any price the client sends is ignored — the request
+ * (productId CUSTOM_PRODUCT_ID) are priced from their dimensions, finish and the cutting
+ * work the server measures from the design's frozen production contours, via
+ * StoreConfig.customPieces (priceCustomLine). Any price the client sends is ignored — the request
  * schema does not even accept one.
  *
  * Prices are GST-inclusive (ROADMAP.md "Business and tax decisions"): every catalogue
@@ -42,7 +43,8 @@ import type { StoreConfig } from './storeConfig';
 
 import { CONSULTATION_SERVICE_ID } from '../../src/types/consultation';
 import { CUSTOM_PRODUCT_ID } from '../../src/types/products';
-import { normaliseFinishId, quoteCustomPiece } from '../../src/lib/pricing/customPiece';
+import { normaliseFinishId, quoteCustomPiece, type CustomPieceBreakdown } from '../../src/lib/pricing/customPiece';
+import { cutWorkFromDesignRef } from '../../src/lib/pricing/cutWork';
 import { tierBps, volumeTierFor, type VolumeDiscountTier } from '../../src/lib/pricing/volumeDiscount';
 
 export { CUSTOM_PRODUCT_ID };
@@ -101,6 +103,8 @@ export interface PricedLine {
   gstRateBps: number;
   /** A service (design consultation): no stock, no shipping, never COD. */
   isService?: boolean;
+  /** Custom pieces: how the unit price was made up (plate, cutting, engraving, holes). */
+  customPricing?: CustomPieceBreakdown;
 }
 
 export interface LineTax {
@@ -263,10 +267,26 @@ export function priceCatalogLine(
   };
 }
 
-/** Custom piece: max(minimum, setupFee + width_cm × height_cm × rate), via the shared quoteCustomPiece(). */
+/** How far (mm) the measured design may exceed the line's stated size: contours are stored to 0.01 mm. */
+const DESIGN_SIZE_TOLERANCE_MM = 1;
+
+/**
+ * Custom piece, via the shared quoteCustomPiece() (src/lib/pricing/customPiece.ts): plate (setup + area) plus cutting,
+ * engraving and pierces beyond the included allowance. The cutting work is measured here from the frozen production
+ * contours inside `customDesignRef` (cutWorkFromDesignRef) — the geometry the workshop cuts — never from numbers the
+ * client sends. A line without a snapshot (a staff custom piece with a plain-text reference, or a legacy design) is
+ * priced by size and finish only. A snapshot that is damaged, too complex, or larger than the stated size is refused.
+ */
 export function priceCustomLine(item: CheckoutItemInput, config: StoreConfig): PricedLine {
   const { minDimensionMm, maxWidthMm, maxHeightMm, finishes } = config.customPieces;
-  const quote = quoteCustomPiece(item, finishes, config.customPieces);
+  const design = cutWorkFromDesignRef(item.customDesignRef);
+  if (design.kind === 'invalid') {
+    throw invalidItem(design.problem === 'too-complex'
+      ? 'This custom design is too detailed to cut. Please simplify it in the studio.'
+      : 'The custom design data is damaged. Please add the design to the cart again from the studio.');
+  }
+  const work = design.kind === 'measured' ? design.work : null;
+  const quote = quoteCustomPiece({ ...item, work }, finishes, config.customPieces);
   if ('problem' in quote) {
     if (quote.problem === 'missing-dimensions') throw invalidItem('Custom pieces require widthMm and heightMm.');
     if (quote.problem === 'out-of-range') {
@@ -274,9 +294,13 @@ export function priceCustomLine(item: CheckoutItemInput, config: StoreConfig): P
     }
     throw invalidItem(`Finish "${item.finish}" is not available for custom pieces.`);
   }
-  const { unitPricePaise, rate, finish } = quote;
+  const { unitPricePaise, rate, finish, breakdown } = quote;
   const widthMm = item.widthMm as number;
   const heightMm = item.heightMm as number;
+  // The plate is billed by the stated size, so the geometry that will be cut must fit inside it.
+  if (work && (work.widthMm > widthMm + DESIGN_SIZE_TOLERANCE_MM || work.heightMm > heightMm + DESIGN_SIZE_TOLERANCE_MM)) {
+    throw invalidItem('The custom design is larger than its stated size. Please add the design to the cart again from the studio.');
+  }
   return {
     productId: CUSTOM_PRODUCT_ID,
     name: `Bespoke ${rate.label} piece (${widthMm} × ${heightMm} mm)`,
@@ -292,6 +316,7 @@ export function priceCustomLine(item: CheckoutItemInput, config: StoreConfig): P
     customDesignRef: item.customDesignRef ?? null,
     hsnCode: config.defaultHsnCode,
     gstRateBps: config.gstRateBps,
+    customPricing: breakdown,
   };
 }
 

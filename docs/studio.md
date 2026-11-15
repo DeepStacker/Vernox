@@ -75,16 +75,25 @@ Switch **Pro** in the header (remembered in this browser). Same document — not
   → kerf, minimum web, minimum hole, edge clearance from the workshop's fiber-laser table; bridge width = 1.5 × minimum web
   (≥ 2 mm); minimum letter height = 8 × minimum web (≥ 12 mm). Override per substrate in `settings/store.studioMaterials`,
   e.g. `{ "mild_steel": { "bridgeMm": 3, "minTextMm": 15 } }` (millimetres; invalid values are ignored).
-- **Price** (`src/lib/pricing/customPiece.ts`, shared with the server): max(minimum, setup + width_cm × height_cm × rate) for
-  the part's bounding box in whole millimetres, per finish, with `settings/store.customPieces` overrides. Lead time:
-  `settings/store.customLeadTimeDays` (default 7).
+- **Price** (`src/lib/pricing/customPiece.ts`, shared with the server): plate (setup + width_cm × height_cm × rate, for the
+  part's bounding box in whole millimetres) plus the cutting work: metres of through-cut beyond the allowance (3 m + 50 m per
+  m² of plate by default), engraved score lines, and pierces (each closed contour: the outline, every hole and cut-out) beyond
+  the included 40, with a per-finish thickness factor; never below the minimum. Rates per finish, with
+  `settings/store.customPieces` overrides (API.md "Checkout items", DATABASE.md). The work is measured by one function,
+  `measureCutWork` (`src/lib/pricing/cutWork.ts`), from the **production contours**: the studio measures the snapshot it is
+  about to freeze (`buildProduction` in the geometry worker, `geometryResult.ts`), the server the frozen copy in the cart line's
+  `customDesignRef`, so the same geometry gives the same paise (`cutPricing.test.ts` checks every template). The live price in
+  the bottom bar follows the debounced analysis; clicking it opens "Price breakdown" (metal plate, extra cutting, extra
+  cut-outs, engraving, minimum top-up) in plain words. A design whose snapshot is too large to measure (over 20,000 contours or
+  200,000 path characters, which is also too large to order) shows no price. Lead time: `settings/store.customLeadTimeDays`
+  (default 7).
 
 ## Orders and production
 
 Add to cart stores a cart line `{ productId: 'custom-bespoke', widthMm, heightMm, finish, quantity, customDesignRef,
 customDesignThumb }`. `customDesignRef` is the design document with `production` — the frozen cut contours in cut order
 (inner contours deepest first, score lines, outer perimeters last), nominal size, plus kerf, substrate and thickness. The
-server re-prices from width, height and finish. The admin Production console exports those contours
+server re-prices from width, height, finish and the cutting work it measures from those same contours (so the customer pays for exactly what is cut). The admin Production console exports those contours
 (`src/lib/orders/camDownload.ts`): DXF R12 in mm with layers `1_CUT_INNER`, `2_SCORE`, `3_CUT_OUTER`; SVG in mm with the same
 groups; a PDF sheet. Files are nominal (the CAM software applies its kerf offset); kerf is printed on the sheet.
 
@@ -267,12 +276,13 @@ apartment numbers). Code: `src/lib/studio/batch/` (pure logic, tested) and `src/
 - **Performance:** rows are grouped into distinct designs (identical resolved text is one design; quantities add up).
   Each design is evaluated once, one at a time in the geometry worker with a yield between jobs, rows on screen first.
   The table is virtualised (fixed 60 px rows).
-- **Price:** `quoteCustomPiece` per design (the function the server uses), integer paise; each row shows unit price x
+- **Price:** `quoteCustomPiece` per design (the function the server uses) with the design's own cutting work, integer paise; each row shows unit price x
   quantity to the paisa (`formatPaise`: whole rupees only when there are no paise), never a re-rounded unit price. Once every
-  design is priced, the batch asks the server for a quote of all its lines (`POST /api/cart-quote`, as cart lines of at most 100)
+  design is priced, the batch asks the server for a quote of all its lines (`POST /api/cart-quote`, as cart lines of at most 100,
+  each with its production snapshot so the server measures the cutting work)
   and shows that total, with the bulk discount tier and the next-tier nudge (API.md "Volume discounts"); the server figure is
   shown only while it prices exactly the rows on screen. More than 50 lines (one order) shows the row sum instead. Checkout
-  re-prices every line from width, height and finish, and the discount counts the whole cart, not the batch alone.
+  re-prices every line from width, height, finish and the frozen snapshot, and the discount counts the whole cart, not the batch alone.
 - **Cart:** one custom line per distinct design via `toCartLine`, so each line carries its own `customDesignRef` (the
   existing order storage; nothing new). Quantity above 100 for one design is split into several lines. Checkout limits
   come from `src/lib/pricing/orderLimits.ts` (also used by `api/_lib/checkout.ts`): 50 lines per order, 100 per line,

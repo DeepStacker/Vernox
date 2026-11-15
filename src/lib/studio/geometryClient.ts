@@ -58,15 +58,10 @@ export class GeometryClient {
     }
     // No Worker support: compute in-thread, deferred so the caller's frame finishes first.
     this.busy = true;
-    void import('./manufacturability').then(({ analyzeDocument, billableSize }) => {
+    void import('./geometryResult').then(({ computeGeometryResult }) => {
       try {
-        const t0 = performance.now();
-        const { composition, analysis } = analyzeDocument(job.doc, job.rules, job.limits);
-        if (id === this.latestId) {
-          void import('./geometry/path').then(({ ringsToPathData }) =>
-            this.onResult({ analysis, bridgesD: ringsToPathData(composition.bridges), materialD: ringsToPathData(composition.material), bounds: composition.bounds, mountingHoles: composition.mountingHoles, size: billableSize(composition), ms: Math.round(performance.now() - t0) }),
-          );
-        }
+        const result = computeGeometryResult(job.doc, job.rules, job.limits);
+        if (id === this.latestId) this.onResult(result);
       } catch (err) {
         this.onError(err instanceof Error ? err.message : String(err));
       } finally {

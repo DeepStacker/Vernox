@@ -1,13 +1,13 @@
 /**
  * Geometry stage of a batch: for each distinct design variant, shape its text, check that
  * the text fits the plate, run the manufacturability checks (geometry worker) and price it
- * with the shared `quoteCustomPiece`. Variants are processed one at a time, yielding to the
+ * with the shared `quoteCustomPiece` (size, finish and the cutting work of its production
+ * snapshot). Variants are processed one at a time, yielding to the
  * browser between jobs, with the rows currently on screen first — a 500-row sheet never
  * blocks the UI.
  */
-import { quoteCustomPiece } from '@/lib/pricing/customPiece';
-import { issueMessage } from '../i18n';
-import { rulesFor, shapeTextObject, type StudioContext } from '../api';
+import { issueMessage, t } from '../i18n';
+import { priceFor, rulesFor, shapeTextObject, type StudioContext } from '../api';
 import { pathBounds, placementMatrix } from '../geometry/path';
 import type { StudioDocument } from '../schema';
 import { plateTextMargin } from '../text/fit';
@@ -25,6 +25,8 @@ export interface VariantEval {
   previewD?: string;
   /** Bounds of the metal region: `minX minY width height`. */
   viewBox?: string;
+  /** The production snapshot as a pricing-only design reference, sent with the batch's server quote. */
+  pricingRef?: string;
 }
 
 export interface BatchContext extends StudioContext {
@@ -79,8 +81,9 @@ export async function evaluateVariant(
     if (issue.severity === 'error') problems.push({ code: 'not-orderable', message: issueMessage(issue) });
   }
 
-  const quote = quoteCustomPiece({ ...geometry.size, finish: variantDoc.material.finish }, ctx.rates, ctx.limits);
+  const { quote } = priceFor(geometry.size, variantDoc.material.finish, geometry.cutWork, ctx);
   if ('problem' in quote) problems.push({ code: 'unpriced', reason: quote.problem });
+  else if (!geometry.cutWork && geometry.analysis.orderable) problems.push({ code: 'not-orderable', message: t('error.tooDetailed') });
 
   return {
     state: problems.length ? 'error' : 'ok',
@@ -88,6 +91,7 @@ export async function evaluateVariant(
     size: geometry.size,
     previewD,
     viewBox,
+    ...(geometry.pricingRef ? { pricingRef: geometry.pricingRef } : {}),
     ...('problem' in quote ? {} : { unitPricePaise: quote.unitPricePaise }),
   };
 }

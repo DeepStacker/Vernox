@@ -13,6 +13,7 @@ import { ApiError, badRequest } from './errors';
 import { productFromDoc } from './pricing';
 import { GSTIN_PATTERN, defaultStoreConfig, mergeStoreConfig } from './storeConfig';
 import { parseVolumeDiscounts } from '../../src/lib/pricing/volumeDiscount';
+import { customPiecesSettingsProblem } from '../../src/lib/pricing/customPiece';
 import type { DocData, DocStore } from './store';
 
 type Actor = Parameters<typeof buildAuditEntry>[0]['actor'];
@@ -169,6 +170,8 @@ export async function saveSettings(store: DocStore, kind: 'store' | 'homepage', 
         next.volumeDiscounts = tiers.tiers;
       }
       assertNoNegativeNumbers({ ...next, updatedAt: 0 }, '');
+      const customPiecesProblem = customPiecesSettingsProblem(next.customPieces);
+      if (customPiecesProblem) throw badRequest(customPiecesProblem);
       mergeStoreConfig(defaultStoreConfig(), next); // throws on shapes the API cannot read
     }
     if (JSON.stringify(next).length > MAX_DOC_BYTES) throw badRequest('These settings are too large to save.');

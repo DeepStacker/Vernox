@@ -19,7 +19,8 @@ import { createDocument, createHole, createPath, createShape, createText, defaul
 import { ringsToPathData, transformPathData } from './geometry/path';
 import { analyzeComposition, billableSize, type Analysis } from './manufacturability';
 import { finishPreset, resolveCutRules, type CutRuleOverrides, type CutRules } from './materials';
-import { buildProduction } from './production';
+import { buildProduction, productionCutWork } from './production';
+import type { CutWork } from '@/lib/pricing/cutWork';
 import { parseStudioDocument, type HoleObject, type ProductionGeometry, type PathObject, type ShapeObject, type StudioDocument, type StudioObject, type TextObject } from './schema';
 import { applyTemplateFields, getTemplate, templateDefaults } from './templates/registry';
 import './templates/definitions';
@@ -167,12 +168,26 @@ export interface PriceResult {
   widthMm: number;
   heightMm: number;
   quote: CustomPieceQuote;
+  /** Cutting work measured from the production snapshot; null when it is too complex to measure (and to order). */
+  work: CutWork | null;
 }
 
-/** The same price the server will charge (shared function), for the part's bounding box. */
-export function price(doc: StudioDocument, ctx: StudioContext = {}, composition = compose(doc, ctx)): PriceResult {
-  const size = billableSize(composition);
-  return { ...size, quote: quoteCustomPiece({ ...size, finish: doc.material.finish }, ctx.rates ?? DEFAULT_CUSTOM_FINISH_RATES, ctx.limits ?? CUSTOM_PIECE_LIMITS) };
+/**
+ * The same price the server will charge (shared quoteCustomPiece), for the part's bounding box and the cutting work
+ * of its production snapshot — measured the way the server measures the frozen copy at checkout.
+ */
+export function price(
+  doc: StudioDocument,
+  ctx: StudioContext = {},
+  composition = compose(doc, ctx),
+  production: ProductionGeometry = buildProduction(composition, rulesFor(doc, ctx), doc.material.finish),
+): PriceResult {
+  return priceFor(billableSize(composition), doc.material.finish, productionCutWork(production), ctx);
+}
+
+/** Prices a measured part (the geometry worker's result, a batch variant) with the shared formula. */
+export function priceFor(size: { widthMm: number; heightMm: number }, finish: string, work: CutWork | null, ctx: StudioContext = {}): PriceResult {
+  return { ...size, work, quote: quoteCustomPiece({ ...size, finish, work }, ctx.rates ?? DEFAULT_CUSTOM_FINISH_RATES, ctx.limits ?? CUSTOM_PIECE_LIMITS) };
 }
 
 export function toProduction(doc: StudioDocument, ctx: StudioContext = {}) {
@@ -239,17 +254,19 @@ export interface CartLine {
 
 /**
  * Cart line for a design (composed once). `unitPrice` (rupees) is display-only — the
- * server re-prices from width, height and finish. Throws when the design has blocking
- * issues, cannot be priced, or is too detailed to store with the order.
+ * server re-prices from width, height, finish and the frozen production snapshot. Throws
+ * when the design has blocking issues, cannot be priced, or is too detailed to store with
+ * the order.
  */
 export function toCartLine(doc: StudioDocument, quantity = 1, ctx: StudioContext = {}): CartLine {
   const rules = rulesFor(doc, ctx);
   const composition = composeDocument(doc, rules);
   const analysis = analyzeComposition(doc, composition, rules, ctx.limits ?? CUSTOM_PIECE_LIMITS);
   if (!analysis.orderable) throw new Error('DESIGN_NOT_ORDERABLE');
-  const p = price(doc, ctx, composition);
-  if ('problem' in p.quote) throw new Error(`PRICE_${p.quote.problem.toUpperCase()}`);
   const production = buildProduction(composition, rules, doc.material.finish);
+  const p = price(doc, ctx, composition, production);
+  if ('problem' in p.quote) throw new Error(`PRICE_${p.quote.problem.toUpperCase()}`);
+  if (!p.work) throw new Error('DESIGN_TOO_DETAILED');
   const thumb = thumbnailDataUri(production, doc.material.finish);
   return {
     productId: CUSTOM_PRODUCT_ID,

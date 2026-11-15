@@ -14,6 +14,7 @@ import { paiseToRupees } from './money';
 import { CUSTOMER_CANCELLABLE_STATUSES, type OrderStatus, type StatusHistoryEntry } from './orderLifecycle';
 import type { ConsultationPurchase } from './consultations';
 import type { LineTax, OrderTotals, PricedLine } from './pricing';
+import type { CustomPieceBreakdown } from '../../src/lib/pricing/customPiece';
 import type { DocData } from './store';
 
 export interface CustomerDetails {
@@ -48,6 +49,8 @@ export interface OrderItemSnapshot {
   /** True for the design consultation service line. */
   isService?: boolean;
   customDesignRef: string | null;
+  /** Custom pieces (orders from 2026-11-15): plate, cutting, engraving and holes parts of the unit price, with the measured work. */
+  customPricing?: CustomPieceBreakdown;
   /** Design files staff uploaded for a custom line of a staff-entered order (storage.rules `staff-designs/`). */
   designFiles?: DesignFile[];
   hsnCode: string;
@@ -260,6 +263,7 @@ export function snapshotItem(line: PricedLine, tax: LineTax): OrderItemSnapshot 
     isCustom: line.isCustom,
     ...(line.isService ? { isService: true } : {}),
     customDesignRef: line.customDesignRef,
+    ...(line.customPricing ? { customPricing: line.customPricing } : {}),
     hsnCode: line.hsnCode,
     gstRateBps: tax.gstRateBps,
     discountPaise: tax.discountPaise,

@@ -160,6 +160,9 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | CD-10 | Object toolbar | Select any object, Simple mode | Use Duplicate, Mirror, Flip, Forward, Backward, Centre, Delete; select two shapes and use Combine and, in the panel, "Cut out of" | Each works and is one undo step; the toolbar hides while drawing | |
 | CD-11 | Pro only items | Switch to Pro | Check the panel | Numeric X/Y/angle, align edges, offset outline, all four boolean operations, layers and rulers appear only in Pro | |
 | CD-12 | Pointed letters | Name plate, black 2 mm | Type "MWNV Vivek Welcome" | No "metal thinner than" warning for the pointed letters | |
+| CD-13 | Price follows the cutting work | House name plate template (420 x 190 mm, black) | Note the price (₹1,628); open Patterns and Fill plate with Hexagon; wait a moment; click the price | The price rises (about ₹2,041 at default rates) within a second of the change; "Price breakdown" lists Metal plate, Extra cutting (metres of cutting and how much is included) and Extra cut-outs (count and included) in plain words, and the rows add up to the price; undo the fill and the price returns to ₹1,628 | |
+| CD-14 | Studio price = cart = checkout | CD-13 with the fill | Add to cart; open the cart; go to checkout | The cart line, the cart total (server quote) and the checkout amount use the same unit price as the studio, to the rupee | |
+| CD-15 | Staff custom piece stays size-priced | Admin > New order, Custom piece | Read the note under "Custom piece"; add 420 x 190 black | The note says the piece is priced by size and finish only (no cutting charge, no Studio geometry); the price is ₹1,628, as the plain plate in the studio | |
 
 ## 2. Customer (signed in)
 

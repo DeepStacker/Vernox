@@ -18,9 +18,13 @@ export interface CartQuoteRequest {
   customerEmail?: string;
 }
 
-// Designs are not needed to price a line (width, height and finish are); they are dropped, and the client does not send them.
+// A studio line's price depends on its cutting work, which the server measures from the frozen production contours in
+// `customDesignRef` exactly as checkout does. The browser sends only the snapshot ({"production":{contours,
+// thicknessMm}}, src/lib/data/cartQuote.ts) to keep the request small; a line without one is priced by size only,
+// as checkout would price it.
 export const cartQuoteSchema = z.object({
-  items: z.array(itemSchema.omit({ customDesignRef: true })).min(1).max(ORDER_LIMITS.maxLines),
+  items: z.array(itemSchema).min(1).max(ORDER_LIMITS.maxLines)
+    .refine(items => items.reduce((sum, i) => sum + (i.customDesignRef?.length ?? 0), 0) <= ORDER_LIMITS.maxTotalDesignRefChars, 'custom design data is too large'),
   couponCode: z.string().trim().max(40).optional().transform(v => (v ? v : undefined)),
   customerEmail: z.string().trim().toLowerCase().email().max(254).optional(),
 }) as unknown as z.ZodType<CartQuoteRequest>;

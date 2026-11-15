@@ -12,6 +12,7 @@ import { pathToRings, ringsBounds, ringsToPathData, type Pt, type Ring, type Rin
 import type { Composition } from './compose';
 import type { CutRules } from './materials';
 import type { ProductionContour, ProductionGeometry } from './schema';
+import { measureCutWork, type CutWork } from '@/lib/pricing/cutWork';
 
 export interface OrderedContour {
   role: 'inner' | 'outer' | 'score';
@@ -80,6 +81,16 @@ export function buildProduction(c: Composition, rules: CutRules, finish: string)
     thicknessMm: rules.thicknessMm,
     finish,
   };
+}
+
+/**
+ * Cutting work of a production snapshot, measured exactly as the server measures the frozen
+ * copy at checkout (src/lib/pricing/cutWork.ts), so the studio's price is the server's price.
+ * Null when the snapshot cannot be measured (too complex to order anyway).
+ */
+export function productionCutWork(prod: Pick<ProductionGeometry, 'contours' | 'thicknessMm'>): CutWork | null {
+  const result = measureCutWork(prod.contours, prod.thicknessMm);
+  return 'work' in result ? result.work : null;
 }
 
 /** Rebuilds the cut region and score lines from stored contours. */

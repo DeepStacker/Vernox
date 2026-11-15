@@ -150,6 +150,7 @@ function CustomPiecePicker({ draftId, onAdd }: { draftId: string; onAdd: (item: 
   return (
     <div className="space-y-3 rounded-lg border border-dashed border-border p-3">
       <p className="text-sm font-medium">Custom piece (made to order from the customer's own design)</p>
+      <p className="text-xs text-muted-foreground">Priced by size and finish only: a design entered here has no Studio geometry, so no cutting or cut-out charge is added (Studio orders pay for cutting work). For a very detailed design (jali, many cut-outs), build it in the Studio and order it from there so the cutting is charged.</p>
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_2fr_5rem] sm:items-end">
         <label className="block text-sm font-medium">Width (mm)
           <input type="number" inputMode="numeric" min={minDimensionMm} max={maxWidthMm} value={width} onChange={e => setWidth(e.target.value)} className="field mt-1 font-normal" />

@@ -1,6 +1,6 @@
 /**
  * POST /api/cart-quote — the server's price of a basket (api/_lib/cartQuote.ts).
- * Body: { items: CheckoutItem[] without customDesignRef, couponCode?, customerEmail? }. Lines are priced on the server
+ * Body: { items: CheckoutItem[] (customDesignRef: the production snapshot only), couponCode?, customerEmail? }. Lines are priced on the server
  * with the checkout engine, including the volume discount; client prices are never accepted. Advisory only.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';

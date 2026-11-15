@@ -10,8 +10,11 @@
  *   shippingFee: number                  flat fee when below the threshold
  *   freeShippingThreshold: number        merchandise subtotal (before discount) at or above
  *                                        which shipping is free (`>=`)
- *   customPieces: { [finishId]: { label, setupFee, ratePerCm2, minimum } }
+ *   customPieces: { [finishId]: { label, setupFee, ratePerCm2, minimum, cutRatePerMetre,
+ *                   includedCutMetres, includedCutMetresPerM2, pierceRate, includedPierces,
+ *                   scoreRatePerMetre, thicknessFactors } }
  *                                        per-finish overrides merged over DEFAULT_CUSTOM_FINISH_RATES
+ *                                        (formula: src/lib/pricing/customPiece.ts)
  *   codEnabled: boolean                  cash on delivery offered at all (catalogue-only carts)
  *   codFee: number                       COD handling fee, its own taxable line
  *   codMaxOrderValue: number             COD is refused when the order total (incl. GST) exceeds it

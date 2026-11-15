@@ -98,7 +98,24 @@ export interface StoreSettingsDoc {
   grievanceOfficerEmail?: string;
   /** Paid design consultation (Stage 2); absent = disabled with defaults. */
   consultation?: Partial<ConsultationSettings>;
-  customPieces?: Record<string, { label?: string; setupFee?: number; ratePerCm2?: number; minimum?: number }>;
+  /**
+   * Custom piece rates per finish id, rupees and metres (src/lib/pricing/customPiece.ts, validated on save by
+   * customPiecesSettingsProblem). Missing fields keep the defaults.
+   */
+  customPieces?: Record<string, {
+    label?: string;
+    setupFee?: number;
+    ratePerCm2?: number;
+    minimum?: number;
+    cutRatePerMetre?: number;
+    includedCutMetres?: number;
+    includedCutMetresPerM2?: number;
+    pierceRate?: number;
+    includedPierces?: number;
+    scoreRatePerMetre?: number;
+    /** Sheet thickness in mm → multiplier on cutting, engraving and pierce charges, e.g. { "3": 1.6 }. */
+    thicknessFactors?: Record<string, number>;
+  }>;
   /** Bulk discount tiers (src/lib/pricing/volumeDiscount.ts); absent = defaults, [] = off. */
   volumeDiscounts?: VolumeDiscountTier[];
   updatedAt?: number;

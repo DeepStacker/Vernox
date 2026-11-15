@@ -1,43 +1,24 @@
 /// <reference lib="webworker" />
 /**
- * Geometry worker: composes the part and runs the manufacturability checks off the main
- * thread. Returns only what the UI draws or shows (issues, stats, bridges, mounting holes).
+ * Geometry worker: composes the part, runs the manufacturability checks and measures the
+ * cutting work off the main thread (src/lib/studio/geometryResult.ts). Returns only what the
+ * UI draws or shows (issues, stats, bridges, mounting holes, the work behind the price).
  */
 import type { CustomPieceLimits } from '@/lib/pricing/customPiece';
-import { ringsToPathData, type Bounds } from '@/lib/studio/geometry/path';
-import { analyzeDocument, billableSize, type Analysis } from '@/lib/studio/manufacturability';
+import { computeGeometryResult, type GeometryJobOptions, type GeometryResult } from '@/lib/studio/geometryResult';
 import type { CutRules } from '@/lib/studio/materials';
 import type { StudioDocument } from '@/lib/studio/schema';
 
-export interface GeometryRequest { id: number; doc: StudioDocument; rules: CutRules; limits?: CustomPieceLimits }
-export interface GeometryResult {
-  analysis: Analysis;
-  bridgesD: string;
-  /** Final metal region (even-odd path, plate mm) for previews. */
-  materialD: string;
-  bounds: Bounds | null;
-  mountingHoles: { x: number; y: number; r: number }[];
-  size: { widthMm: number; heightMm: number };
-  ms: number;
-}
+export type { GeometryResult };
+export interface GeometryRequest extends GeometryJobOptions { id: number; doc: StudioDocument; rules: CutRules; limits?: CustomPieceLimits }
 export type GeometryResponse = { id: number; ok: true; result: GeometryResult } | { id: number; ok: false; error: string };
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (event: MessageEvent<GeometryRequest>) => {
-  const { id, doc, rules, limits } = event.data;
-  const t0 = performance.now();
+  const { id, doc, rules, limits, withPricingRef } = event.data;
   try {
-    const { composition, analysis } = analyzeDocument(doc, rules, limits);
-    const result: GeometryResult = {
-      analysis,
-      bridgesD: ringsToPathData(composition.bridges),
-      materialD: ringsToPathData(composition.material),
-      bounds: composition.bounds,
-      mountingHoles: composition.mountingHoles,
-      size: billableSize(composition),
-      ms: Math.round(performance.now() - t0),
-    };
+    const result = computeGeometryResult(doc, rules, limits, { withPricingRef });
     ctx.postMessage({ id, ok: true, result } satisfies GeometryResponse);
   } catch (err) {
     ctx.postMessage({ id, ok: false, error: err instanceof Error ? err.message : String(err) } satisfies GeometryResponse);

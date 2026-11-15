@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { CartItem } from '@/lib/cartContext';
 import { toCheckoutItems } from '@/lib/checkout/checkoutItems';
+import { pricingDesignRefFrom } from '@/lib/pricing/cutWork';
 import type { CartQuote } from '@/types/cartQuote';
 
 export type { CartQuote } from '@/types/cartQuote';
@@ -18,6 +19,8 @@ export interface CartQuoteItem {
   heightMm?: number;
   finish: string;
   quantity: number;
+  /** Studio lines: the production snapshot only (pricingDesignRef), which the server measures for the cutting price. */
+  customDesignRef?: string;
 }
 
 export interface CartQuoteRequest {
@@ -26,9 +29,16 @@ export interface CartQuoteRequest {
   customerEmail?: string;
 }
 
-/** Cart lines without their design JSON: width, height and finish price a studio line, so the quote stays small. */
+/**
+ * Cart lines for the quote. A studio line carries only its production snapshot (contours and thickness), which is
+ * what the server measures for the cutting part of the price; the rest of the design JSON is dropped to keep the
+ * request small.
+ */
 export function cartQuoteItems(items: CartItem[]): CartQuoteItem[] {
-  return toCheckoutItems(items).map(({ customDesignRef: _design, ...line }) => line);
+  return toCheckoutItems(items).map(({ customDesignRef, ...line }) => {
+    const design = pricingDesignRefFrom(customDesignRef);
+    return design ? { ...line, customDesignRef: design } : line;
+  });
 }
 
 export async function fetchCartQuote(request: CartQuoteRequest): Promise<CartQuote> {

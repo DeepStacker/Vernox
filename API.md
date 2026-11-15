@@ -53,7 +53,16 @@ Item rules:
 - Custom studio pieces: `productId: "custom-bespoke"`, `widthMm` and `heightMm` required (100–3000 × 100–1500 mm),
   `finish` must be a key of the custom rate table (`steel`, `natural_mill`, `black_patina`, `brushed_hairline`, `mirror_polish`,
   `stainless`, `corten`, `corten_rust`, `brass`, `antique_brass`, `copper`, `verdigris`, `gold`, plus any added in
-  `settings/store.customPieces`). Price = `max(minimum, setupFee + width_cm × height_cm × ratePerCm2)`.
+  `settings/store.customPieces`). Price (`quoteCustomPiece`, `src/lib/pricing/customPiece.ts`) =
+  `max(minimum, setupFee + width_cm × height_cm × ratePerCm2 + cutting + engraving + holes)`, where the server measures the
+  cutting work itself from the frozen production contours in `customDesignRef` (`production.contours`,
+  `src/lib/pricing/cutWork.ts`; client-sent lengths or prices are never read): cutting = metres of through-cut beyond
+  `includedCutMetres + includedCutMetresPerM2 × plate m²`, × `cutRatePerMetre`; engraving = score-line metres × `scoreRatePerMetre`;
+  holes = closed contours (pierces) beyond `includedPierces`, × `pierceRate`; the three are multiplied by the finish's
+  `thicknessFactors[production.thicknessMm]` (default 1). A line with no snapshot (a plain-text staff reference, a legacy design)
+  is priced by size and finish only. `400 INVALID_ITEM` when the snapshot is damaged (anything but absolute `M`/`L`/`Z`
+  polylines with role `inner`/`outer`/`score`), too complex (over 20,000 contours or 200,000 path characters), or its contours
+  extend more than 1 mm beyond `widthMm` × `heightMm`. The order line keeps the parts as `customPricing` (DATABASE.md).
 - `quantity` 1–100, at most 50 lines, `customDesignRef` ≤ 200 000 chars (≤ 700 000 total). Indian addresses need a 6-digit PIN.
 - Totals: the total is the GST-inclusive amounts the customer saw; GST is taken out of each line (line − its share of the
   discount), shipping and the COD fee (see India commerce below); shipping is free when the pre-discount subtotal is **≥** the
@@ -117,8 +126,11 @@ large, so checkout would use that instead. Invalid coupons return 200 with `isVa
 ## `POST /api/cart-quote`
 
 The server's price of a basket, for the cart page and the studio batch (`api/_lib/cartQuote.ts`, the checkout engine read-only;
-checkout re-prices). Body: `{ "items": [<checkout items without customDesignRef>], "couponCode"?: "WELCOME10", "customerEmail"?: "a@b.in" }`
-(a design reference is dropped: width, height and finish price a studio line). Amounts are integer **paise**:
+checkout re-prices). Body: `{ "items": [<checkout items>], "couponCode"?: "WELCOME10", "customerEmail"?: "a@b.in" }`. A studio
+line's `customDesignRef` is measured for its cutting price exactly as at checkout; the browser sends only the snapshot
+(`{"production":{"contours":[…],"thicknessMm":2}}`, `pricingDesignRef` in `src/lib/pricing/cutWork.ts`) to keep the request
+small, and a line without one is priced by size (as checkout would). Same limits as checkout (≤ 200,000 characters per line,
+≤ 700,000 in total). Amounts are integer **paise**:
 `200`: `{ success: true, lines: [{ unitPricePaise, lineTotalPaise, quantity }], subtotalPaise, discountPaise, couponDiscountPaise,
 coupon: "none"|"applied"|"superseded"|"invalid", couponMessage, volumeDiscount: { minUnits, percent, units, discountPaise } | null,
 nextVolumeTier: { minUnits, percent, unitsToGo } | null, shippingPaise, taxPaise, totalPaise }` (prepaid total; a COD fee is added

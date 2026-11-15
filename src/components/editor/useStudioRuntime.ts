@@ -2,7 +2,7 @@
  * Background services of the studio, each a small hook:
  *  - pricing/rules context from `settings/store` (same overrides the server applies)
  *  - text outline shaping (HarfBuzz, on demand, outside undo history)
- *  - debounced manufacturability analysis in the geometry worker
+ *  - debounced manufacturability analysis and cutting-work measurement (live price) in the geometry worker
  *  - crash-safe autosave
  */
 import { useEffect, useMemo, useRef } from 'react';
@@ -10,7 +10,6 @@ import { usePublicCatalog } from '@/lib/data/publicCatalog';
 import {
   CUSTOM_PIECE_LIMITS,
   DEFAULT_CUSTOM_LEAD_TIME_DAYS,
-  quoteCustomPiece,
   resolveCustomFinishRates,
   type CustomFinishRate,
 } from '@/lib/pricing/customPiece';
@@ -19,7 +18,7 @@ import { parseCutRuleOverrides, resolveCutRules, type CutRuleOverrides } from '@
 import { useStudio } from '@/lib/studio/store';
 import { shapeKey, shapeText } from '@/lib/studio/text/shaper';
 import { autoFitBoundText } from '@/lib/studio/text/fit';
-import type { StudioContext } from '@/lib/studio/api';
+import { priceFor, type StudioContext } from '@/lib/studio/api';
 import type { TextObject } from '@/lib/studio/schema';
 import { writeAutosave } from '@/lib/projectStorage';
 import { useStudioUi } from './uiStore';
@@ -57,13 +56,18 @@ export function useCutRules(ctx: StudioRuntimeContext) {
   return useMemo(() => resolveCutRules(finish, thickness, ctx.cutRuleOverrides), [finish, thickness, ctx.cutRuleOverrides]);
 }
 
-/** Live price for the current billable size (from the latest analysis). */
+/**
+ * Live price from the latest geometry analysis (debounced in useGeometryAnalysis): billable size plus the cutting work
+ * of the production snapshot the design would freeze, priced with the shared formula — the server's number for the
+ * same geometry. Null while nothing is measured yet or the design is too detailed to measure.
+ */
 export function useLivePrice(ctx: StudioRuntimeContext) {
   const size = useStudioUi(s => s.geometry?.size);
+  const work = useStudioUi(s => s.geometry?.cutWork);
   const finish = useStudio(s => s.doc.material.finish);
   return useMemo(
-    () => (size ? quoteCustomPiece({ ...size, finish }, ctx.rates, ctx.limits) : null),
-    [size, finish, ctx.rates, ctx.limits],
+    () => (size && work ? priceFor(size, finish, work, ctx).quote : null),
+    [size, work, finish, ctx],
   );
 }
 

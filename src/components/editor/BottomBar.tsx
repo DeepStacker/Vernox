@@ -10,11 +10,57 @@ import { useLivePrice, type StudioRuntimeContext } from './useStudioRuntime';
 
 const rupees = (paise: number) => `₹${Math.round(paise / 100).toLocaleString('en-IN')}`;
 
+const metres = (mm: number) => (mm / 1000).toLocaleString('en-IN', { maximumFractionDigits: 1 });
+
+function BreakdownRow({ label, hint, paise }: { label: string; hint?: string; paise: number }) {
+  return (
+    <li className="flex items-start justify-between gap-3 py-1.5">
+      <span className="min-w-0">
+        <span className="block text-sm text-foreground">{label}</span>
+        {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
+      </span>
+      <span className="shrink-0 text-sm tabular-nums text-foreground">{rupees(paise)}</span>
+    </li>
+  );
+}
+
+/** The live price; clicking it explains the parts (plate, cutting, holes) in plain words. */
 export function PriceTag({ ctx }: { ctx: StudioRuntimeContext }) {
   const quote = useLivePrice(ctx);
+  const size = useStudioUi(s => s.geometry?.size);
   if (!quote) return <span className="text-sm text-muted-foreground">…</span>;
   if ('problem' in quote) return <span className="text-sm text-muted-foreground">—</span>;
-  return <span className="text-lg font-semibold text-foreground" data-testid="studio-price">{rupees(quote.unitPricePaise)}</span>;
+  const b = quote.breakdown;
+  const work = b.work;
+  const sizeLabel = size ? `${(size.widthMm / 10).toFixed(1)} × ${(size.heightMm / 10).toFixed(1)} cm` : '';
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className="text-left text-lg font-semibold text-foreground underline decoration-dotted underline-offset-4" aria-label={t('price.open')} data-testid="studio-price">
+          {rupees(quote.unitPricePaise)}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" side="top" className="w-80 p-3" data-testid="price-breakdown">
+        <p className="text-sm font-semibold text-foreground">{t('price.title')}</p>
+        <ul className="mt-1 divide-y divide-border">
+          <BreakdownRow label={t('price.plate', { size: sizeLabel })} hint={t('price.plateHint')} paise={b.platePaise} />
+          {work && (
+            <BreakdownRow label={t('price.cutting')} hint={t('price.cuttingHint', { total: metres(work.cutLengthMm), included: metres(work.includedCutMm) })} paise={b.cuttingPaise} />
+          )}
+          {work && work.scoreLengthMm > 0 && (
+            <BreakdownRow label={t('price.engraving')} hint={t('price.engravingHint', { total: metres(work.scoreLengthMm) })} paise={b.engravingPaise} />
+          )}
+          {work && (
+            <BreakdownRow label={t('price.holes')} hint={t('price.holesHint', { total: work.pierces, included: work.includedPierces })} paise={b.holesPaise} />
+          )}
+          {b.minimumTopUpPaise > 0 && <BreakdownRow label={t('price.minimum')} paise={b.minimumTopUpPaise} />}
+          <li className="flex justify-between pt-2 text-sm font-semibold text-foreground"><span>{t('price.total')}</span><span className="tabular-nums">{rupees(quote.unitPricePaise)}</span></li>
+        </ul>
+        <p className="mt-2 text-xs text-muted-foreground">{t('price.why')}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t('price.gst')}</p>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function SizeLabel() {
