@@ -5,7 +5,7 @@ import type { Order } from '@/types/store';
 
 const ops: OrderOps = {
   paymentMethod: 'prepaid', razorpayPaymentId: null, paidAt: null, subtotalPaise: 100000, discountPaise: 10000, shippingPaise: 0, codFeePaise: 0,
-  taxPaise: 16200, totalPaise: 106200, refundedPaise: 0, refundPendingPaise: 0, manualRefundDuePaise: 0, refunds: [], codCollectedPaise: 0, codCollectedAt: null,
+  taxPaise: 16200, totalPaise: 106200, pricesIncludeTax: false, refundedPaise: 0, refundPendingPaise: 0, manualRefundDuePaise: 0, refunds: [], codCollectedPaise: 0, codCollectedAt: null,
   deliveredAt: null, invoiceNumber: null, flags: [], shipment: null, parentOrderId: null,
 };
 const config = {
@@ -48,7 +48,21 @@ describe('buildReceipt', () => {
     expect(r.lines[0].detail).toContain('Medium · 50cm');
   });
 
-  it('splits GST into CGST and SGST within the seller state and IGST outside it', () => {
+  it('lists GST under the total as included tax on GST-inclusive orders', () => {
+    // ₹1,000 − ₹100 = ₹900 paid, which holds 900 × 5/105 = ₹42.86 GST.
+    const inclusive = order({ taxTotal: 42.86, total: 900 }, { pricesIncludeTax: true, subtotalPaise: 100000, discountPaise: 10000, taxPaise: 4286, totalPaise: 90000 });
+    const r = buildReceipt({ order: inclusive, config });
+    expect(r.totals).toEqual([
+      { label: 'Subtotal', value: '₹1,000.00' },
+      { label: 'Discount', value: '-₹100.00' },
+      { label: 'TOTAL', value: '₹900.00', strong: true },
+      { label: 'incl. CGST', value: '₹21.43' },
+      { label: 'incl. SGST', value: '₹21.43' },
+    ]);
+    expect(r.payment.at(-1)).toEqual({ label: 'Balance due', value: '₹900.00', strong: true });
+  });
+
+  it('splits GST into CGST and SGST within the seller state and IGST outside it (older GST-exclusive order)', () => {
     expect(buildReceipt({ order: order(), config }).totals.map(t => t.label)).toEqual(['Subtotal', 'Discount', 'CGST', 'SGST', 'TOTAL']);
     const inter = buildReceipt({ order: order({ shippingState: 'Kerala' }), config });
     expect(inter.totals.map(t => t.label)).toEqual(['Subtotal', 'Discount', 'IGST', 'TOTAL']);

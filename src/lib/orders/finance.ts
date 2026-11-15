@@ -120,7 +120,8 @@ const normState = (value: string | undefined): string => (value ?? '').trim().to
  * GST split of an order's tax: CGST + SGST when the delivery state is the seller's state, IGST
  * otherwise. With no seller state configured the split is left empty (supply "unknown") rather
  * than guessed. The invoice PDF stays authoritative: it rounds per line, this splits the order
- * tax total, so the two can differ by a paisa.
+ * tax total, so the two can differ by a paisa. The order total contains the tax in both pricing models
+ * (GST-inclusive since 2026-11-15, GST added on top before), so taxable value = total − tax for every order.
  */
 export function gstSplit(order: Order, sellerState: string | undefined): GstSplit {
   const taxPaise = order.ops?.taxPaise || Math.round(order.taxTotal * 100);

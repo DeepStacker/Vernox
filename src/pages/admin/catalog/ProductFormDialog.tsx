@@ -18,7 +18,6 @@ interface Props {
   /** Prefills a NEW product from an existing one (duplicate); ignored when editing. */
   template?: Product | null;
   currency: string;
-  gstRatePercent: number;
   newId: () => string;
   onClose: () => void;
   onSave: (product: Product) => Promise<boolean>;
@@ -77,7 +76,7 @@ function ImageField({ label, value, error, folder, onChange }: { label: string; 
   );
 }
 
-export function ProductFormDialog({ open, product, template, currency, gstRatePercent, newId, onClose, onSave }: Props) {
+export function ProductFormDialog({ open, product, template, currency, newId, onClose, onSave }: Props) {
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [slugTouched, setSlugTouched] = useState(false);
@@ -117,7 +116,7 @@ export function ProductFormDialog({ open, product, template, currency, gstRatePe
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{product ? `Edit ${product.name}` : 'New product'}</DialogTitle>
-          <DialogDescription>Prices are in rupees and exclude GST. The checkout charges the price plus the size difference.</DialogDescription>
+          <DialogDescription>Prices are in rupees and include GST: the customer pays the price plus the size difference, and GST is taken out of it on the invoice.</DialogDescription>
         </DialogHeader>
         <form onSubmit={e => void submit(e)} className="space-y-6" noValidate>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -153,7 +152,7 @@ export function ProductFormDialog({ open, product, template, currency, gstRatePe
                 <input value={draft.mrp} onChange={e => set('mrp', e.target.value)} inputMode="decimal" className={field} />
               </Field>
             </div>
-            <SizesEditor draft={draft} gstRatePercent={gstRatePercent} currency={currency} errors={errors} onChange={sizes => set('sizes', sizes)} />
+            <SizesEditor draft={draft} currency={currency} errors={errors} onChange={sizes => set('sizes', sizes)} />
             {errors.sizes && <p role="alert" className="text-xs text-destructive">{errors.sizes}</p>}
           </fieldset>
 

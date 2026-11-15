@@ -31,8 +31,9 @@ describe('cash on delivery checkout', () => {
     const d = deps(store);
     const res = (await createCheckoutIntent(d, cod({ couponCode: 'WELCOME10' }), null)) as CodCheckoutResponse;
 
-    // ₹538 − ₹53.80 = ₹484.20 goods; COD fee ₹49; GST 18% on each: 87.16 + 8.82
-    expect(res).toMatchObject({ success: true, paymentMethod: 'cod', pricing: { subtotal: 538, discount: 53.8, shipping: 0, codFee: 49, tax: 95.98, total: 629.18 } });
+    // Prices include GST: ₹538 − ₹53.80 = ₹484.20 goods + ₹49 COD fee = ₹533.20 to pay;
+    // GST inside (18/118): 73.86 on the goods + 7.47 on the fee.
+    expect(res).toMatchObject({ success: true, paymentMethod: 'cod', pricing: { subtotal: 538, discount: 53.8, shipping: 0, codFee: 49, tax: 81.33, total: 533.2, taxIncluded: true } });
     expect(res).not.toHaveProperty('razorpayOrderId');
     expect(d.gateway.calls).toHaveLength(0);
 
@@ -95,11 +96,11 @@ describe('COD fee and GST math', () => {
   const frame = productFromDoc('p-01', PRODUCT_FRAME)!;
   const lines = priceLines([{ productId: 'p-01', sizeLabel: 'Small · 30cm', finish: 'steel', quantity: 1 }], new Map([['p-01', frame]]), SELLER_CONFIG);
 
-  it('adds the fee as its own line taxed at the goods rate, together with shipping', () => {
+  it('adds the fee as its own line split at the goods rate, with GST included in the fee', () => {
     const t = computeTotals(lines, 0, SELLER_CONFIG, { cod: true });
-    // ₹189 ≥ ₹150 threshold → free shipping; fee ₹49 → GST ₹8.82; goods GST ₹34.02
-    expect(t).toMatchObject({ subtotalPaise: 18_900, shippingPaise: 0, codFeePaise: 4_900, taxPaise: 3_402 + 882, totalPaise: 18_900 + 4_900 + 4_284 });
-    expect(t.taxBreakdown.charges).toEqual([{ kind: 'cod_fee', taxablePaise: 4_900, gstRateBps: 1_800, taxPaise: 882 }]);
+    // ₹189 ≥ ₹150 threshold → free shipping; the ₹49 fee holds ₹7.47 GST; the ₹189 piece holds ₹28.83.
+    expect(t).toMatchObject({ subtotalPaise: 18_900, shippingPaise: 0, codFeePaise: 4_900, taxPaise: 2_883 + 747, totalPaise: 18_900 + 4_900 });
+    expect(t.taxBreakdown.charges).toEqual([{ kind: 'cod_fee', taxablePaise: 4_153, gstRateBps: 1_800, taxPaise: 747 }]);
   });
 
   it('charges no fee for prepaid orders', () => {

@@ -1,7 +1,9 @@
 /**
  * Thermal receipt (58 / 80 mm) for any order: a pure mapping from the order, the seller settings and the
  * invoice summary to the lines the printable component renders. Money is read from the order (paise written by
- * the server) and the GST split comes from finance.ts; nothing is recalculated here.
+ * the server) and the GST split comes from finance.ts; nothing is recalculated here. Orders priced GST-inclusive
+ * (`ops.pricesIncludeTax`, every order since 2026-11-15, and so their invoices) list the GST under the total as
+ * "incl." rows; older GST-exclusive orders list it above the total, as the amount that was added.
  */
 import { finishName } from '@/lib/catalog';
 import type { OrderDocuments } from '@/lib/data/orderOps';
@@ -107,7 +109,10 @@ export function buildReceipt({ order, config, invoice }: ReceiptInput): Receipt 
   if (shipping > 0) totals.push({ label: 'Shipping', value: formatInr(shipping) });
   const codFee = ops?.codFeePaise ?? 0;
   if (codFee > 0) totals.push({ label: 'COD fee', value: formatInr(codFee) });
-  totals.push(...taxRows(order, config?.seller?.state, invoice), { label: 'TOTAL', value: formatInr(totalPaise(order)), strong: true });
+  const tax = taxRows(order, config?.seller?.state, invoice);
+  const total: ReceiptRow = { label: 'TOTAL', value: formatInr(totalPaise(order)), strong: true };
+  if (ops?.pricesIncludeTax) totals.push(total, ...tax.map(row => ({ ...row, label: `incl. ${row.label}` })));
+  else totals.push(...tax, total);
 
   const footer = ['Thank you for shopping with us.'];
   if (config?.returnWindowDays) footer.push(`Returns accepted within ${config.returnWindowDays} days of delivery.`);

@@ -4,7 +4,6 @@ import { previewSizes, type ProductDraft, type SizeDraft } from './productForm';
 
 interface Props {
   draft: Pick<ProductDraft, 'price' | 'mrp' | 'sizes'>;
-  gstRatePercent: number;
   currency: string;
   errors: Record<string, string>;
   onChange: (sizes: SizeDraft[]) => void;
@@ -13,7 +12,7 @@ interface Props {
 const inputClass = 'min-h-11 w-full rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-oxblood';
 
 /** Sizes table: label, width, height and price difference, with the resulting unit price, MRP and discount per row. */
-export function SizesEditor({ draft, gstRatePercent, currency, errors, onChange }: Props) {
+export function SizesEditor({ draft, currency, errors, onChange }: Props) {
   const preview = previewSizes(draft);
   const update = (i: number, patch: Partial<SizeDraft>) => onChange(draft.sizes.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
   const fmt = (n: number) => `${currency}${n.toLocaleString('en-IN')}`;
@@ -37,7 +36,7 @@ export function SizesEditor({ draft, gstRatePercent, currency, errors, onChange 
             <p className="text-xs text-muted-foreground">
               {cm ? `${cm} · ` : ''}
               {p.price === null ? 'Enter price and difference to preview' : (
-                <>Unit price <strong className="text-foreground">{fmt(p.price)}</strong> + GST = {fmt(Math.round(p.price * (1 + gstRatePercent / 100)))}
+                <>Unit price <strong className="text-foreground">{fmt(p.price)}</strong> incl. GST
                   {p.mrp ? <> · MRP {fmt(p.mrp)} · <strong className="text-emerald-700">{p.discountPercent}% off</strong></> : null}</>
               )}
             </p>

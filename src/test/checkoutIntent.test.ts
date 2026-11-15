@@ -25,22 +25,26 @@ describe('checkout intent', () => {
       success: true,
       razorpayOrderId: 'order_rzp000001',
       keyId: 'rzp_test_key',
-      amount: 63_484, // ₹538 + 18% GST, free shipping
+      amount: 53_800, // ₹538 including 18% GST, free shipping: exactly the price shown
       currency: 'INR',
       pricing: {
         subtotal: 538,
         discount: 0,
         shipping: 0,
-        tax: 96.84,
-        total: 634.84,
+        tax: 82.07, // 538 × 18/118, included in the total
+        total: 538,
+        taxIncluded: true,
         items: [{ productId: 'p-01', name: 'Ember Round Frame', unitPrice: 269, quantity: 2, lineTotal: 538 }],
       },
     });
     expect(res.orderNumber).toMatch(/^VX-20261105-[A-Z2-9]{6}$/);
-    expect(d.gateway.calls[0]).toMatchObject({ amountPaise: 63_484, receipt: res.orderNumber, notes: { orderId: res.orderId } });
+    expect(d.gateway.calls[0]).toMatchObject({ amountPaise: 53_800, receipt: res.orderNumber, notes: { orderId: res.orderId } });
 
     const order = store.read(`orders/${res.orderId}`)!;
     expect(order).toMatchObject({
+      pricesIncludeTax: true,
+      amounts: { subtotalPaise: 53_800, taxPaise: 8_207, totalPaise: 53_800 },
+      items: [{ lineTotalPaise: 53_800, discountPaise: 0, taxablePaise: 45_593, taxPaise: 8_207 }],
       status: 'Pending_Payment',
       userId: 'uid-123',
       email: 'asha@example.com',
@@ -160,8 +164,8 @@ describe('checkout intent', () => {
     const store = seededStore();
     store.seed('coupons/c1', { code: 'WELCOME10', discountType: 'percentage', discountValue: 10, isActive: true, usedCount: 0, maxUsageCount: 1 });
     const res = await createCheckoutIntent(deps(store), checkoutRequest({ couponCode: 'welcome10' }), null);
-    expect(res.pricing).toMatchObject({ subtotal: 538, discount: 53.8, tax: 87.16, total: 571.36 });
-    expect((res as PrepaidCheckoutResponse).amount).toBe(57_136);
+    expect(res.pricing).toMatchObject({ subtotal: 538, discount: 53.8, tax: 73.86, total: 484.2 });
+    expect((res as PrepaidCheckoutResponse).amount).toBe(48_420);
     expect(store.read('coupons/c1')!.usedCount).toBe(0);
     expect(store.read(`orders/${res.orderId}`)!.coupon).toEqual({ id: 'c1', code: 'WELCOME10', discountPaise: 5_380 });
   });

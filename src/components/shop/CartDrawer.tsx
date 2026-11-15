@@ -43,7 +43,7 @@ export function CartDrawer() {
             </ul>
             <div className="space-y-3 border-t border-border p-4">
               <div className="flex items-baseline justify-between">
-                <span className="text-sm text-muted-foreground">Subtotal (excl. GST)</span>
+                <span className="text-sm text-muted-foreground">Subtotal (incl. GST)</span>
                 <span className="text-lg font-semibold">{formatINR(subtotal)}</span>
               </div>
               <button type="button" onClick={() => go('/checkout')} className="btn-primary w-full">Checkout</button>

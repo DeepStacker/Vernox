@@ -28,7 +28,7 @@ class FakeLinks implements PaymentLinkGateway {
 }
 
 const ACTOR = STAFF_ACTOR.email;
-const ADVANCE = 20_000; // ₹200 of a ₹634.84 order
+const ADVANCE = 20_000; // ₹200 of a ₹538 order (GST included)
 
 const input = (overrides: Record<string, unknown> = {}): StaffOrderInput =>
   staffOrderSchema.parse({
@@ -60,6 +60,9 @@ describe('advance payments: creating the order', () => {
   it('an advance taken in person starts the order Paid with the rest owed', async () => {
     const { store, res, id, total } = await advanceOrder();
     const doc = order(store, id);
+    // 2 × ₹269 including GST: the total is the prices shown, so the balance is ₹538 − ₹200 = ₹338.
+    expect(total).toBe(53_800);
+    expect(doc).toMatchObject({ pricesIncludeTax: true, balanceDuePaise: 33_800, amounts: { taxPaise: 8_207 } });
     expect(res).toMatchObject({ status: 'Paid', advance: 200, balanceDue: (total - ADVANCE) / 100 });
     expect(doc.balanceDuePaise).toBe(total - ADVANCE);
     expect(doc.payments).toEqual([expect.objectContaining({ kind: 'advance', amountPaise: ADVANCE, mode: 'upi', reference: 'UTR1', by: ACTOR })]);

@@ -7,16 +7,27 @@
  * StoreConfig.customPieces. Any price the client sends is ignored — the request
  * schema does not even accept one.
  *
+ * Prices are GST-inclusive (ROADMAP.md "Business and tax decisions"): every catalogue
+ * price, size difference, custom-piece rate, shipping fee, COD fee, coupon amount
+ * and the consultation fee is what the customer pays, tax included. The order total
+ * is the sum of those inclusive amounts, to the paisa; GST is the part of it that
+ * splitInclusiveTax() takes out, never an amount added on top.
+ *
  * Rounding: every unit price is an integer number of paise; line totals are
- * unit × quantity. GST (prices are GST-exclusive; tax is added on top) is
- * computed per invoice line and rounded per line, so the order total and the GST
- * invoice always agree to the paisa:
+ * unit × quantity. GST is back-calculated per invoice line and rounded per line,
+ * so the order total and the GST invoice always agree to the paisa:
  *  - an order-level discount is allocated to lines pro rata to their value
- *    (largest-remainder, so the parts sum exactly to the discount);
- *  - each line is taxed at its product's GST rate (`gstRatePercent` on the product,
- *    else the store rate);
+ *    (largest-remainder, so the parts sum exactly to the discount) and taken off
+ *    the inclusive line amount before the split;
+ *  - each line is split at its product's GST rate (`gstRatePercent` on the product,
+ *    else the store rate): tax = round(inclusive × r / (100 + r)), half up, and
+ *    taxable = inclusive − tax, so taxable + tax is always the inclusive amount;
  *  - shipping and the COD fee are part of a composite supply of goods, so they are
- *    taxable at the rate of the principal supply — the highest line rate.
+ *    split at the rate of the principal supply — the highest line rate.
+ *
+ * Orders created before 2026-11-15 were priced GST-exclusive (tax added on top);
+ * their frozen `amounts` stay as they were and carry no `pricesIncludeTax` marker
+ * (api/_lib/orders.ts).
  */
 import { ApiError } from './errors';
 import { isNonNegativeFinite, rupeesToPaise } from './money';
@@ -88,6 +99,7 @@ export interface PricedLine {
 export interface LineTax {
   /** Share of the order discount allocated to this line. */
   discountPaise: number;
+  /** Line value after discount, less the GST included in it (taxable + tax = line total − discount). */
   taxablePaise: number;
   gstRateBps: number;
   taxPaise: number;
@@ -95,6 +107,7 @@ export interface LineTax {
 
 export interface ChargeTax {
   kind: 'shipping' | 'cod_fee';
+  /** Fee less the GST included in it (taxable + tax = the fee). Legacy exclusive orders: the fee itself. */
   taxablePaise: number;
   gstRateBps: number;
   taxPaise: number;
@@ -111,7 +124,9 @@ export interface OrderTotals {
   shippingPaise: number;
   /** COD handling fee (0 for prepaid). */
   codFeePaise: number;
+  /** GST included in the total (legacy exclusive orders: GST added to it; see OrderDoc.pricesIncludeTax). */
   taxPaise: number;
+  /** subtotal − discount + shipping + COD fee: what the customer pays. */
   totalPaise: number;
   /** Store GST rate at the time of the order (rate of shipping/fees when all lines share it). */
   gstRateBps: number;
@@ -301,7 +316,21 @@ export function allocateProRata(total: number, weights: number[]): number[] {
   return parts;
 }
 
-const taxOn = (taxablePaise: number, rateBps: number) => Math.round((taxablePaise * rateBps) / 10_000);
+/**
+ * The one place GST is taken out of a GST-inclusive amount (pricing and credit notes both use it; the browser only
+ * shows what the server returns). Integer arithmetic, rounded half up, so the result never depends on floating
+ * point: tax = round(inclusive × r / (10 000 + r)) with r in basis points, taxable = inclusive − tax.
+ */
+export function splitInclusiveTax(inclusivePaise: number, rateBps: number): { taxablePaise: number; taxPaise: number } {
+  if (!Number.isInteger(inclusivePaise) || !Number.isInteger(rateBps) || rateBps < 0) {
+    throw new Error(`splitInclusiveTax needs integer paise and a non-negative integer rate (got ${inclusivePaise}, ${rateBps})`);
+  }
+  const sign = inclusivePaise < 0 ? -1 : 1;
+  const magnitude = Math.abs(inclusivePaise);
+  const divisor = 10_000 + rateBps;
+  const taxPaise = sign * Math.floor((2 * magnitude * rateBps + divisor) / (2 * divisor));
+  return { taxablePaise: inclusivePaise - taxPaise, taxPaise };
+}
 
 export function computeTotals(
   lines: PricedLine[],
@@ -318,26 +347,24 @@ export function computeTotals(
   const codFeePaise = options.cod ? config.cod.feePaise : 0;
 
   const discounts = allocateProRata(discount, lines.map(l => l.lineTotalPaise));
-  const lineTaxes: LineTax[] = lines.map((l, idx) => {
-    const taxablePaise = l.lineTotalPaise - discounts[idx];
-    return { discountPaise: discounts[idx], taxablePaise, gstRateBps: l.gstRateBps, taxPaise: taxOn(taxablePaise, l.gstRateBps) };
-  });
+  const lineTaxes: LineTax[] = lines.map((l, idx) => ({
+    discountPaise: discounts[idx],
+    gstRateBps: l.gstRateBps,
+    ...splitInclusiveTax(l.lineTotalPaise - discounts[idx], l.gstRateBps),
+  }));
   const chargeRateBps = lines.length > 0 ? Math.max(...lines.map(l => l.gstRateBps)) : config.gstRateBps;
   const charges: ChargeTax[] = [];
-  if (shippingPaise > 0) {
-    charges.push({ kind: 'shipping', taxablePaise: shippingPaise, gstRateBps: chargeRateBps, taxPaise: taxOn(shippingPaise, chargeRateBps) });
-  }
-  if (codFeePaise > 0) {
-    charges.push({ kind: 'cod_fee', taxablePaise: codFeePaise, gstRateBps: chargeRateBps, taxPaise: taxOn(codFeePaise, chargeRateBps) });
-  }
+  if (shippingPaise > 0) charges.push({ kind: 'shipping', gstRateBps: chargeRateBps, ...splitInclusiveTax(shippingPaise, chargeRateBps) });
+  if (codFeePaise > 0) charges.push({ kind: 'cod_fee', gstRateBps: chargeRateBps, ...splitInclusiveTax(codFeePaise, chargeRateBps) });
   const taxPaise = [...lineTaxes, ...charges].reduce((sum, t) => sum + t.taxPaise, 0);
   return {
     subtotalPaise,
     discountPaise: discount,
     shippingPaise,
     codFeePaise,
+    // Included in the amounts above, not added to them.
     taxPaise,
-    totalPaise: subtotalPaise - discount + shippingPaise + codFeePaise + taxPaise,
+    totalPaise: subtotalPaise - discount + shippingPaise + codFeePaise,
     // Headline rate for legacy readers; per-line rates in taxBreakdown are authoritative.
     gstRateBps: chargeRateBps,
     taxBreakdown: { lines: lineTaxes, charges },

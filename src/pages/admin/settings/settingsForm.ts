@@ -113,7 +113,7 @@ export function validateBusiness(d: BusinessDraft): BusinessErrors {
   checkNumber(errors, 'customLeadTimeDays', d.customLeadTimeDays, 'Custom lead time', { integer: true, max: 365 });
   checkNumber(errors, 'returnWindowDays', d.returnWindowDays, 'The return window', { integer: true, max: 90 });
   const c = d.consultation;
-  if (c.priceInr.trim() === '' || !(Number(c.priceInr) >= 1) || Number(c.priceInr) > 100_000) errors.consultationPrice = 'Enter a fee between ₹1 and ₹1,00,000, before GST.';
+  if (c.priceInr.trim() === '' || !(Number(c.priceInr) >= 1) || Number(c.priceInr) > 100_000) errors.consultationPrice = 'Enter a fee between ₹1 and ₹1,00,000, including GST.';
   checkNumber(errors, 'creditValidityDays', c.creditValidityDays, 'Credit validity', { integer: true, max: 365 });
   checkNumber(errors, 'turnaroundDays', c.turnaroundDays, 'Turnaround', { integer: true, max: 30 });
   if (c.sacCode.trim() && !/^\d{4,8}$/.test(c.sacCode.trim())) errors.sacCode = 'A SAC code is 4 to 8 digits, for example 998391.';

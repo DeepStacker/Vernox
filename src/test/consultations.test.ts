@@ -69,8 +69,9 @@ describe('consultation pricing', () => {
     expect(line).toMatchObject({ productId: 'design-consultation', unitPricePaise: 99_900, isService: true, hsnCode: '998391', gstRateBps: 1800 });
     const totals = computeTotals([line], 0, config());
     expect(totals.shippingPaise).toBe(0);
-    expect(totals.taxPaise).toBe(17_982);
-    expect(totals.totalPaise).toBe(117_882);
+    // The ₹999 fee includes 18% GST: 999 × 18/118 = ₹152.39.
+    expect(totals.taxPaise).toBe(15_239);
+    expect(totals.totalPaise).toBe(99_900);
   });
 
   it('ignores an invalid fee in settings and keeps the default', () => {
@@ -91,7 +92,7 @@ describe('consultation purchase', () => {
     const store = new MemoryStore();
     seedSpace(store);
     const res = await purchaseConsultation(consultationDeps(store), USER, request());
-    expect(res.amount).toBe(117_882);
+    expect(res.amount).toBe(99_900);
     const order = store.read(`orders/${res.orderId}`)!;
     expect(order).toMatchObject({ kind: 'service', status: 'Pending_Payment', userId: UID, email: 'asha@example.com', paymentMethod: 'prepaid' });
     expect(order.consultation).toMatchObject({ spaceId: 's1', creditTowardsOrder: true, creditValidityDays: 60, turnaroundDays: 3 });

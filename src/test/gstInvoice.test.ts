@@ -79,9 +79,11 @@ describe('GST invoice', () => {
     const store = seededStore();
     const { res, invoice } = await invoicedOrder(store);
     const order = asOrder(store.read(orderPath(res.orderId))!)!;
-    expect(invoice).toMatchObject({ type: 'invoice', supplyType: 'intra_state', taxInclusive: false, placeOfSupply: { stateCode: '29' } });
-    expect(invoice.totals).toEqual({ taxablePaise: 53_800, cgstPaise: 4_842, sgstPaise: 4_842, igstPaise: 0, taxPaise: 9_684, totalPaise: order.amounts.totalPaise });
-    expect(invoice.lines[0]).toMatchObject({ hsnCode: '830629', quantity: 2, gstRateBps: 1_800 });
+    // 2 × ₹269 including 18% GST: ₹538 holds 538 × 18/118 = ₹82.07, so the taxable value is ₹455.93.
+    expect(invoice).toMatchObject({ type: 'invoice', supplyType: 'intra_state', taxInclusive: true, placeOfSupply: { stateCode: '29' } });
+    expect(invoice.totals).toEqual({ taxablePaise: 45_593, cgstPaise: 4_103, sgstPaise: 4_104, igstPaise: 0, taxPaise: 8_207, totalPaise: 53_800 });
+    expect(order.amounts.totalPaise).toBe(53_800);
+    expect(invoice.lines[0]).toMatchObject({ hsnCode: '830629', quantity: 2, gstRateBps: 1_800, unitPricePaise: 26_900, grossPaise: 53_800, totalPaise: 53_800 });
     expect(order.invoiceNumber).toBe(invoice.number);
     expect(order.status).toBe('Shipped');
   });
@@ -92,19 +94,30 @@ describe('GST invoice', () => {
       customer: { email: 'ravi@example.com', name: 'Ravi K', phone: '9876500000', address: '1 Linking Road', city: 'Mumbai', state: 'Maharashtra', pincode: '400050', country: 'India' },
     });
     expect(invoice.supplyType).toBe('inter_state');
-    expect(invoice.totals).toMatchObject({ cgstPaise: 0, sgstPaise: 0, igstPaise: 9_684 });
+    expect(invoice.totals).toMatchObject({ taxablePaise: 45_593, cgstPaise: 0, sgstPaise: 0, igstPaise: 8_207, totalPaise: 53_800 });
   });
 
-  it('taxes shipping as its own line at the goods rate', async () => {
+  it('worked example: one ₹2,499 piece at 5%, intra-state', async () => {
+    const store = seededStore();
+    store.seed('products/p-2499', { id: 'p-2499', name: 'Mandala', category: 'spiritual', price: 2_499, gstRatePercent: 5, finishes: ['brass'], sizes: [], stock: 5, trackInventory: true });
+    const { res, invoice } = await invoicedOrder(store, { items: [{ productId: 'p-2499', finish: 'brass', quantity: 1 }] });
+    // 2,499 × 5/105 = ₹119.00 GST inside the price: taxable ₹2,380.00, CGST ₹59.50 + SGST ₹59.50, total ₹2,499.00.
+    expect(invoice.lines).toHaveLength(1);
+    expect(invoice.lines[0]).toMatchObject({ unitPricePaise: 249_900, taxablePaise: 238_000, gstRateBps: 500, cgstPaise: 5_950, sgstPaise: 5_950, totalPaise: 249_900 });
+    expect(invoice.totals).toEqual({ taxablePaise: 238_000, cgstPaise: 5_950, sgstPaise: 5_950, igstPaise: 0, taxPaise: 11_900, totalPaise: 249_900 });
+    expect(asOrder(store.read(orderPath(res.orderId))!)!.amounts.totalPaise).toBe(249_900);
+  });
+
+  it('splits shipping as its own line at the goods rate, with GST included in the fee', async () => {
     const store = seededStore();
     // One ₹89 piece: below the ₹150 free-shipping threshold → ₹40 shipping
     const { invoice } = await invoicedOrder(store, { items: [{ productId: 'p-11', finish: 'steel', quantity: 1 }] });
     const goods = invoice.lines[0];
-    expect(goods.taxablePaise).toBe(8_900);
-    expect([goods.cgstPaise, goods.sgstPaise]).toEqual([801, 801]);
+    expect(goods).toMatchObject({ grossPaise: 8_900, taxablePaise: 7_542, cgstPaise: 679, sgstPaise: 679, totalPaise: 8_900 });
     const shipping = invoice.lines.find(l => l.description.startsWith('Shipping'))!;
-    expect(shipping).toMatchObject({ taxablePaise: 4_000, cgstPaise: 360, sgstPaise: 360 });
-    expect(invoice.totals.totalPaise).toBe(8_900 + 4_000 + 1_602 + 720);
+    expect(shipping).toMatchObject({ unitPricePaise: 4_000, grossPaise: 4_000, taxablePaise: 3_390, cgstPaise: 305, sgstPaise: 305, totalPaise: 4_000 });
+    expect(invoice.totals.totalPaise).toBe(8_900 + 4_000);
+    for (const l of invoice.lines) expect(l.taxablePaise + l.cgstPaise + l.sgstPaise + l.igstPaise).toBe(l.totalPaise);
   });
 
   it('is idempotent: shipping retries reuse the invoice and number', async () => {
@@ -130,7 +143,7 @@ describe('GST invoice', () => {
     expect(store.read(orderPath(res.orderId))!.status).toBe('Packed');
   });
 
-  it('builds credit notes that mirror the invoice (full) or keep its tax proportion (partial)', async () => {
+  it('builds credit notes that mirror the invoice (full) or split the credited amount at the line rate (partial)', async () => {
     const store = seededStore();
     const { invoice } = await invoicedOrder(store);
     const reservation = { series: 'credit_note' as const, fy: '2026-27', sequence: 1, number: 'CN/26-27/000001', counterPath: 'x' };
@@ -139,6 +152,8 @@ describe('GST invoice', () => {
     expect(full.againstInvoice).toEqual({ id: invoice.id, number: invoice.number });
     const partial = buildCreditNote({ invoice, refundId: 'r2', amountPaise: 11_800, reason: 'goodwill', reservation, now: NOW });
     expect(partial.totals).toMatchObject({ taxablePaise: 10_000, taxPaise: 1_800, totalPaise: 11_800, cgstPaise: 900, sgstPaise: 900 });
+    expect(partial.lines[0]).toMatchObject({ quantity: 1, unitPricePaise: 11_800, grossPaise: 11_800, taxablePaise: 10_000 });
+    expect(partial.taxInclusive).toBe(true);
     expect(() => buildCreditNote({ invoice, refundId: 'r3', amountPaise: invoice.totals.totalPaise + 1, reason: 'x', reservation, now: NOW })).toThrow();
   });
 
@@ -166,10 +181,56 @@ describe('legacy (Phase 1) orders', () => {
       const { hsnCode: _h, gstRateBps: _g, discountPaise: _d, taxablePaise: _t, taxPaise: _x, ...rest } = i;
       return rest;
     });
-    setStatus(store, res.orderId, 'Packed', { items: legacyItems, amounts: { ...order.amounts, taxBreakdown: undefined } });
+    // Phase 1 was GST-exclusive: ₹538 + 18% GST (₹96.84, rounded once on the order) = ₹634.84, no marker.
+    const amounts = { ...order.amounts, taxPaise: 9_684, totalPaise: 63_484, taxBreakdown: undefined };
+    setStatus(store, res.orderId, 'Packed', { items: legacyItems, amounts, pricesIncludeTax: undefined });
     await createShipment(store, manual, SELLER_CONFIG, { orderId: res.orderId, manual: { courier: 'DTDC', awb: 'D7654321' }, actor: STAFF_ACTOR });
     const invoice = store.read(`invoices/${res.orderId}`) as unknown as TaxDocument;
-    expect(invoice.totals.totalPaise).toBe(order.amounts.totalPaise);
+    expect(invoice.taxInclusive).toBe(false);
+    expect(invoice.totals).toMatchObject({ taxablePaise: 53_800, taxPaise: 9_684, totalPaise: 63_484 });
+  });
+});
+
+describe('GST-exclusive orders placed before 2026-11-15', () => {
+  /** Rewrites a fresh order into what the server stored before GST-inclusive pricing: ₹89 + ₹40 shipping, 18% added on top. */
+  async function exclusiveOrder(store: MemoryStore) {
+    const res = await paidOrder(store, { items: [{ productId: 'p-11', finish: 'steel', quantity: 1 }] });
+    const order = asOrder(store.read(orderPath(res.orderId))!)! as OrderDoc;
+    setStatus(store, res.orderId, 'Packed', {
+      pricesIncludeTax: undefined,
+      items: [{ ...order.items[0], discountPaise: 0, taxablePaise: 8_900, taxPaise: 1_602 }],
+      amounts: {
+        ...order.amounts,
+        taxPaise: 2_322,
+        totalPaise: 15_222,
+        taxBreakdown: {
+          lines: [{ discountPaise: 0, taxablePaise: 8_900, gstRateBps: 1_800, taxPaise: 1_602 }],
+          charges: [{ kind: 'shipping', taxablePaise: 4_000, gstRateBps: 1_800, taxPaise: 720 }],
+        },
+      },
+    });
+    return res;
+  }
+
+  it('still invoices exactly as before: GST added on top, same per-line values and total', async () => {
+    const store = seededStore();
+    const res = await exclusiveOrder(store);
+    await createShipment(store, manual, SELLER_CONFIG, { orderId: res.orderId, manual: { courier: 'DTDC', awb: 'D5554321' }, actor: STAFF_ACTOR });
+    const invoice = store.read(`invoices/${res.orderId}`) as unknown as TaxDocument;
+    expect(invoice.taxInclusive).toBe(false);
+    expect(invoice.lines[0]).toMatchObject({ unitPricePaise: 8_900, grossPaise: 8_900, taxablePaise: 8_900, cgstPaise: 801, sgstPaise: 801, totalPaise: 10_502 });
+    const shipping = invoice.lines.find(l => l.description.startsWith('Shipping'))!;
+    expect(shipping).toMatchObject({ unitPricePaise: 4_000, grossPaise: 4_000, taxablePaise: 4_000, cgstPaise: 360, sgstPaise: 360, totalPaise: 4_720 });
+    expect(invoice.totals.totalPaise).toBe(15_222);
+
+    // A partial credit note keeps the original line's taxable/GST proportion, as before.
+    const reservation = { series: 'credit_note' as const, fy: '2026-27', sequence: 1, number: 'CN/26-27/000001', counterPath: 'x' };
+    const partial = buildCreditNote({ invoice, refundId: 'r-old', amountPaise: 10_502, reason: 'goodwill', reservation, now: NOW });
+    expect(partial.taxInclusive).toBe(false);
+    expect(partial.totals.totalPaise).toBe(10_502);
+    expect(partial.totals.taxablePaise + partial.totals.taxPaise).toBe(10_502);
+    const pdf = await renderTaxDocumentPdf(invoice);
+    expect(Buffer.from(pdf.slice(0, 5)).toString()).toBe('%PDF-');
   });
 });
 

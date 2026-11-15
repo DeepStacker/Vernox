@@ -12,7 +12,7 @@ export default function Faqs() {
       title: 'Ordering',
       items: [
         { q: 'Which payment methods do you accept?', a: 'UPI, cards and net banking. Cash on delivery on ready designs.' },
-        { q: 'Are prices inclusive of GST?', a: `Prices exclude GST. ${storeConfig.gstRatePercent}% GST is added at checkout.` },
+        { q: 'Are prices inclusive of GST?', a: `Yes. Every price on the site includes GST (${storeConfig.gstRatePercent}% on our pieces), and so do shipping and the cash on delivery fee. The price you see is the price you pay; your GST invoice shows the tax included in it.` },
         { q: 'Can I use a coupon?', a: 'Yes, enter it in your cart.' },
       ],
     },

@@ -14,7 +14,7 @@ import type { MemoryStore } from './support/memoryStore';
 
 const DAY = 24 * 3600_000;
 const manual = new ManualShippingProvider({ transitDays: 5, codEnabled: true });
-const TOTAL = 63_484;
+const TOTAL = 53_800; // 2 × ₹269, GST included
 
 const refundParams = (orderId: string, amountPaise: number, extra: Partial<CreateRefundParams> = {}): CreateRefundParams => ({
   orderId,
@@ -78,9 +78,10 @@ describe('staff refunds', () => {
     const store = seededStore();
     const res = await paidOrder(store);
     const gateway = new FakeRefundGateway();
-    await createRefund(store, gateway, refundParams(res.orderId, 60_000));
-    expect(await code(createRefund(store, gateway, refundParams(res.orderId, 3_485)))).toBe('CONFLICT');
-    await expect(createRefund(store, gateway, refundParams(res.orderId, 3_484))).resolves.toMatchObject({ status: 'pending' });
+    // The ceiling is the GST-inclusive total the customer paid (₹538), not a pre-tax amount.
+    await createRefund(store, gateway, refundParams(res.orderId, 50_000));
+    expect(await code(createRefund(store, gateway, refundParams(res.orderId, 3_801)))).toBe('CONFLICT');
+    await expect(createRefund(store, gateway, refundParams(res.orderId, 3_800))).resolves.toMatchObject({ status: 'pending' });
     expect(await code(createRefund(store, gateway, refundParams(res.orderId, 1)))).toBe('CONFLICT');
   });
 
@@ -126,7 +127,19 @@ describe('staff refunds', () => {
     const refund = await createRefund(store, null, refundParams(res.orderId, 11_800, { method: 'manual', reference: 'UTR123456' }));
     expect(refund.status).toBe('processed');
     expect(store.read(`refunds/${refund.id}`)).toMatchObject({ providerRefundId: 'UTR123456', creditNoteNumber: 'CN/26-27/000001' });
-    expect(store.read(`credit_notes/${refund.id}`)).toMatchObject({ type: 'credit_note', totals: { totalPaise: 11_800 } });
+    // ₹118 spread over the ₹538 goods line and the ₹49 COD fee line (both GST-inclusive), each split at 18/118.
+    const note = store.read(`credit_notes/${refund.id}`)!;
+    expect(note).toMatchObject({
+      type: 'credit_note',
+      taxInclusive: true,
+      totals: { taxablePaise: 10_000, taxPaise: 1_800, totalPaise: 11_800 },
+      lines: [
+        { grossPaise: 10_815, taxablePaise: 9_165, cgstPaise: 825, sgstPaise: 825, totalPaise: 10_815 },
+        { grossPaise: 985, taxablePaise: 835, cgstPaise: 75, sgstPaise: 75, totalPaise: 985 },
+      ],
+    });
+    // The credit note can never exceed the invoice: a refund above the order total is refused.
+    expect(await code(createRefund(store, null, refundParams(res.orderId, collected, { method: 'manual', reference: 'UTR999999' })))).toBe('CONFLICT');
   });
 });
 

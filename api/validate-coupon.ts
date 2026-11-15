@@ -27,8 +27,10 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       subtotal: paiseToRupees(totals.subtotalPaise),
       discount: paiseToRupees(totals.discountPaise),
       shipping: paiseToRupees(totals.shippingPaise),
+      // GST included in `total` (prices are GST-inclusive), not added to it.
       tax: paiseToRupees(totals.taxPaise),
       total: paiseToRupees(totals.totalPaise),
+      taxIncluded: true,
     };
 
     const result: CouponValidationResult & { pricing: typeof pricing } = 'coupon' in evaluation

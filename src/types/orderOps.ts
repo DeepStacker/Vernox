@@ -31,8 +31,11 @@ export interface OrderOps {
   discountPaise: number;
   shippingPaise: number;
   codFeePaise: number;
+  /** GST inside totalPaise when pricesIncludeTax; GST added to reach it on older orders. */
   taxPaise: number;
   totalPaise: number;
+  /** Server marker `pricesIncludeTax` (orders since 2026-11-15): item and fee amounts include GST. */
+  pricesIncludeTax: boolean;
   refundedPaise: number;
   /** Requested from the provider but not yet confirmed by the refund webhook. */
   refundPendingPaise: number;

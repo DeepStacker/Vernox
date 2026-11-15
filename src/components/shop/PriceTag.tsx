@@ -13,7 +13,7 @@ interface Props {
   className?: string;
 }
 
-/** Price, strike-through MRP and discount. All figures exclude GST, matching what the server prices. */
+/** Price, strike-through MRP and discount. All figures include GST, matching what the server charges. */
 export function PriceTag({ product, size, from, large, compact, className }: Props) {
   const price = unitPrice(product, size);
   const mrp = mrpFor(product, size);

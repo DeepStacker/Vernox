@@ -145,7 +145,7 @@ export default function Cart() {
                   <div className="flex min-w-0 flex-1 flex-col">
                     <Link to={`/product/${item.productSlug}`} className="font-medium hover:text-burgundy">{item.productName}</Link>
                     <p className="text-sm text-muted-foreground">{item.sizeLabel} · {finishName(item.finish)}</p>
-                    <p className="text-sm text-muted-foreground">{formatINR(item.unitPrice)} each, excl. GST</p>
+                    <p className="text-sm text-muted-foreground">{formatINR(item.unitPrice)} each, incl. GST</p>
                     <div className="mt-auto flex items-center justify-between pt-2">
                       <div className="flex items-center rounded-md border border-border" role="group" aria-label={`Quantity of ${item.productName}`}>
                         <button type="button" aria-label="Decrease quantity" onClick={() => updateQty(item.id, item.quantity - 1)} disabled={item.quantity <= 1} className="flex h-10 w-10 items-center justify-center disabled:opacity-40"><Minus className="h-4 w-4" /></button>
@@ -188,11 +188,12 @@ export default function Cart() {
               <div className="flex justify-between"><dt>Subtotal</dt><dd>{formatINR(subtotal)}</dd></div>
               {discount > 0 && <div className="flex justify-between text-emerald-800"><dt>Discount</dt><dd>-{formatINRExact(discount)}</dd></div>}
               <div className="flex justify-between"><dt>Shipping</dt><dd>{shipping === 0 ? 'Free' : formatINR(shipping)}</dd></div>
-              <div className="flex justify-between text-muted-foreground"><dt>GST</dt><dd>Calculated at checkout</dd></div>
+              <div className="flex justify-between border-t border-border pt-2 font-semibold"><dt>Total</dt><dd>{formatINRExact(subtotal - discount + shipping)}</dd></div>
+              <p className="text-xs text-muted-foreground">Inclusive of all taxes. A cash on delivery fee, if you choose it, is shown at checkout.</p>
             </dl>
 
-            {/* Approximate payable: goods less discount plus shipping, with GST (the exact total is shown at checkout). */}
-            <EmiWidget amountRupees={Math.round((subtotal - discount + shipping) * (1 + storeConfig.gstRatePercent / 100))} />
+            {/* Prices include GST, so goods less discount plus shipping is what a prepaid order costs. */}
+            <EmiWidget amountRupees={subtotal - discount + shipping} />
 
             <button type="button" onClick={() => navigate('/checkout')} className="btn-primary w-full">Proceed to checkout</button>
 

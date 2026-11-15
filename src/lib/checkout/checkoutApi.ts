@@ -24,8 +24,11 @@ export interface ServerPricing {
   shipping: number;
   /** Cash on delivery fee (0 for prepaid). */
   codFee?: number;
+  /** GST included in `total` when `taxIncluded`; on orders placed before GST-inclusive pricing, GST added to reach it. */
   tax: number;
   total: number;
+  /** True for every order priced since 2026-11-15 (API.md); absent or false only for older orders. */
+  taxIncluded?: boolean;
   items: Array<{ productId: string; name: string; unitPrice: number; quantity: number; lineTotal: number }>;
 }
 

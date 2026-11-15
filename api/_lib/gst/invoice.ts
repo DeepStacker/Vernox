@@ -8,10 +8,16 @@
  * delivery. A prepaid order cancelled before dispatch has no invoice, so its
  * refund needs no credit note (GST on advances for goods is exempt).
  *
- * Amounts are the order's frozen paise values (prices are GST-exclusive; tax is
- * added on top, stated on the document). Intra-state supply (seller state code ==
- * delivery state code) splits each line's GST into CGST + SGST (SGST gets the odd
- * paisa); inter-state supply charges IGST.
+ * Amounts are the order's frozen paise values. Orders priced GST-inclusive
+ * (`order.pricesIncludeTax`, every order since 2026-11-15) carry the taxable value
+ * and the GST included in each line and charge; the document is `taxInclusive` and
+ * shows the price paid, the taxable value, the rates and the tax per line. Older
+ * orders were GST-exclusive (tax added on top); their documents keep
+ * `taxInclusive: false` and are built from the same frozen per-line values, so they
+ * render and total exactly as before. Every line's total is taxable + tax, so the
+ * invoice total equals the order total in both models. Intra-state supply (seller
+ * state code == delivery state code) splits each line's GST into CGST + SGST (SGST
+ * gets the odd paisa); inter-state supply charges IGST.
  *
  * Records are immutable: `invoices/{orderId}` (one per order) and
  * `credit_notes/{refundId}` (one per refund), both server-only.
@@ -19,7 +25,7 @@
 import { isPlaceholderSeller } from '../../../src/types/settings';
 import { ApiError } from '../errors';
 import type { OrderDoc } from '../orders';
-import { allocateProRata } from '../pricing';
+import { allocateProRata, splitInclusiveTax } from '../pricing';
 import type { SellerDetails } from '../storeConfig';
 import { GSTIN_PATTERN } from '../storeConfig';
 import type { StoreTransaction } from '../store';
@@ -32,8 +38,9 @@ export interface TaxDocumentLine {
   description: string;
   hsnCode: string;
   quantity: number;
+  /** Price per unit as charged: GST-inclusive on `taxInclusive` documents, before GST on older ones. */
   unitPricePaise: number;
-  /** Value before discount (unit × quantity, or the charge amount). */
+  /** Value before discount (unit × quantity, or the charge amount), on the same basis as unitPricePaise. */
   grossPaise: number;
   discountPaise: number;
   taxablePaise: number;
@@ -67,8 +74,11 @@ export interface TaxDocument {
   supplyType: SupplyType;
   lines: TaxDocumentLine[];
   totals: TaxDocumentTotals;
-  /** Prices are GST-exclusive; GST is shown separately and added to reach the total. */
-  taxInclusive: false;
+  /**
+   * true: unit prices and gross values include GST; each line's taxable value and GST are the parts of its total.
+   * false (documents issued before 2026-11-15): prices are before GST and GST was added to reach the total.
+   */
+  taxInclusive: boolean;
   reverseCharge: false;
   paymentMethod: OrderDoc['paymentMethod'];
   /** Issued under placeholder seller details: not a valid tax invoice (see PLACEHOLDER_GSTIN). */
@@ -175,14 +185,16 @@ function orderTaxLines(order: OrderDoc, supplyType: SupplyType): TaxDocumentLine
     return items;
   }
   for (const charge of a.taxBreakdown.charges) {
+    // Inclusive orders charged the fee with its GST inside it; exclusive ones charged the fee plus GST.
+    const chargedPaise = order.pricesIncludeTax ? charge.taxablePaise + charge.taxPaise : charge.taxablePaise;
     items.push(
       line(
         {
           description: charge.kind === 'shipping' ? 'Shipping and handling' : 'Cash on delivery fee',
           hsnCode: charge.kind === 'shipping' ? SHIPPING_SAC : COD_FEE_SAC,
           quantity: 1,
-          unitPricePaise: charge.taxablePaise,
-          grossPaise: charge.taxablePaise,
+          unitPricePaise: chargedPaise,
+          grossPaise: chargedPaise,
           discountPaise: 0,
           taxablePaise: charge.taxablePaise,
           gstRateBps: charge.gstRateBps,
@@ -227,7 +239,7 @@ export function buildInvoice(order: OrderDoc, seller: SellerDetails, reservation
     supplyType,
     lines,
     totals,
-    taxInclusive: false,
+    taxInclusive: order.pricesIncludeTax === true,
     reverseCharge: false,
     paymentMethod: order.paymentMethod ?? 'prepaid',
     ...(reservation.series === 'specimen_invoice' ? { specimen: true } : {}),
@@ -239,9 +251,11 @@ export function buildInvoice(order: OrderDoc, seller: SellerDetails, reservation
 
 /**
  * Credit note for `amountPaise` (GST-inclusive) against an invoice. The amount is
- * spread over the invoice lines pro rata to their totals; within a line the
- * taxable/GST proportion of the original line is kept, so a full credit note
- * mirrors the invoice exactly.
+ * spread over the invoice lines pro rata to their totals; a fully credited line
+ * mirrors the invoice line exactly, so a full credit note mirrors the invoice. A
+ * partly credited line is split at its rate with splitInclusiveTax() on
+ * `taxInclusive` invoices (the same rule as checkout pricing); on older exclusive
+ * invoices it keeps the taxable/GST proportion of the original line, as it always did.
  */
 export function buildCreditNote(params: {
   invoice: TaxDocument;
@@ -261,14 +275,20 @@ export function buildCreditNote(params: {
       const gross = shares[idx];
       if (gross === 0) return null;
       const full = gross === l.totalPaise;
-      const taxablePaise = full ? l.taxablePaise : Math.round((gross * l.taxablePaise) / l.totalPaise);
+      const taxablePaise = full
+        ? l.taxablePaise
+        : invoice.taxInclusive
+          ? splitInclusiveTax(gross, l.gstRateBps).taxablePaise
+          : Math.round((gross * l.taxablePaise) / l.totalPaise);
+      // A partial line is one unit of the credited value, priced on the invoice's own basis.
+      const partialPricePaise = invoice.taxInclusive ? gross : taxablePaise;
       return line(
         {
           description: l.description,
           hsnCode: l.hsnCode,
           quantity: full ? l.quantity : 1,
-          unitPricePaise: full ? l.unitPricePaise : taxablePaise,
-          grossPaise: full ? l.grossPaise : taxablePaise,
+          unitPricePaise: full ? l.unitPricePaise : partialPricePaise,
+          grossPaise: full ? l.grossPaise : partialPricePaise,
           discountPaise: full ? l.discountPaise : 0,
           taxablePaise,
           gstRateBps: l.gstRateBps,

@@ -45,8 +45,10 @@ export function OrderDetailPanel({ order, allOrders, currency, storeName }: { or
         <div className="flex justify-between"><span>Subtotal</span><span>{inr(order.subtotal, currency)}</span></div>
         {order.discountTotal > 0 && <div className="flex justify-between"><span>Discount{order.couponCode ? ` (${order.couponCode})` : ''}</span><span>-{inr(order.discountTotal, currency)}</span></div>}
         <div className="flex justify-between"><span>Shipping</span><span>{inr(order.shippingTotal, currency)}</span></div>
-        <div className="flex justify-between"><span>Tax</span><span>{inr(order.taxTotal, currency)}</span></div>
+        {(order.ops?.codFeePaise ?? 0) > 0 && <div className="flex justify-between"><span>COD fee</span><span>{inr((order.ops?.codFeePaise ?? 0) / 100, currency)}</span></div>}
+        {!order.ops?.pricesIncludeTax && <div className="flex justify-between"><span>GST</span><span>{inr(order.taxTotal, currency)}</span></div>}
         <div className="flex justify-between font-semibold border-t border-border/60 pt-1"><span>Total</span><span>{inr(order.total, currency)}</span></div>
+        {order.ops?.pricesIncludeTax && <div className="flex justify-between text-muted-foreground"><span>Includes GST</span><span>{inr(order.taxTotal, currency)}</span></div>}
       </section>
 
       {order.tracking?.trackingNumber && (

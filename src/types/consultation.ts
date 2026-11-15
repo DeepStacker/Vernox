@@ -31,7 +31,7 @@ export type BudgetBandId = (typeof BUDGET_BANDS)[number]['id'];
 /** `settings/store.consultation` (rupees). Server parsing and defaults: api/_lib/storeConfig.ts. */
 export interface ConsultationSettings {
   enabled: boolean;
-  /** Fee before GST, like every catalogue price. Owner to confirm. */
+  /** Fee including GST, like every catalogue price. Owner to confirm. */
   priceInr: number;
   /** Issue a single-use coupon for the fee, redeemable on the customer's next order. */
   creditTowardsOrder: boolean;
@@ -127,7 +127,7 @@ export interface Proposal {
 export interface ConsultationCredit {
   /** Customer-visible coupon code, bound to the customer's email. */
   code: string;
-  /** Rupees (the consultation fee before GST). */
+  /** Rupees (the consultation fee paid, GST included). */
   amountInr: number;
   expiresAt: number;
 }

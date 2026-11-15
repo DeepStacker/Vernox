@@ -49,7 +49,7 @@ export function FilterPanel({ filters, onChange, idPrefix }: Props) {
       </fieldset>
 
       <RadioGroup legend="Size" name={`${idPrefix}-size`} value={filters.size} onSelect={size => set({ size })} options={SIZE_BANDS.map(b => ({ id: b.id, label: b.label }))} />
-      <RadioGroup legend="Price (excl. GST)" name={`${idPrefix}-price`} value={filters.price} onSelect={price => set({ price })} options={PRICE_BANDS.map(b => ({ id: b.id, label: b.label }))} />
+      <RadioGroup legend="Price" name={`${idPrefix}-price`} value={filters.price} onSelect={price => set({ price })} options={PRICE_BANDS.map(b => ({ id: b.id, label: b.label }))} />
 
       <label className="flex min-h-9 cursor-pointer items-center gap-2 text-sm font-semibold">
         <input type="checkbox" checked={filters.ready} onChange={e => set({ ready: e.target.checked })} className="h-4 w-4 accent-[#5B262C]" />
