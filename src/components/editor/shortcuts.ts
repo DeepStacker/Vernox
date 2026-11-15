@@ -47,6 +47,7 @@ export const STUDIO_SHORTCUTS: Shortcut[] = [
   { keys: '← ↑ → ↓', label: 'Nudge 1 mm (Shift: 10 mm)', match: (e, m) => !m && e.key in arrows, run: e => { const [dx, dy] = arrows[e.key]; const k = e.shiftKey ? 10 : 1; nudgeSelection(dx * k, dy * k); } },
   { keys: 'T', label: 'Add text', match: (e, m) => !m && e.key.toLowerCase() === 't', run: () => addTextObject() },
   { keys: 'S', label: 'Add circle', match: (e, m) => !m && e.key.toLowerCase() === 's', run: () => addShapeObject('circle') },
+  { keys: 'R', label: 'Repeat & symmetry (row, grid, circle, mandala)', match: (e, m) => !m && e.key.toLowerCase() === 'r', run: () => { if (useStudio.getState().selection.length) useStudioUi.getState().openRepeat(); } },
   { keys: 'U', label: 'Upload & trace', match: (e, m) => !m && e.key.toLowerCase() === 'u', run: () => useStudioUi.getState().openTrace() },
   { keys: 'L', label: 'Layers', match: (e, m) => !m && e.key.toLowerCase() === 'l', run: () => { const ui = useStudioUi.getState(); ui.setMode('pro'); ui.setPanel('layers'); } },
   { keys: '] / [', label: 'Bring to front / send to back', match: (e, m) => !m && (e.key === ']' || e.key === '['), run: e => { const s = useStudio.getState(); s.reorder(s.selection, e.key === ']' ? 'front' : 'back'); } },

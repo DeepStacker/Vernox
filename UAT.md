@@ -122,6 +122,23 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | DR-12 | Shortcuts | Desktop | Press `?` | P, B, V, A / Enter, Backspace, Esc and the arrow keys for points are listed | |
 | DR-13 | Old designs | A saved design from before these tools | Open it | It opens unchanged (no migration needed); texts without "Follow arc" stay straight | |
 
+## 1c. Studio complex designs (Simple and Pro)
+
+| ID | Case | Preconditions | Steps | Expected result | Result |
+|---|---|---|---|---|---|
+| CD-01 | Left rail | `/studio`, Simple mode | Look at the rail | Captions under every icon: Templates, Text, Elements, Shapes, Draw, Freehand, Patterns, Upload, Plate | |
+| CD-02 | Element library | Blank plate | Elements; filter by category; tap Lotus, then Border strip | Each is added once, sized for the plate; the border sits against the top edge; checks stay green | |
+| CD-03 | Custom shape | Shapes panel | "Make a shape": polygon with 8 sides, star with 7 points, ring, spiral | Preview updates live; polygon/star/ring are cut out, the spiral is an engraved line; rounded rectangle and teardrop are in the grid | |
+| CD-04 | Pattern fill: plate | Solid plate 600 x 400, black 2 mm | Patterns; pick each of the 10 patterns; Fill plate | Preview appears within a moment; the fill is one object; checks stay green at the default size and web; the mounting holes stay in metal | |
+| CD-05 | Pattern fill: shape | A big heart | Select it; Patterns; "Selected shape"; Fill selected shape | Holes only inside the heart, with a margin; the heart cut-out is replaced by the perforated version; one undo restores it | |
+| CD-06 | Pattern limits | 900 x 600 plate | Set pattern size to 8 mm | A clear message (too many cells, make it bigger); the Fill button is disabled; the page stays responsive | |
+| CD-07 | Web width | Pattern panel | Set web width below the minimum | Amber warning about the minimum web for this metal | |
+| CD-08 | Repeat row, grid, circle | One small shape selected | Toolbar "Repeat" (or `R`): Row 5, then Grid 3 x 3, then Circle 8 | Copies are real objects, grouped with the original, same cut/solid/engrave; each is one undo step; more than 400 copies is refused with a message | |
+| CD-09 | Mandala | A leaf offset from the plate centre | Repeat > Mandala, 8 turns, mirror on; Apply symmetry | Eight turns plus mirror images around the plate centre; the checks update | |
+| CD-10 | Object toolbar | Select any object, Simple mode | Use Duplicate, Mirror, Flip, Forward, Backward, Centre, Delete; select two shapes and use Combine and, in the panel, "Cut out of" | Each works and is one undo step; the toolbar hides while drawing | |
+| CD-11 | Pro only items | Switch to Pro | Check the panel | Numeric X/Y/angle, align edges, offset outline, all four boolean operations, layers and rulers appear only in Pro | |
+| CD-12 | Pointed letters | Name plate, black 2 mm | Type "MWNV Vivek Welcome" | No "metal thinner than" warning for the pointed letters | |
+
 ## 2. Customer (signed in)
 
 | ID | Case | Preconditions | Steps | Expected result | Result |

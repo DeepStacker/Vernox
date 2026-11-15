@@ -22,6 +22,8 @@ import { importVectorFile, startBlank, startFromTemplate, VECTOR_IMPORT_PATTERN 
 import { BatchStep } from './batch/BatchStep';
 import { BottomBar } from './BottomBar';
 import { Inspector, InspectorBody } from './Inspector';
+import { ObjectToolbar } from './ObjectToolbar';
+import { RepeatDialog } from './RepeatDialog';
 import { ReviewStep } from './ReviewStep';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { StartStep } from './StartStep';
@@ -170,6 +172,7 @@ export function StudioApp() {
               <Suspense fallback={<div className="h-full w-full animate-pulse bg-muted" />}>
                 <StudioCanvas showRulers={!isMobile && hasFeature(mode, 'rulers')} />
               </Suspense>
+              <ObjectToolbar />
               {isMobile && hasSelection && panel === null && (
                 <button type="button" onClick={() => useStudioUi.getState().setPanel('inspect')} className="btn-primary absolute bottom-3 right-3 h-11 gap-1.5 rounded-full px-4 text-sm shadow-lg">
                   <Pencil className="h-4 w-4" /> Edit
@@ -196,6 +199,7 @@ export function StudioApp() {
       {step === 'batch' && <BatchStep ctx={ctx} />}
       {step === 'review' && <ReviewStep ctx={ctx} rules={rules} pricedFinishes={pricedFinishes} />}
       <TraceDialog />
+      <RepeatDialog />
       <ShortcutsDialog />
     </div>
   );

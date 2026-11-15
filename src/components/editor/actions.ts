@@ -4,6 +4,12 @@
  * bundle stays small.
  */
 import { applyTemplate, resizePlate, type StudioContext } from '@/lib/studio/api';
+import { elementById, elementPathData } from '@/lib/studio/elements/motifs';
+import { parametricShape, type ParametricKind, type ParametricParams } from '@/lib/studio/elements/parametric';
+import { centrePathData } from '@/lib/studio/geometry/path';
+import type { BooleanOp } from '@/lib/studio/operations';
+import type { PatternResult } from '@/lib/studio/patterns/generate';
+import type { RepeatResult } from '@/lib/studio/repeat';
 import { cloneObject, createDocument, createHole, createPath, createShape, createText, defaultOpFor } from '@/lib/studio/document';
 import type { FixId, DesignIssue } from '@/lib/studio/manufacturability';
 import type { CutRules } from '@/lib/studio/materials';
@@ -28,6 +34,37 @@ export function addShapeObject(shapeId: string) {
   const d = doc();
   const s = Math.round(Math.min(d.plate.widthMm, d.plate.heightMm) * 0.3);
   useStudio.getState().addObjects([createShape({ ...centre(), shapeId, widthMm: s, heightMm: s }, defaultOpFor(d.plate.style))]);
+}
+
+/** Places a library motif sized and anchored as its definition says (border pieces against the plate edge). */
+export function addElementObject(id: string) {
+  const def = elementById(id);
+  if (!def) return;
+  const { plate } = doc();
+  const c = centrePathData(elementPathData(id));
+  const place = def.place ?? { span: 'min' as const, share: 0.4 };
+  const scale = (place.share * (place.span === 'width' ? plate.widthMm : Math.min(plate.widthMm, plate.heightMm))) / Math.max(c.width, c.height, 1e-6);
+  const w = c.width * scale, h = c.height * scale;
+  const edge = Math.min(20, Math.min(plate.widthMm, plate.heightMm) * 0.08);
+  const at = place.anchor === 'top-left' ? { x: edge + w / 2, y: edge + h / 2 }
+    : place.anchor === 'top' ? { x: plate.widthMm / 2, y: edge + h / 2 }
+      : centre();
+  useStudio.getState().addObjects([createPath({ d: c.d, ...at, scaleX: scale, scaleY: scale, name: def.name }, defaultOpFor(plate.style))]);
+}
+
+/** Adds a polygon, star, ring or spiral (a spiral is an engraved line). */
+export function addParametricShape(kind: ParametricKind, params: Partial<ParametricParams>) {
+  const d = doc();
+  const diameter = Math.round(Math.min(d.plate.widthMm, d.plate.heightMm) * 0.35);
+  const made = parametricShape(kind, diameter, params);
+  useStudio.getState().addObjects([createPath({ d: made.d, ...centre(), source: 'draw', name: kind, op: made.op === 'score' ? 'score' : undefined }, defaultOpFor(d.plate.style))]);
+}
+
+/** A rounded rectangle: the rectangle shape with its corners rounded. */
+export function addRoundedRectangle() {
+  const d = doc();
+  const w = Math.round(d.plate.widthMm * 0.35), h = Math.round(Math.min(d.plate.heightMm * 0.3, w));
+  useStudio.getState().addObjects([createShape({ ...centre(), shapeId: 'rectangle', widthMm: w, heightMm: h, cornerRadiusMm: Math.round(Math.min(w, h) * 0.25) }, defaultOpFor(d.plate.style))]);
 }
 
 export function addHoleObject(diameterMm = 6) {
@@ -55,6 +92,49 @@ export function deleteSelection() {
   const s = useStudio.getState();
   const ids = selectedObjects(s).filter(o => !o.locked).map(o => o.id);
   if (ids.length) s.removeObjects(ids);
+}
+
+/**
+ * Adds a generated pattern as one path object (one undo step). `replaceId` is a selected cut-out
+ * that the pattern fills in: it is replaced, since the holes are that cut-out with metal left in it.
+ */
+export function addPatternFill(result: Extract<PatternResult, { ok: true }>, mode: 'cut' | 'add', name: string, replaceId?: string) {
+  const path = createPath({ d: result.d, x: result.centre.x, y: result.centre.y, op: mode, name });
+  const s = useStudio.getState();
+  if (replaceId) s.replaceObjects([replaceId], [path]);
+  else s.addObjects([path]);
+}
+
+/** Applies a repeat or symmetry result as one undoable edit: the selection (grouped) plus its copies. */
+export function applyRepeatResult(result: RepeatResult, originalIds: string[]) {
+  if (result.copies.length === 0) return;
+  useStudio.getState().replaceObjects(originalIds, [...result.originals, ...result.copies]);
+}
+
+async function geometry() {
+  return import('@/lib/studio/operations');
+}
+
+export async function centreSelection(axis: 'both' | 'x' | 'y' = 'both') {
+  const s = useStudio.getState();
+  const objects = selectedObjects(s).filter(o => !o.locked);
+  if (objects.length) s.updateObjects((await geometry()).centreOnPlate(objects, s.doc.plate, axis));
+}
+
+export async function flipSelection(axis: 'x' | 'y') {
+  const s = useStudio.getState();
+  const objects = selectedObjects(s).filter(o => !o.locked);
+  if (objects.length) s.updateObjects((await geometry()).flipObjects(objects, axis));
+}
+
+/** Combine (union) or cut the upper shapes out of the lowest one (subtract) and replace the selection with the result. */
+export async function combineSelection(op: BooleanOp) {
+  const s = useStudio.getState();
+  const objects = selectedObjects(s);
+  if (objects.length < 2) return;
+  const result = (await geometry()).booleanObjects(objects, op);
+  if (result) s.replaceObjects(objects.map(o => o.id), [result]);
+  else toast.error('Nothing is left after that.');
 }
 
 export function nudgeSelection(dx: number, dy: number) {

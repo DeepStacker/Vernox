@@ -1,8 +1,10 @@
 import { X } from 'lucide-react';
 import { t, type MessageKey } from '@/lib/studio/i18n';
 import { useStudio } from '@/lib/studio/store';
+import { ElementsPanel } from './panels/ElementsPanel';
 import { LayersPanel } from './panels/LayersPanel';
 import { ObjectPanel } from './panels/ObjectPanel';
+import { PatternsPanel } from './panels/PatternsPanel';
 import { PlatePanel } from './panels/PlatePanel';
 import { ShapesPanel } from './panels/ShapesPanel';
 import { TemplatesGrid } from './panels/TemplatesPanel';
@@ -11,6 +13,8 @@ import { useStudioUi, type Panel } from './uiStore';
 const TITLES: Partial<Record<NonNullable<Panel>, MessageKey>> = {
   templates: 'tool.templates',
   shape: 'tool.shape',
+  elements: 'tool.short.elements',
+  patterns: 'tool.short.patterns',
   plate: 'tool.plate',
   layers: 'tool.layers',
 };
@@ -24,6 +28,8 @@ export function InspectorBody({ pricedFinishes }: { pricedFinishes: string[] }) 
   const hasSelection = useStudio(s => s.selection.length > 0);
   if (panel === 'templates') return <TemplatesGrid className="p-4" />;
   if (panel === 'shape') return <ShapesPanel />;
+  if (panel === 'elements') return <ElementsPanel />;
+  if (panel === 'patterns') return <PatternsPanel />;
   if (panel === 'layers') return <LayersPanel />;
   if (panel === 'plate') return <PlatePanel pricedFinishes={pricedFinishes} />;
   return hasSelection ? <ObjectPanel /> : <PlatePanel pricedFinishes={pricedFinishes} />;

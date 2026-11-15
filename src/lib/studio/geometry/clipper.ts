@@ -43,15 +43,18 @@ export function xor(a: Rings, b: Rings): Rings {
 
 export type Join = 'round' | 'miter';
 
-/** Grows (delta > 0) or shrinks (delta < 0) a region. */
-export function offset(rings: Rings, delta: number, join: Join = 'round'): Rings {
+/**
+ * Grows (delta > 0) or shrinks (delta < 0) a region. `miterLimit` (multiples of |delta|) bounds
+ * how far a mitered corner may reach; a corner sharper than 2·asin(1/limit) is bevelled.
+ */
+export function offset(rings: Rings, delta: number, join: Join = 'round', miterLimit = 3): Rings {
   if (rings.length === 0 || delta === 0) return rings;
   return Clipper.inflatePathsD(
     rings as PathsD,
     delta,
     join === 'round' ? JoinType.Round : JoinType.Miter,
     EndType.Polygon,
-    3,
+    miterLimit,
     PRECISION,
     ARC_TOLERANCE,
   );

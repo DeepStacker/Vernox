@@ -45,6 +45,30 @@ export function objectBounds(obj: StudioObject): Bounds | null {
   return pathBounds(local, placementMatrix(obj.x, obj.y, obj.rotation, obj.scaleX, obj.scaleY));
 }
 
+/** Bounding box of a set of objects in plate mm. */
+export function selectionBounds(objects: StudioObject[]): Bounds | null {
+  return ringsBounds(objects.flatMap(o => { const b = objectBounds(o); return b ? [[{ x: b.minX, y: b.minY }, { x: b.maxX, y: b.maxY }]] : []; }));
+}
+
+/** Moves the selection as a whole so its box is centred on the plate (`axis`: across, down or both). */
+export function centreOnPlate(objects: StudioObject[], plate: Plate, axis: 'both' | 'x' | 'y' = 'both'): Record<string, Partial<StudioObject>> {
+  const b = selectionBounds(objects);
+  if (!b) return {};
+  const dx = axis === 'y' ? 0 : plate.widthMm / 2 - (b.minX + b.maxX) / 2;
+  const dy = axis === 'x' ? 0 : plate.heightMm / 2 - (b.minY + b.maxY) / 2;
+  return Object.fromEntries(objects.map(o => [o.id, { x: o.x + dx, y: o.y + dy }]));
+}
+
+/** Flips the selection in place about the centre of its box: `x` swaps left and right, `y` top and bottom. */
+export function flipObjects(objects: StudioObject[], axis: 'x' | 'y'): Record<string, Partial<StudioObject>> {
+  const b = selectionBounds(objects);
+  if (!b) return {};
+  const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+  return Object.fromEntries(objects.map(o => [o.id, axis === 'x'
+    ? { x: 2 * cx - o.x, scaleX: -o.scaleX, rotation: -o.rotation }
+    : { y: 2 * cy - o.y, scaleY: -o.scaleY, rotation: -o.rotation }]));
+}
+
 export type AlignEdge = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom';
 
 /** Moves objects so the chosen edge lines up with the selection (or the plate when alone). */

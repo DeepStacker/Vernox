@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { FileUp, Grid3x3, Keyboard, Layers, LayoutTemplate, MousePointer2, Pencil, PenTool, Shapes, Square, Type, Upload, type LucideIcon } from 'lucide-react';
+import { FileUp, Flower2, Grid3x3, Keyboard, Layers, LayoutGrid, LayoutTemplate, MousePointer2, Pencil, PenTool, Shapes, Square, Type, Upload, type LucideIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { t, type MessageKey } from '@/lib/studio/i18n';
 import { hasFeature, toolsFor, type ToolId } from '@/lib/studio/modes';
@@ -10,17 +10,21 @@ import { setDrawTool } from './drawActions';
 import { useDrawStore } from './drawStore';
 import { useStudioUi, type Panel } from './uiStore';
 
-const TOOL_META: Record<ToolId, { icon: LucideIcon; label: MessageKey; simpleLabel?: MessageKey; panel?: Panel }> = {
-  select: { icon: MousePointer2, label: 'tool.select' },
-  templates: { icon: LayoutTemplate, label: 'tool.templates', panel: 'templates' },
-  text: { icon: Type, label: 'tool.text' },
-  shape: { icon: Shapes, label: 'tool.shape', panel: 'shape' },
-  pen: { icon: PenTool, label: 'tool.pen', simpleLabel: 'tool.pen.simple' },
-  pencil: { icon: Pencil, label: 'tool.pencil', simpleLabel: 'tool.pencil.simple' },
-  upload: { icon: Upload, label: 'tool.upload' },
-  import: { icon: FileUp, label: 'tool.import' },
-  plate: { icon: Square, label: 'tool.plate', panel: 'plate' },
-  layers: { icon: Layers, label: 'tool.layers', panel: 'layers' },
+interface ToolMeta { icon: LucideIcon; label: MessageKey; /** Short caption under the icon. */ short: MessageKey; simpleLabel?: MessageKey; panel?: Panel }
+
+const TOOL_META: Record<ToolId, ToolMeta> = {
+  select: { icon: MousePointer2, label: 'tool.select', short: 'tool.short.select' },
+  templates: { icon: LayoutTemplate, label: 'tool.templates', short: 'tool.short.templates', panel: 'templates' },
+  text: { icon: Type, label: 'tool.text', short: 'tool.short.text' },
+  elements: { icon: Flower2, label: 'tool.elements', short: 'tool.short.elements', panel: 'elements' },
+  shape: { icon: Shapes, label: 'tool.shape', short: 'tool.short.shape', panel: 'shape' },
+  pen: { icon: PenTool, label: 'tool.pen', short: 'tool.short.draw', simpleLabel: 'tool.pen.simple' },
+  pencil: { icon: Pencil, label: 'tool.pencil', short: 'tool.short.freehand', simpleLabel: 'tool.pencil.simple' },
+  patterns: { icon: LayoutGrid, label: 'tool.patterns', short: 'tool.short.patterns', panel: 'patterns' },
+  upload: { icon: Upload, label: 'tool.upload', short: 'tool.short.upload' },
+  import: { icon: FileUp, label: 'tool.import', short: 'tool.short.import' },
+  plate: { icon: Square, label: 'tool.plate', short: 'tool.short.plate', panel: 'plate' },
+  layers: { icon: Layers, label: 'tool.layers', short: 'tool.short.layers', panel: 'layers' },
 };
 
 /** Left rail (desktop) / bottom row (mobile) of icon tools, driven by the mode's tool list. */
@@ -46,7 +50,7 @@ export function ToolRail({ orientation = 'vertical' }: { orientation?: 'vertical
   return (
     <nav
       aria-label="Tools"
-      className={cn('flex shrink-0 gap-1 bg-card', horizontal ? 'w-full justify-around border-t border-border px-1 py-1' : 'w-14 flex-col items-center border-r border-border py-2')}
+      className={cn('flex shrink-0 gap-0.5 bg-card', horizontal ? 'w-full overflow-x-auto border-t border-border px-1 py-1' : 'w-[4.5rem] flex-col items-center overflow-y-auto border-r border-border py-2')}
     >
       {toolsFor(mode).map(id => {
         const meta = TOOL_META[id];
@@ -61,9 +65,10 @@ export function ToolRail({ orientation = 'vertical' }: { orientation?: 'vertical
                 onClick={() => run(id)}
                 aria-label={label}
                 aria-pressed={active}
-                className={cn('flex h-11 items-center justify-center rounded-lg transition-colors', horizontal ? 'w-10' : 'w-11', active ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted', id === 'pen' && !horizontal && 'mt-2')}
+                className={cn('flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5 transition-colors', horizontal ? 'h-14 w-16' : 'w-16', active ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted')}
               >
                 <Icon className="h-5 w-5" />
+                <span className="text-[10px] leading-none">{t(meta.short)}</span>
               </button>
             </TooltipTrigger>
             <TooltipContent side={horizontal ? 'top' : 'right'}>{label}</TooltipContent>
