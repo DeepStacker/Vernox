@@ -17,7 +17,7 @@ import { studioShapePath } from './shapes';
 /** Curve flattening tolerance for cut geometry (mm). */
 export const CUT_TOLERANCE = 0.03;
 /** Weld growth for "weld letters": fuses script letters that almost touch. */
-const WELD_MM = 0.6;
+export const WELD_MM = 0.6;
 
 export function plateRings(plate: Plate): Rings {
   if (plate.style === 'none') return [];

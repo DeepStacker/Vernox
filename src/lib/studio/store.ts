@@ -15,7 +15,7 @@ export const HISTORY_LIMIT = 150;
 const HISTORY_COALESCE_MS = 450;
 
 /** Fields whose change invalidates a text outline. */
-const OUTLINE_FIELDS = ['text', 'fontId', 'sizeMm', 'letterSpacingMm', 'lineHeight', 'align'] as const;
+const OUTLINE_FIELDS = ['text', 'fontId', 'sizeMm', 'letterSpacingMm', 'lineHeight', 'align', 'arcRadiusMm'] as const;
 
 export type ObjectPatch = Partial<Omit<StudioObject, 'id' | 'kind'>> & Record<string, unknown>;
 

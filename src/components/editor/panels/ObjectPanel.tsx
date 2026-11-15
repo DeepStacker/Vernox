@@ -1,6 +1,6 @@
 import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical,
-  ArrowDownToLine, ArrowUpToLine, Combine, Copy, FlipHorizontal2, FlipVertical2, Group, Lock, Maximize2, Trash2, Ungroup, Unlock,
+  ArrowDownToLine, ArrowUpToLine, Combine, Copy, FlipHorizontal2, FlipVertical2, Group, Lock, Maximize2, Spline, Trash2, Ungroup, Unlock,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Switch } from '@/components/ui/switch';
@@ -12,6 +12,7 @@ import { fontById, fontsForText } from '@/lib/studio/text/fonts';
 import { t } from '@/lib/studio/i18n';
 import { useStudioUi } from '../uiStore';
 import { deleteSelection, duplicateSelection, groupSelection } from '../actions';
+import { convertSelectionToPath, enterNodeEdit } from '../drawActions';
 import { Field, IconButton, NumberField, Section, Segmented } from './fields';
 
 async function runGeometry(fn: (ops: typeof import('@/lib/studio/operations')) => void) {
@@ -67,6 +68,33 @@ export function ObjectPanel() {
             <span>Join letters</span>
             <Switch checked={one.weld} onCheckedChange={weld => patch({ weld })} />
           </label>
+          <label className="flex items-center justify-between text-sm">
+            <span>{t('text.arc')}</span>
+            <Switch
+              checked={Boolean(one.arcRadiusMm)}
+              onCheckedChange={on => patch({
+                arcRadiusMm: on ? Math.round(Math.max(one.sizeMm * 2, Math.min(doc.plate.widthMm, doc.plate.heightMm) * 0.4)) : undefined,
+              })}
+            />
+          </label>
+          {one.arcRadiusMm ? (
+            <>
+              <Segmented
+                label=""
+                value={one.arcRadiusMm > 0 ? 'top' : 'bottom'}
+                options={[{ value: 'top', label: t('text.arcTop') }, { value: 'bottom', label: t('text.arcBottom') }]}
+                onChange={side => patch({ arcRadiusMm: (side === 'top' ? 1 : -1) * Math.abs(one.arcRadiusMm ?? 0) })}
+              />
+              <NumberField
+                label={t('text.arcRadius')}
+                length
+                value={Math.abs(one.arcRadiusMm)}
+                min={one.sizeMm}
+                max={5000}
+                onChange={v => patch({ arcRadiusMm: Math.sign(one.arcRadiusMm ?? 1) * v })}
+              />
+            </>
+          ) : null}
           <button type="button" className="btn-secondary h-9 text-sm" onClick={() => runGeometry(ops => {
             const size = ops.fitTextSize(one, doc.plate);
             if (size) updateObjects({ [one.id]: { sizeMm: size, x: doc.plate.widthMm / 2, y: doc.plate.heightMm / 2, rotation: 0 } });
@@ -89,6 +117,20 @@ export function ObjectPanel() {
       {one?.kind === 'hole' && (
         <Section>
           <NumberField label="Diameter" length value={one.diameterMm} min={0.5} max={300} step={0.5} onChange={v => patch({ diameterMm: v })} />
+        </Section>
+      )}
+
+      {one && !one.locked && (one.kind === 'path' || one.kind === 'text' || one.kind === 'shape') && (
+        <Section>
+          {one.kind === 'path' ? (
+            <button type="button" className="btn-secondary h-9 text-sm" onClick={() => enterNodeEdit(one.id)}>
+              <Spline className="mr-1.5 h-4 w-4" /> {t('draw.editPoints')}
+            </button>
+          ) : (
+            <button type="button" className="btn-secondary h-9 text-sm" onClick={() => void convertSelectionToPath()}>
+              <Spline className="mr-1.5 h-4 w-4" /> {t('draw.convert')}
+            </button>
+          )}
         </Section>
       )}
 

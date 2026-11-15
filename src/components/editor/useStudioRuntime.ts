@@ -17,7 +17,7 @@ import {
 import { GeometryClient } from '@/lib/studio/geometryClient';
 import { parseCutRuleOverrides, resolveCutRules, type CutRuleOverrides } from '@/lib/studio/materials';
 import { useStudio } from '@/lib/studio/store';
-import { shapeText } from '@/lib/studio/text/shaper';
+import { shapeKey, shapeText } from '@/lib/studio/text/shaper';
 import { autoFitBoundText } from '@/lib/studio/text/fit';
 import type { StudioContext } from '@/lib/studio/api';
 import type { TextObject } from '@/lib/studio/schema';
@@ -75,7 +75,7 @@ export function useTextOutlines() {
     const ui = useStudioUi.getState();
     for (const o of objects) {
       if (o.kind !== 'text' || o.outline || !o.text.trim()) continue;
-      const key = JSON.stringify([o.text, o.fontId, o.sizeMm, o.letterSpacingMm, o.lineHeight, o.align]);
+      const key = shapeKey(o);
       if (inFlight.current.get(o.id) === key) continue;
       inFlight.current.set(o.id, key);
       ui.shapingDelta(1);
@@ -83,10 +83,9 @@ export function useTextOutlines() {
         .then(shaped => {
           // Apply only if the object still has the same text settings.
           const current = useStudio.getState().doc.objects.find(x => x.id === o.id);
-          if (current?.kind === 'text' && !current.outline &&
-            JSON.stringify([current.text, current.fontId, current.sizeMm, current.letterSpacingMm, current.lineHeight, current.align]) === key) {
+          if (current?.kind === 'text' && !current.outline && shapeKey(current) === key) {
             const fitted = autoFitBoundText({ ...current, outline: shaped.d || undefined }, useStudio.getState().doc.plate);
-            useStudio.getState().applyDerived({ [o.id]: { outline: fitted.outline, sizeMm: fitted.sizeMm, letterSpacingMm: fitted.letterSpacingMm } });
+            useStudio.getState().applyDerived({ [o.id]: { outline: fitted.outline, sizeMm: fitted.sizeMm, letterSpacingMm: fitted.letterSpacingMm, arcRadiusMm: fitted.arcRadiusMm } });
           }
         })
         .catch(err => useStudioUi.getState().setGeometryError(err instanceof Error ? err.message : String(err)))

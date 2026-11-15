@@ -1,12 +1,12 @@
 /**
  * Editing operations that produce new geometry or placements: booleans, offset outline,
- * align/distribute, mirror, fit-to-plate. Pure functions over documents/objects.
+ * align/distribute, mirror, fit-to-plate, convert to path. Pure functions over documents/objects.
  */
 import { difference, intersection, normalise, offset, union, xor } from './geometry/clipper';
-import { centrePathData, pathBounds, placementMatrix, ringsBounds, ringsToPathData, type Bounds } from './geometry/path';
-import { objectLocalPath, objectRings } from './compose';
+import { applyMatrix, centrePathData, pathBounds, pathToRings, placementMatrix, ringsBounds, ringsToPathData, type Bounds } from './geometry/path';
+import { CUT_TOLERANCE, objectLocalPath, objectRings, WELD_MM } from './compose';
 import { createPath } from './document';
-import type { PathObject, Plate, StudioObject, TextObject } from './schema';
+import type { PathObject, Plate, ShapeObject, StudioObject, TextObject } from './schema';
 
 export type BooleanOp = 'union' | 'subtract' | 'intersect' | 'exclude';
 
@@ -104,4 +104,24 @@ export function mirrorCopy<T extends StudioObject>(obj: T, axis: 'x' | 'y', plat
   return axis === 'x'
     ? ({ x: plate.widthMm - obj.x, scaleX: -obj.scaleX, rotation: -obj.rotation } as Partial<T>)
     : ({ y: plate.heightMm - obj.y, scaleY: -obj.scaleY, rotation: -obj.rotation } as Partial<T>);
+}
+
+/**
+ * Turns text or a shape into an editable path with the same outline and placement (one-way:
+ * the text can no longer be retyped). Welded text keeps its welded outline, which is
+ * flattened to line segments because the weld is an offset of the letters.
+ */
+export function convertToPath(obj: TextObject | ShapeObject): PathObject | null {
+  let local = objectLocalPath(obj);
+  if (!local) return null;
+  if (obj.kind === 'text' && obj.weld) {
+    local = ringsToPathData(offset(normalise(pathToRings(local, CUT_TOLERANCE)), WELD_MM / 2, 'round'), true, 3);
+  }
+  const c = centrePathData(local);
+  const at = applyMatrix(placementMatrix(obj.x, obj.y, obj.rotation, obj.scaleX, obj.scaleY), { x: c.cx, y: c.cy });
+  const name = obj.name ?? (obj.kind === 'text' ? obj.text.replace(/\s+/g, ' ').trim().slice(0, 60) : undefined);
+  return createPath({
+    d: c.d, x: at.x, y: at.y, rotation: obj.rotation, scaleX: obj.scaleX, scaleY: obj.scaleY,
+    op: obj.op, name: name || undefined, locked: obj.locked, hidden: obj.hidden, groupId: obj.groupId, source: 'draw',
+  });
 }

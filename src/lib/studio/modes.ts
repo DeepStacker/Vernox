@@ -7,7 +7,7 @@ import { safeLocal } from '@/lib/safeStorage';
 
 export type StudioMode = 'simple' | 'pro';
 
-export type ToolId = 'select' | 'text' | 'shape' | 'upload' | 'templates' | 'plate' | 'layers' | 'import';
+export type ToolId = 'select' | 'text' | 'shape' | 'pen' | 'pencil' | 'upload' | 'templates' | 'plate' | 'layers' | 'import';
 
 export type FeatureId =
   | 'transform-fields'
@@ -24,8 +24,9 @@ export type FeatureId =
   | 'manual-bridges-toggle';
 
 const TOOLS: Record<StudioMode, readonly ToolId[]> = {
-  simple: ['select', 'templates', 'text', 'shape', 'upload', 'plate'],
-  pro: ['select', 'templates', 'text', 'shape', 'upload', 'import', 'plate', 'layers'],
+  // Drawing (pen, pencil) is in both modes: Simple shows friendlier labels (ToolRail).
+  simple: ['select', 'templates', 'text', 'shape', 'pen', 'pencil', 'upload', 'plate'],
+  pro: ['select', 'templates', 'text', 'shape', 'pen', 'pencil', 'upload', 'import', 'plate', 'layers'],
 };
 
 const FEATURES: Record<StudioMode, ReadonlySet<FeatureId>> = {

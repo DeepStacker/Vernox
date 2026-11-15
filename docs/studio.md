@@ -7,13 +7,43 @@ Engine decisions: [ADR 0001](adr/0001-studio-engine.md). Code: `src/components/e
 
 1. **Start** — pick a template, a blank plate, or upload a logo. "Continue your last design" appears when an autosave exists.
 2. **Design** — type into the template fields (long names shrink to fit), tap the canvas to select, drag to move, pull the
-   corner handles to resize or the top handle to rotate. The left rail adds text, shapes and uploads; the right panel shows
+   corner handles to resize or the top handle to rotate. The left rail adds text, shapes and uploads, and has two drawing
+   tools (see [Drawing](#drawing-both-modes)); the right panel shows
    the selected item, or the plate & finish when nothing is selected. The pill at the bottom shows checks: red items block
    ordering and come with a fix button (for example **Add bridges** for letter centres that would fall out).
 3. **Review** — the finished piece in its metal with a wall shadow, finish, quantity, **Add to cart**.
 
 Phones: the canvas is full screen; tools sit at the bottom and open in a sheet; pinch to zoom, drag with one finger on empty
 space to pan, **Edit** opens the selected item.
+
+## Drawing (both modes)
+
+Simple mode labels the tools "Draw lines & curves" and "Draw freehand"; Pro calls them Pen and Pencil. A bar at the top of
+the canvas shows a one-line hint and the touch equivalents of the keys (Finish, Undo point, Cancel, Done, Delete point,
+Corner / smooth), so everything works on phones and tablets. Pinch-zoom works while drawing (a second finger withdraws the
+point or stroke the first finger started); Space-drag or the middle button pans.
+
+- **Pen (`P`):** click for a corner point, press-and-drag for a smooth point (mirrored handles). Click the first point to
+  close the shape; click the last point again (or double-click, or Enter) to finish an open line; Backspace removes the last
+  point; Esc drops the draft (a second Esc leaves the tool).
+- **Pencil (`B`):** draw freehand; the stroke is smoothed into Bezier curves (Ramer–Douglas–Peucker, then least-squares cubic
+  fitting). The **Smoothing** slider sets the fitting tolerance (0.6–10 screen px). A stroke that ends near its start is
+  closed.
+- **What a drawing becomes:** a `path` object with `source: 'draw'`. Closed shapes take the plate's default role (cut out of a
+  solid plate, solid metal on a frame or with no plate); open lines are engraved (score). Manufacturability checks, bridges
+  and production export treat them like any other object. Each finished path is one undo step; the tool stays active.
+- **Edit points (`A` / Enter, double-click a path, or "Edit points"):** square = corner, round = smooth. Drag points or their
+  handles (a smooth point keeps its handles in line), tap the outline to add a point (the curve keeps its shape), Delete
+  removes the selected point, double-click a point toggles corner / smooth, arrows move it 1 mm (Shift 10 mm). Editing
+  happens in the object's local coordinates, so rotated, scaled and mirrored paths edit correctly. Every change is one
+  undo step. Esc, Enter, **Done** or a tap on empty canvas ends editing.
+- **Convert to editable path** (text and shapes): replaces the item with a path of exactly the same outline and opens point
+  editing. One-way (the text can no longer be retyped; undo restores it). Welded text keeps its welded outline, flattened to
+  line segments.
+- **Text on a curve:** text option **Follow arc** with a radius and **Top of circle** / **Bottom of circle**, for round name
+  plates and badges. Each letter (HarfBuzz cluster) is rotated and placed on the circle without warping, so the cut outline
+  stays exact. Resizing the text scales the radius with it. A second line follows a concentric circle.
+  Devanagari on a tight arc: the headline can open slightly between letters; switch on **Join letters** to fuse it.
 
 ## For designers and trade (Pro mode)
 
@@ -27,7 +57,8 @@ Switch **Pro** in the header (remembered in this browser). Same document — not
 - Import SVG or DXF (lines, polylines with bulges, arcs, circles, ellipses, splines; DXF units honoured).
 - Every finish and thickness, mounting hole size and inset, auto-bridges on/off.
 - Review → **Download** SVG, DXF (nominal), DXF (kerf-compensated) and a PDF sheet of your own design.
-- `?` lists every shortcut (undo `Ctrl Z`, redo `Ctrl Shift Z`, duplicate `Ctrl D`, nudge with arrows, zoom `+ −`, fit `0`).
+- `?` lists every shortcut (undo `Ctrl Z`, redo `Ctrl Shift Z`, duplicate `Ctrl D`, nudge with arrows, zoom `+ −`, fit `0`,
+  pen `P`, pencil `B`, select `V`, edit points `A` / Enter).
 
 ## How a design becomes a part
 
@@ -71,9 +102,9 @@ groups; a PDF sheet. Files are nominal (the CAM software applies its kerf offset
   mounting: { preset: 'none' | 'top-2' | 'corners-4' | 'center-1', diameterMm, insetMm },
   manufacturing: { autoBridges, bridgeWidthMm? },
   objects: Array<                      // z-order, bottom first; geometry local & centred, placed by x, y, rotation, scaleX/Y
-    | { kind: 'text', text, fontId, sizeMm /* cap height */, letterSpacingMm, lineHeight, align, weld, binding?, outline? }
+    | { kind: 'text', text, fontId, sizeMm /* cap height */, letterSpacingMm, lineHeight, align, weld, arcRadiusMm?, binding?, outline? }
     | { kind: 'shape', shapeId, widthMm, heightMm, cornerRadiusMm }
-    | { kind: 'path', d, source? }
+    | { kind: 'path', d, source? /* trace | import | boolean | offset | draw (pen, pencil, converted) */ }
     | { kind: 'hole', diameterMm }
   > & { id, op: 'cut' | 'add' | 'score', x, y, rotation, scaleX, scaleY, locked?, hidden?, groupId?, name? },
   template?: { id, fields },
@@ -81,6 +112,10 @@ groups; a PDF sheet. Files are nominal (the CAM software applies its kerf offset
                  contours: { role: 'inner' | 'outer' | 'score', d }[] },
 }
 ```
+
+`arcRadiusMm` (text on a curve) is optional: positive bends the baseline over the top of a circle of that radius, negative
+along the bottom; absent or 0 is straight; the layout uses at least the letter height. Adding it needed no version bump or
+migration — older v4 documents parse unchanged.
 
 Migrations: legacy order designs (VDM `version: '3.0.0'`) → `migrateLegacyDesign` in `src/lib/orders/camDocument.ts`;
 legacy saved projects (`metalshape-projects`) → plate-only documents in `src/lib/projectStorage.ts`. Bump `schemaVersion`
@@ -104,6 +139,17 @@ and add a migration for any breaking change.
   finish ids are offered.
 - **Tools per mode:** `src/lib/studio/modes.ts`.
 - **Strings:** `src/lib/studio/i18n.ts` (English complete; add a `hi` dictionary — missing keys fall back to English).
+
+### Drawing internals
+
+`src/lib/studio/draw/` is pure and unit-tested (`__tests__/draw.test.ts`): `pathModel.ts` (SVG path data ⇄ anchors with
+absolute handles; move, insert by de Casteljau split, delete, corner / smooth, nearest segment), `curveFit.ts` (RDP +
+Schneider cubic fitting), `freehand.ts` (pencil strokes → sub-path, auto-close), `pen.ts` (pen state machine), `objects.ts`
+(drawn sub-path → centred path object; node edits written back re-centred with the placement adjusted). The canvas layers
+(`src/components/editor/canvas/PenTool.tsx`, `PencilTool.tsx`, `NodeEditor.tsx`, `DrawToolbar.tsx`) only forward pointer
+events and render drafts; `drawStore.ts` holds the tool state (no undo) and `drawActions.ts` the commands shared by the
+canvas, toolbar, inspector and the shortcut table. Text arcs live in `text/shaper.ts` (`placeOnArc`); `convertToPath` in
+`operations.ts`.
 
 ### Deep links
 
@@ -141,4 +187,4 @@ the bound text must be a text object, not a traced image.
 
 ### Not built yet
 
-Path node editing, draggable ruler guides, multiple artboards, PDF-vector import, the Hindi string dictionary.
+Draggable ruler guides, multiple artboards, PDF-vector import, the Hindi string dictionary.

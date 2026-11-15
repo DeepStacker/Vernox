@@ -25,7 +25,7 @@ import { applyTemplateFields, getTemplate, templateDefaults } from './templates/
 import './templates/definitions';
 import { fontById } from './text/fonts';
 import { shapeText } from './text/shaper';
-import { autoFitBoundText } from './text/fit';
+import { autoFitBoundText, scaledTextMetrics } from './text/fit';
 import { DEFAULT_TRACE_OPTIONS, type TraceOptions } from './trace/options';
 import type { ImageDataLike } from 'imagetracerjs';
 
@@ -143,7 +143,7 @@ export function resizePlate(doc: StudioDocument, widthMm: number, heightMm: numb
   const objects = doc.objects.map((o): StudioObject => {
     const moved = { ...o, x: o.x * sx, y: o.y * sy };
     switch (o.kind) {
-      case 'text': return { ...moved, kind: 'text', sizeMm: Math.round(o.sizeMm * s * 10) / 10, letterSpacingMm: o.letterSpacingMm * s, outline: undefined } as TextObject;
+      case 'text': return { ...moved, kind: 'text', ...scaledTextMetrics(o, s), sizeMm: Math.round(o.sizeMm * s * 10) / 10, outline: undefined } as TextObject;
       case 'shape': return { ...moved, widthMm: o.widthMm * s, heightMm: o.heightMm * s } as ShapeObject;
       case 'path': return { ...moved, scaleX: o.scaleX * s, scaleY: o.scaleY * s } as PathObject;
       default: return moved as StudioObject;

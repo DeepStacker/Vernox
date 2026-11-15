@@ -79,7 +79,7 @@ const placed = (p: Placement, op: ObjectOp) => ({
   ...(p.groupId ? { groupId: p.groupId } : {}),
 });
 
-export function createText(opts: Placement & Partial<Pick<TextObject, 'text' | 'fontId' | 'sizeMm' | 'letterSpacingMm' | 'lineHeight' | 'align' | 'weld' | 'binding'>>, defaultOp: ObjectOp = 'cut'): TextObject {
+export function createText(opts: Placement & Partial<Pick<TextObject, 'text' | 'fontId' | 'sizeMm' | 'letterSpacingMm' | 'lineHeight' | 'align' | 'weld' | 'binding' | 'arcRadiusMm'>>, defaultOp: ObjectOp = 'cut'): TextObject {
   return {
     id: newId('t'),
     kind: 'text',
@@ -92,6 +92,7 @@ export function createText(opts: Placement & Partial<Pick<TextObject, 'text' | '
     align: opts.align ?? 'center',
     weld: opts.weld ?? false,
     ...(opts.binding ? { binding: opts.binding } : {}),
+    ...(opts.arcRadiusMm ? { arcRadiusMm: opts.arcRadiusMm } : {}),
   };
 }
 

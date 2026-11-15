@@ -27,6 +27,7 @@ import { ShortcutsDialog } from './ShortcutsDialog';
 import { StartStep } from './StartStep';
 import { STUDIO_SHORTCUTS } from './shortcuts';
 import { ToolRail } from './ToolRail';
+import { useDrawStore } from './drawStore';
 import { TraceDialog } from './TraceDialog';
 import { useStudioUi, type StudioStep } from './uiStore';
 import { useAddToCart } from './useAddToCart';
@@ -142,6 +143,8 @@ export function StudioApp() {
   useGeometryAnalysis(ctx);
   useAutosave(step !== 'start');
   useKeyboardShortcuts(STUDIO_SHORTCUTS, step === 'design');
+  // Leaving the design step ends any drawing or point editing.
+  useEffect(() => { if (step !== 'design') useDrawStore.getState().setTool('select'); }, [step]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     const file = e.dataTransfer.files[0];

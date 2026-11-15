@@ -21,11 +21,19 @@ import { Circle, Layer, Line, Path, Rect, Stage, Transformer } from 'react-konva
 import { plateOutline, plateRings } from '@/lib/studio/compose';
 import { ringsToPathData, transformPathData } from '@/lib/studio/geometry/path';
 import { finishPreset } from '@/lib/studio/materials';
+import { scaledTextMetrics } from '@/lib/studio/text/fit';
 import { useStudio, type ObjectPatch } from '@/lib/studio/store';
 import type { StudioObject } from '@/lib/studio/schema';
 import { useStudioUi } from '../uiStore';
 import { withGroups } from '../actions';
+import { enterNodeEdit, exitNodeEdit } from '../drawActions';
+import { useDrawStore } from '../drawStore';
+import { coarsePointer } from './drawInput';
+import { DrawToolbar } from './DrawToolbar';
+import { NODE_EDITOR_NAME, NodeEditor } from './NodeEditor';
 import { ObjectNode, type ObjectPaint } from './ObjectNode';
+import { PencilTool } from './PencilTool';
+import { PenTool } from './PenTool';
 import { Rulers, type ViewState } from './Rulers';
 
 Konva.hitOnDragEnabled = true;
@@ -47,8 +55,6 @@ function gradientStops(stops: readonly string[]): (string | number)[] {
 
 interface Rect { x: number; y: number; width: number; height: number }
 
-const coarsePointer = () => typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
-
 export default function StudioCanvas({ showRulers }: { showRulers: boolean }) {
   const doc = useStudio(s => s.doc);
   const selection = useStudio(s => s.selection);
@@ -56,6 +62,9 @@ export default function StudioCanvas({ showRulers }: { showRulers: boolean }) {
   const fitRequest = useStudioUi(s => s.fitRequest);
   const showGrid = useStudioUi(s => s.showGrid);
   const snap = useStudioUi(s => s.snap);
+  const drawTool = useDrawStore(s => s.tool);
+  const editingId = useDrawStore(s => s.nodeEdit?.objectId ?? null);
+  const editingObj = editingId ? doc.objects.find(o => o.id === editingId) : undefined;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -164,7 +173,8 @@ export default function StudioCanvas({ showRulers }: { showRulers: boolean }) {
     const tr = transformerRef.current;
     const stage = stageRef.current;
     if (!tr || !stage) return;
-    const nodes = selection
+    // Drawing and point editing have their own handles; the transformer stays out of the way.
+    const nodes = (drawTool !== 'select' || editingId ? [] : selection)
       .map(id => stage.findOne(`#${id}`))
       .filter((n): n is KonvaNode => Boolean(n))
       .filter(n => doc.objects.find(o => o.id === n.id())?.locked !== true);
@@ -176,7 +186,12 @@ export default function StudioCanvas({ showRulers }: { showRulers: boolean }) {
       ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
       : ['top-left', 'top-center', 'top-right', 'middle-right', 'middle-left', 'bottom-left', 'bottom-center', 'bottom-right']);
     tr.getLayer()?.batchDraw();
-  }, [selection, doc.objects]);
+  }, [selection, doc.objects, drawTool, editingId]);
+
+  // The edited object was deleted, undone away or is no longer a path.
+  useEffect(() => { if (editingId && editingObj?.kind !== 'path') exitNodeEdit(); }, [editingId, editingObj]);
+
+  const onDoubleTap = useCallback((id: string) => { enterNodeEdit(id); }, []);
 
   const select = useStudio(s => s.select);
   const onPointerDown = useCallback((e: KonvaEventObject<MouseEvent | TouchEvent>, id: string) => {
@@ -256,8 +271,7 @@ export default function StudioCanvas({ showRulers }: { showRulers: boolean }) {
         // Shaping is linear in size: scale the cached outline exactly instead of re-shaping.
         const k = (kx + ky) / 2;
         Object.assign(base, {
-          sizeMm: Math.round(o.sizeMm * k * 100) / 100,
-          letterSpacingMm: o.letterSpacingMm * k,
+          ...scaledTextMetrics(o, k),
           ...(o.outline ? { outline: transformPathData(o.outline, [k, 0, 0, k, 0, 0]) } : {}),
         });
         node.scale({ x: o.scaleX, y: o.scaleY });
@@ -302,13 +316,16 @@ export default function StudioCanvas({ showRulers }: { showRulers: boolean }) {
       gesture.current = { mode: 'pinch', dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), last: { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 } };
       return;
     }
-    const onObject = e.target.hasName('studio-object') || e.target.getParent()?.className === 'Transformer';
+    const onObject = e.target.hasName('studio-object') || e.target.hasName(NODE_EDITOR_NAME) || e.target.getParent()?.className === 'Transformer';
     if (onObject) return;
     const p = pointer();
     const middle = 'button' in evt && evt.button === 1;
     const touch = 'touches' in evt;
     const pro = useStudioUi.getState().mode === 'pro';
-    if (middle || spaceDown.current || touch || !pro) {
+    const drawing = useDrawStore.getState();
+    // The pen and pencil own one-finger / left-button input; pinch, middle button and Space still pan.
+    if (drawing.tool !== 'select' && !middle && !spaceDown.current) return;
+    if (middle || spaceDown.current || touch || !pro || drawing.nodeEdit) {
       gesture.current = { mode: 'pan', last: p, start: p };
     } else {
       const w = toWorld(p);
@@ -358,7 +375,9 @@ export default function StudioCanvas({ showRulers }: { showRulers: boolean }) {
         select(withGroups(hits, useStudio.getState().doc.objects));
       }
     } else if (g.mode === 'pan' && g.start && g.last && Math.hypot(g.last.x - g.start.x, g.last.y - g.start.y) < 4) {
-      select([]); // a tap on empty space clears the selection
+      // A tap on empty space ends point editing, else clears the selection.
+      if (useDrawStore.getState().nodeEdit) exitNodeEdit();
+      else select([]);
     }
     gesture.current = { mode: 'none' };
   };
@@ -377,8 +396,9 @@ export default function StudioCanvas({ showRulers }: { showRulers: boolean }) {
   }, [showGrid, W, H]);
 
   return (
-    <div ref={containerRef} className="relative h-full w-full touch-none select-none overflow-hidden" style={{ background: wall }} role="application" aria-label="Design canvas">
+    <div ref={containerRef} className={`relative h-full w-full touch-none select-none overflow-hidden${drawTool !== 'select' ? ' cursor-crosshair' : ''}`} style={{ background: wall }} role="application" aria-label="Design canvas">
       {showRulers && <Rulers view={view} width={size.width} height={size.height} />}
+      <DrawToolbar />
       {size.width > 0 && (
         <Stage
           ref={stageRef}
@@ -420,8 +440,9 @@ export default function StudioCanvas({ showRulers }: { showRulers: boolean }) {
                 key={o.id}
                 obj={o}
                 paint={paint}
-                draggable={!o.locked}
+                draggable={!o.locked && o.id !== editingId}
                 onPointerDown={onPointerDown}
+                onDoubleTap={onDoubleTap}
                 onDragStart={onDragStart}
                 onDragMove={onDragMove}
                 onDragEnd={onDragEnd}
@@ -447,6 +468,9 @@ export default function StudioCanvas({ showRulers }: { showRulers: boolean }) {
               />
             ))}
           </Layer>
+          {editingObj?.kind === 'path' && <NodeEditor obj={editingObj} scale={view.scale} />}
+          {drawTool === 'pen' && <PenTool scale={view.scale} spaceDown={spaceDown} />}
+          {drawTool === 'pencil' && <PencilTool scale={view.scale} spaceDown={spaceDown} />}
           <Layer>
             <Transformer
               ref={transformerRef}

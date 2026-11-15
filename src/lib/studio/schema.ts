@@ -50,6 +50,14 @@ export const textObjectSchema = baseObjectSchema.extend({
   align: z.enum(['left', 'center', 'right']).default('center'),
   /** Fuse nearly-touching letters (script fonts) into one connected piece. */
   weld: z.boolean().default(false),
+  /**
+   * Text on a curve: radius (mm) of the circle the baseline follows. Positive bends the line
+   * over the top of a circle (centre below the text), negative along the bottom (centre above,
+   * letters upright, still reading left to right). Layout uses at least the letter height.
+   * Absent or 0 = straight. Optional, so v4 documents
+   * without it are unchanged (no schema bump).
+   */
+  arcRadiusMm: finite.optional(),
   /** Template field this text is bound to (parametric templates). */
   binding: z.string().optional(),
   /** Cached outline in local mm (derived from text+font+size; re-derivable). */
