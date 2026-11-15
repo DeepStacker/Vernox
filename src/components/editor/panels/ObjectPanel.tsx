@@ -73,7 +73,7 @@ export function ObjectPanel() {
             <Switch
               checked={Boolean(one.arcRadiusMm)}
               onCheckedChange={on => patch({
-                arcRadiusMm: on ? Math.round(Math.max(one.sizeMm * 2, Math.min(doc.plate.widthMm, doc.plate.heightMm) * 0.4)) : undefined,
+                arcRadiusMm: on ? Math.round(Math.max(one.sizeMm * 3, Math.min(doc.plate.widthMm, doc.plate.heightMm) * 0.4)) : undefined,
               })}
             />
           </label>
