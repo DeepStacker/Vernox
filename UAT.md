@@ -38,7 +38,8 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | CG-02 | Browse by category | Products in 2+ categories | Open `/shop`, click a category | URL becomes `/shop/<category>`; only that category's products listed; count matches | |
 | CG-03 | Filter and sort | Shop open | Apply finish filter, price cap, sort by price low to high | List updates; order and filters correct; clearing filters restores all | |
 | CG-04 | Search | Shop open | Search a known product name and a nonsense term | Match shown; nonsense shows empty state, no crash | |
-| CG-05 | Product detail | A published product | Open `/product/<slug>` | Images, price in INR, finish and size selectors, stock state, reviews visible; page title and meta match the product | |
+| CG-05 | Product detail | A published product | Open `/product/<slug>` | Images, price in INR with "Inclusive of all taxes" under it (no "+ GST" anywhere, also not on the mobile sticky bar or product cards), finish and size selectors, stock state, reviews visible; page title and meta match the product | |
+| CG-05a | One price, GST included | A ₹2,499 piece at 5% GST, seller in Karnataka | Add it to the cart, check out prepaid to a Bengaluru address, ship it, open the invoice | Card, PDP, cart ("incl. GST", Total ₹2,499) and checkout all show ₹2,499; checkout lists "Includes GST ₹119.00" under the total; Razorpay asks for ₹2,499.00; invoice: taxable ₹2,380.00, CGST 2.5% ₹59.50, SGST 2.5% ₹59.50, total ₹2,499.00, footer "Prices are inclusive of GST" | |
 | CG-06 | Variant price change | PDP with sizes | Change size and finish | Price updates per the size delta; selected variant carried to cart | |
 | CG-07 | Out of stock product | Product with stock 0 and tracking on | Open PDP | "Out of stock" shown; add to cart disabled | |
 | CG-08 | Add to cart | PDP open | Add item, open cart drawer | Item, variant, quantity, line price and subtotal correct | |
@@ -51,7 +52,7 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | CG-15 | Pay by UPI success | Test mode | Choose UPI, pay with test success VPA | Redirect to `/order-confirmation/<id>`; order number, items, address, total shown; cart emptied | |
 | CG-16 | Pay by card success | Test mode | Pay with test success card | Same as CG-15 | |
 | CG-17 | Pay by netbanking success | Test mode | Pay via test bank, success | Same as CG-15 | |
-| CG-18 | Cash on delivery | COD enabled, eligible pincode and value | Choose COD, place order | Order created as `Confirmed_COD` with no payment window; confirmation shows the total incl. COD fee (+ GST on it); stock decremented; confirmation notification queued | |
+| CG-18 | Cash on delivery | COD enabled, eligible pincode and value | Choose COD, place order | Order created as `Confirmed_COD` with no payment window; confirmation shows the total incl. the COD fee (GST included in it, nothing added on top); stock decremented; confirmation notification queued | |
 | CG-19 | COD ineligible | COD-ineligible pincode or above value cap | Open payment step | COD radio disabled with the reason (PIN not COD-eligible / above the value cap / COD off); forcing it via API returns `COD_NOT_AVAILABLE` | |
 | CG-20 | Payment failure | Test mode | Pay with test failure card | Failure message; cart retained; order not marked paid; retry possible | |
 | CG-21 | Payment abandoned | Test mode | Close payment window without paying | Order stays unpaid; cart retained; stock reservation released after timeout | |
@@ -135,7 +136,7 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 | SP-04 | Photo handling | Wall editor | Upload a 12 MP phone photo; a non-image; a very large wall size (6000 cm) | Photo is downscaled to ≤ 1600 px before upload; non-image rejected; size outside 30 cm to 30 × 15 m refused with a message | |
 | SP-05 | Try a design here | Wall with photo and scale | Try a design here, change the design and the size | The wall preview opens on "Your wall" with the saved photo at the saved scale; the piece is to scale; the privacy note says the photo is saved in the account | |
 | SP-06 | Wall without a photo | Wall saved without a photo | Look at its card | Try a design here is disabled; Get design help stays disabled until a wall has a photo | |
-| SP-07 | Buy a consultation | Space with a photographed wall; consultation enabled | Get design help, enter name, mobile, state, pay with a test card | Razorpay shows the server price (fee + 18% GST); after payment `/account/consultations/{id}` shows "Designer at work" and the due date; receipt email mentions the credit code; `consultation_purchased` recorded | |
+| SP-07 | Buy a consultation | Space with a photographed wall; consultation enabled | Get design help, enter name, mobile, state, pay with a test card | Razorpay shows the server price (the fee as displayed, 18% GST included); after payment `/account/consultations/{id}` shows "Designer at work" and the due date; receipt email mentions the credit code; `consultation_purchased` recorded | |
 | SP-08 | Price is server-side | SP-07 request | Replay `POST /api/consultation` with an extra `amount` field; call `/api/checkout-intent` with `productId: design-consultation` | The extra field is ignored; the public checkout rejects the item (`INVALID_ITEM`) | |
 | SP-09 | Disabled or no photo | Setting off / space without photos | `PURCHASE` | `409` / `400` with a message; no order created | |
 | SP-10 | Credit coupon issued | SP-07 done | Open the consultation | Credit panel shows ₹fee off until the expiry date and the `DESIGN-` code; a `coupons/cc_{orderId}` document exists, bound to the buyer's email, single use | |
@@ -274,7 +275,8 @@ Needs `settings/store.consultation.enabled = true`, Razorpay test keys, a design
 | FN-10 | Intra- vs inter-state GST | Seller in Karnataka (29) | Ship one order to Bengaluru, one to Mumbai; open both invoices | Bengaluru: CGST + SGST each 9%; Mumbai: IGST 18%; totals equal the amounts charged | Testable via API |
 | FN-11 | Invoice numbering across FY boundary | Staging clock or orders dispatched 31 Mar 23:xx and 1 Apr 00:xx IST | Dispatch both | `VX/26-27/…` last number, then `VX/27-28/000001`; no gaps within a year | Testable via API |
 | FN-12 | Refund not double counted | Razorpay test mode | `CREATE_REFUND` partial, then let `refund.processed` arrive (and replay it) | `refundedPaise` increases once; one refund record, one credit note, one notification | Testable via API |
-| FN-13 | COD fee and GST | COD enabled, fee ₹49 | Place COD order for ₹538 of goods | Pricing shows COD fee 49 and GST on goods and fee (₹96.84 + ₹8.82); invoice has a "Cash on delivery fee" line | |
+| FN-13 | COD fee and GST | COD enabled, fee ₹49, goods GST 18% | Place COD order for ₹538 of goods | Total ₹587 (₹538 + ₹49, nothing added); "Includes GST" ₹89.54 (₹82.07 in the goods + ₹7.47 in the fee); invoice has a "Cash on delivery fee" line of ₹49 (taxable ₹41.53) | |
+| FN-14 | Older GST-exclusive order | An order placed before 2026-11-15 (no `pricesIncludeTax`) | Ship it or open its invoice and receipt | Invoice, credit notes and receipt show GST added on top, exactly as charged then; totals equal the stored order total | Covered by `src/test/gstInvoice.test.ts` |
 
 ## 9. Support
 

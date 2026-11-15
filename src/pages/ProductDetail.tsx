@@ -83,8 +83,6 @@ export default function ProductDetail() {
   const size = product.sizes[sizeIndex] ?? { label: 'Standard', widthMm: 0, heightMm: 0, priceDelta: 0 };
   const activeFinish = finish || product.finishes[0] || 'brass';
   const price = unitPrice(product, size);
-  const gstRate = storeConfig.gstRatePercent;
-  const inclusive = Math.round(price * (1 + gstRate / 100));
   const outOfStock = product.trackInventory !== false && product.stock <= 0;
   const lowStock = !outOfStock && product.trackInventory !== false && product.stock <= 5;
   const wished = isInWishlist(product.id);
@@ -144,8 +142,8 @@ export default function ProductDetail() {
 
             <div className="space-y-1">
               <PriceTag product={product} size={size} large />
-              <p className="text-sm text-muted-foreground">+ {gstRate}% GST · {formatINR(inclusive)} incl. GST</p>
-              <EmiWidget amountRupees={inclusive} className="pt-1" />
+              <p className="text-sm text-muted-foreground">Inclusive of all taxes</p>
+              <EmiWidget amountRupees={price} className="pt-1" />
               <DeliveryEstimate productId={product.id} className="pt-2" />
             </div>
 
@@ -247,7 +245,7 @@ export default function ProductDetail() {
       <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-background p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
         <div className="min-w-0">
           <p className="text-lg font-semibold leading-tight">{formatINR(price)}</p>
-          <p className="text-xs text-muted-foreground">+ GST</p>
+          <p className="text-xs text-muted-foreground">incl. GST</p>
         </div>
         <button type="button" disabled={outOfStock} onClick={(e: MouseEvent<HTMLButtonElement>) => addToCart(true, e.currentTarget)} className="btn-secondary ml-auto px-4">Add</button>
         <button type="button" disabled={outOfStock} onClick={buyNow} className="btn-primary px-4">Buy now</button>

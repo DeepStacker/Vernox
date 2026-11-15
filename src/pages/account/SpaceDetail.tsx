@@ -136,7 +136,7 @@ export default function SpaceDetail() {
           <section className="mt-8 rounded-lg border border-border bg-card p-5" aria-labelledby="help-heading">
             <h2 id="help-heading" className="font-display text-2xl">Get design help</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              A designer picks pieces for these walls and shows each one on your photos. {formatINR(settings.priceInr)} + GST
+              A designer picks pieces for these walls and shows each one on your photos. {formatINR(settings.priceInr)} incl. GST
               {settings.creditTowardsOrder ? ', credited back on your next order' : ''}.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-3">

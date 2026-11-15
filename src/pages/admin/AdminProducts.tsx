@@ -130,7 +130,7 @@ export function AdminProducts() {
       </div>
 
       <ProductFormDialog open={form.open} product={form.product} template={form.template} currency={currency}
-        gstRatePercent={storeConfig.gstRatePercent} newId={newProductId}
+        newId={newProductId}
         onClose={() => setForm(f => ({ ...f, open: false }))} onSave={save} />
     </div>
   );

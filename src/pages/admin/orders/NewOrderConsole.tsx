@@ -524,8 +524,8 @@ export function NewOrderConsole() {
                 {quote.coupon && 'message' in quote.coupon && <p className="text-destructive">{quote.coupon.message}</p>}
                 {!handingOver && <div className="flex justify-between"><dt>Shipping</dt><dd className="font-mono">{quote.totals.shippingPaise ? formatInr(quote.totals.shippingPaise) : 'Free'}</dd></div>}
                 {quote.totals.codFeePaise > 0 && <div className="flex justify-between"><dt>COD fee</dt><dd className="font-mono">{formatInr(quote.totals.codFeePaise)}</dd></div>}
-                <div className="flex justify-between"><dt>GST</dt><dd className="font-mono">{formatInr(quote.totals.taxPaise)}</dd></div>
                 <div className="flex justify-between text-base font-semibold"><dt>Total</dt><dd className="font-mono">{formatInr(quote.totals.totalPaise)}</dd></div>
+                <div className="flex justify-between text-muted-foreground"><dt>Includes GST</dt><dd className="font-mono">{formatInr(quote.totals.taxPaise)}</dd></div>
               </dl>
               {advancePaise && !advanceProblem ? (
                 <dl className="space-y-1 border-t border-border pt-2">

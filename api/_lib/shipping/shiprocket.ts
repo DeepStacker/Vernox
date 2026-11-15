@@ -237,7 +237,11 @@ export class ShiprocketProvider implements ShippingProvider {
     const cod = order.paymentMethod === 'cod';
     const istStamp = new Date(order.placedAt + 5.5 * 3600_000).toISOString().slice(0, 16).replace('T', ' ');
     const charges = order.amounts.taxBreakdown?.charges ?? [];
-    const chargeGross = (kind: 'shipping' | 'cod_fee', base: number) => base + (charges.find(ch => ch.kind === kind)?.taxPaise ?? 0);
+    // taxable + tax is the amount charged in both pricing models (inclusive since 2026-11-15, exclusive before).
+    const chargeGross = (kind: 'shipping' | 'cod_fee', base: number) => {
+      const charge = charges.find(ch => ch.kind === kind);
+      return charge ? charge.taxablePaise + charge.taxPaise : base;
+    };
     const shippingGross = chargeGross('shipping', order.amounts.shippingPaise);
     const codFeeGross = chargeGross('cod_fee', order.amounts.codFeePaise ?? 0);
     const itemsGross = order.amounts.totalPaise - shippingGross - codFeeGross;

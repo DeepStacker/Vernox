@@ -120,8 +120,9 @@ export interface ConsultationWrites {
 }
 
 /**
- * Documents to create when the consultation order is paid (pure). The credit is the fee before GST
- * (`unit price`), applied by the coupon engine as a pre-tax discount like any other coupon.
+ * Documents to create when the consultation order is paid (pure). The credit is the fee the customer paid
+ * (`unit price`, GST-inclusive), applied by the coupon engine as a discount on GST-inclusive prices like any
+ * other coupon, so it lowers the later order's taxable value.
  */
 export function planConsultationOnPayment(order: OrderDoc, creditCode: string, now: number): ConsultationWrites | null {
   const purchase = order.consultation;

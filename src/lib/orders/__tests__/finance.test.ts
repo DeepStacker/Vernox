@@ -9,7 +9,7 @@ import {
 
 const baseOps: OrderOps = {
   paymentMethod: 'prepaid', razorpayPaymentId: 'pay_1', paidAt: 1, subtotalPaise: 0, discountPaise: 0, shippingPaise: 0, codFeePaise: 0,
-  taxPaise: 1800, totalPaise: 11800, refundedPaise: 0, refundPendingPaise: 0, manualRefundDuePaise: 0, refunds: [], codCollectedPaise: 0, codCollectedAt: null,
+  taxPaise: 1800, totalPaise: 11800, pricesIncludeTax: true, refundedPaise: 0, refundPendingPaise: 0, manualRefundDuePaise: 0, refunds: [], codCollectedPaise: 0, codCollectedAt: null,
   deliveredAt: null, invoiceNumber: null, flags: [], shipment: null, parentOrderId: null,
 };
 

@@ -139,6 +139,13 @@ export interface OrderDoc {
   items: OrderItemSnapshot[];
   currency: 'INR';
   amounts: OrderTotals;
+  /**
+   * True on every order created since GST-inclusive pricing (2026-11-15): item and fee amounts include GST and
+   * `amounts.taxPaise` is the GST inside `amounts.totalPaise`. Absent on older orders, whose prices were
+   * GST-exclusive (total = subtotal − discount + shipping + COD fee + tax). Only code that reads frozen
+   * component amounts (not the total) needs to look at it; stored orders are never rewritten.
+   */
+  pricesIncludeTax?: true;
   coupon: { id: string; code: string; discountPaise: number } | null;
   couponCode: string | null;
   stockReservation: StockReservation;
@@ -312,6 +319,7 @@ export function buildOrderDoc(params: {
     items: params.lines.map((line, idx) => snapshotItem(line, totals.taxBreakdown.lines[idx])),
     currency: 'INR',
     amounts: totals,
+    pricesIncludeTax: true,
     coupon: params.coupon,
     couponCode: params.coupon?.code ?? null,
     stockReservation: { status: reservationStatus, items: params.reservedItems },
@@ -367,9 +375,11 @@ export const asOrder = (data: DocData | null) => data as unknown as OrderDoc | n
 export const orderPath = (orderId: string) => `orders/${orderId}`;
 
 /** Rupee pricing block returned to the browser (checkout-intent response, order-status). */
-export function pricingPayload(order: Pick<OrderDoc, 'amounts' | 'items'>) {
+export function pricingPayload(order: Pick<OrderDoc, 'amounts' | 'items' | 'pricesIncludeTax'>) {
   const a = order.amounts;
   return {
+    /** false only for orders placed before GST-inclusive pricing, where `tax` was added to reach `total`. */
+    taxIncluded: order.pricesIncludeTax === true,
     subtotal: paiseToRupees(a.subtotalPaise),
     discount: paiseToRupees(a.discountPaise),
     shipping: paiseToRupees(a.shippingPaise),

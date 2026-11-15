@@ -61,7 +61,7 @@ export function ConsultationPurchaseDialog({ space, onClose, onPurchased }: Prop
             A designer reviews your walls and sends a proposal within {settings.turnaroundDays} days, with each piece shown on your own wall.
           </DialogDescription>
         </DialogHeader>
-        <p className="font-display text-3xl">{formatINR(settings.priceInr)} <span className="text-sm font-sans text-muted-foreground">+ GST</span></p>
+        <p className="font-display text-3xl">{formatINR(settings.priceInr)} <span className="text-sm font-sans text-muted-foreground">incl. GST</span></p>
         {settings.creditTowardsOrder && (
           <p className="text-sm text-muted-foreground">The fee comes back as credit on your next order, valid for {settings.creditValidityDays} days.</p>
         )}
@@ -83,7 +83,7 @@ export function ConsultationPurchaseDialog({ space, onClose, onPurchased }: Prop
           </label>
         </div>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <button type="button" onClick={pay} disabled={busy} className="btn-primary w-full">{busy ? 'Opening payment…' : `Pay ${formatINR(settings.priceInr)} + GST`}</button>
+        <button type="button" onClick={pay} disabled={busy} className="btn-primary w-full">{busy ? 'Opening payment…' : `Pay ${formatINR(settings.priceInr)}`}</button>
       </DialogContent>
     </Dialog>
   );

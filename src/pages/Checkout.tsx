@@ -370,7 +370,7 @@ export default function Checkout() {
                 disabled={codBlockedReason !== null} onChange={() => setPaymentMethod('cod')} className="mt-1 accent-burgundy" />
               <span>
                 <span className="font-semibold text-dark-brown">
-                  Cash on delivery{codFee > 0 ? ` (+ ${money(codFee)} fee + GST)` : ''}
+                  Cash on delivery{codFee > 0 ? ` (+ ${money(codFee)} fee incl. GST)` : ''}
                 </span>
                 <span className="block text-xs text-muted-foreground">
                   {codBlockedReason ?? 'Pay in cash when your order arrives.'}
@@ -482,13 +482,21 @@ export default function Checkout() {
                       <span>Cash on delivery fee</span><span className="font-mono">{money(pricing.codFee ?? 0)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>GST</span><span className="font-mono">{money(pricing.tax)}</span>
-                  </div>
+                  {!pricing.taxIncluded && (
+                    // Only an order placed before GST-inclusive pricing (a resumed payment) adds GST on top.
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>GST</span><span className="font-mono">{money(pricing.tax)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm font-semibold border-t border-border/70 pt-3 text-dark-brown">
                     <span>Total payable</span>
                     <span className="font-mono text-xl font-bold text-burgundy">{money(pricing.total)}</span>
                   </div>
+                  {pricing.taxIncluded && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Includes GST</span><span className="font-mono">{money(pricing.tax)}</span>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
@@ -496,7 +504,7 @@ export default function Checkout() {
                     <span>Items subtotal (estimate)</span><span className="font-mono text-foreground">{money(subtotal)}</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Shipping, GST{paymentMethod === 'cod' ? ', the cash on delivery fee' : ''} and discounts are calculated by our server when you continue. That total is the amount you pay.
+                    Prices are inclusive of all taxes. Shipping{paymentMethod === 'cod' ? ', the cash on delivery fee' : ''} and discounts are calculated by our server when you continue. That total is the amount you pay.
                   </p>
                 </>
               )}

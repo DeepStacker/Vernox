@@ -10,6 +10,7 @@ import {
   priceCustomLine,
   priceLines,
   productFromDoc,
+  splitInclusiveTax,
   stockRequirements,
 } from '../../api/_lib/pricing';
 import { defaultStoreConfig, mergeStoreConfig } from '../../api/_lib/storeConfig';
@@ -137,11 +138,27 @@ describe('custom piece pricing', () => {
 describe('order totals', () => {
   const line = (paise: number) => priceCatalogLine({ productId: 'x', finish: 'steel', quantity: 1 }, productFromDoc('x', { price: paise / 100 }), TEST_CONFIG);
 
-  it('charges shipping below the threshold and taxes it with the goods (composite supply)', () => {
+  it('charges shipping below the threshold and splits it at the goods rate (composite supply)', () => {
     const totals = computeTotals([line(8_900)], 0, TEST_CONFIG);
-    // GST 18% of ₹89 = 16.02 plus 18% of ₹40 shipping = 7.20
-    expect(totals).toMatchObject({ subtotalPaise: 8_900, shippingPaise: 4_000, taxPaise: 2_322, totalPaise: 15_222 });
-    expect(totals.taxBreakdown.charges).toEqual([{ kind: 'shipping', taxablePaise: 4_000, gstRateBps: 1_800, taxPaise: 720 }]);
+    // Prices include GST: ₹89 holds 89 × 18/118 = 13.576 → ₹13.58; ₹40 shipping holds 6.102 → ₹6.10.
+    expect(totals).toMatchObject({ subtotalPaise: 8_900, shippingPaise: 4_000, taxPaise: 1_358 + 610, totalPaise: 12_900 });
+    expect(totals.taxBreakdown.lines).toEqual([{ discountPaise: 0, taxablePaise: 7_542, gstRateBps: 1_800, taxPaise: 1_358 }]);
+    expect(totals.taxBreakdown.charges).toEqual([{ kind: 'shipping', taxablePaise: 3_390, gstRateBps: 1_800, taxPaise: 610 }]);
+  });
+
+  it('makes the total exactly the inclusive amounts the customer saw, never adding GST on top', () => {
+    const totals = computeTotals([line(53_800), line(8_900)], 0, TEST_CONFIG);
+    expect(totals.totalPaise).toBe(53_800 + 8_900);
+    totals.taxBreakdown.lines.forEach((l, idx) => expect(l.taxablePaise + l.taxPaise).toBe([53_800, 8_900][idx]));
+  });
+
+  it('splits a discounted order after allocating the discount to the inclusive line amounts', () => {
+    const totals = computeTotals([line(53_800), line(26_900)], 8_070, TEST_CONFIG);
+    expect(totals.taxBreakdown.lines.map(l => l.discountPaise)).toEqual([5_380, 2_690]);
+    expect(totals.taxBreakdown.lines[0]).toMatchObject({ taxablePaise: 41_034, taxPaise: 7_386 }); // 48,420 incl.
+    expect(totals.taxBreakdown.lines[1]).toMatchObject({ taxablePaise: 20_517, taxPaise: 3_693 }); // 24,210 incl.
+    expect(totals.totalPaise).toBe(53_800 + 26_900 - 8_070);
+    expect(totals.taxPaise).toBe(7_386 + 3_693);
   });
 
   it('gives free shipping at exactly the threshold (>=)', () => {
@@ -155,7 +172,33 @@ describe('order totals', () => {
     expect(totals.taxPaise).toBe(0);
     const t2 = computeTotals([line(53_801)], 1_234, TEST_CONFIG);
     expect(Number.isInteger(t2.taxPaise)).toBe(true);
-    expect(t2.totalPaise).toBe(53_801 - 1_234 + t2.shippingPaise + t2.taxPaise);
+    expect(t2.totalPaise).toBe(53_801 - 1_234 + t2.shippingPaise);
+  });
+});
+
+describe('splitInclusiveTax (GST inside an inclusive amount)', () => {
+  it('takes 5% GST out of ₹2,499: taxable ₹2,380.00, GST ₹119.00', () => {
+    expect(splitInclusiveTax(249_900, 500)).toEqual({ taxablePaise: 238_000, taxPaise: 11_900 });
+  });
+
+  it('rounds half up and always returns taxable + tax == the inclusive amount', () => {
+    for (const rate of [0, 300, 500, 1_200, 1_800, 2_800]) {
+      for (let paise = 0; paise <= 20_000; paise += 7) {
+        const { taxablePaise, taxPaise } = splitInclusiveTax(paise, rate);
+        expect(taxablePaise + taxPaise).toBe(paise);
+        expect(Number.isInteger(taxPaise)).toBe(true);
+        // Within half a paisa of the exact share.
+        expect(Math.abs(taxPaise - (paise * rate) / (10_000 + rate))).toBeLessThanOrEqual(0.5);
+      }
+    }
+    // 1 paisa at 5% holds 0.048 → 0; 11 paise hold 0.524 → 1.
+    expect(splitInclusiveTax(1, 500).taxPaise).toBe(0);
+    expect(splitInclusiveTax(11, 500).taxPaise).toBe(1);
+  });
+
+  it('rejects fractional paise or rates', () => {
+    expect(() => splitInclusiveTax(10.5, 500)).toThrow();
+    expect(() => splitInclusiveTax(100, -1)).toThrow();
   });
 });
 

@@ -1,7 +1,7 @@
 /**
  * Catalog manager form model: the editable draft (strings, as typed), zod validation, and the
  * conversion to the Product stored in Firestore. Pricing contract (api/_lib/pricing.ts): the unit
- * price of a size is `price + priceDelta` rupees excluding GST; finish ids must be server-known.
+ * price of a size is `price + priceDelta` rupees including GST; finish ids must be server-known.
  */
 import { z } from 'zod';
 import {
@@ -152,7 +152,7 @@ export function buildProduct(fields: ValidProduct, base: Pick<Product, 'id'> & P
 
 export interface SizePreview {
   label: string;
-  /** Rupees excluding GST, or null when the row is incomplete. */
+  /** Rupees including GST, or null when the row is incomplete. */
   price: number | null;
   mrp: number | null;
   discountPercent: number;

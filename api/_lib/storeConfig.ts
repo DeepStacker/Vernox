@@ -5,7 +5,7 @@
  * with `settings.write`); env vars provide defaults for fields the document does
  * not set. Request bodies never influence these values.
  *
- * `settings/store` fields (all optional, rupee amounts):
+ * `settings/store` fields (all optional, rupee amounts, GST-inclusive: what the customer pays):
  *   gstRatePercent: number               goods rate, default 5 (HSN 8306, GST 2.0 from 22 Sep 2025)
  *   shippingFee: number                  flat fee when below the threshold
  *   freeShippingThreshold: number        merchandise subtotal (before discount) at or above
@@ -22,7 +22,7 @@
  *   manualTransitDays: number            courier transit estimate when Shiprocket is not configured
  *   defaultHsnCode: string               HSN for products without hsnCode, default 830629 (other base-metal ornaments)
  *   consultation: { enabled, priceInr, creditTowardsOrder, creditValidityDays, turnaroundDays, sacCode, gstRatePercent }
- *                                        paid design consultation (see ConsultationSettings; price is GST-exclusive)
+ *                                        paid design consultation (see ConsultationSettings; price includes GST)
  *   seller: { legalName, tradeName, gstin, address, city, state, stateCode, pincode, email, phone }
  *                                        supplier block printed on GST invoices
  */

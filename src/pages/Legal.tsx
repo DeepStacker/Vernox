@@ -56,7 +56,7 @@ function Terms() {
         <p>All pieces are designed and made in India.</p>
       </Section>
       <Section title="Prices and payment">
-        <p>Prices are in rupees and exclude GST. GST, shipping and any cash-on-delivery fee are shown before you pay. Pay by UPI, card, net banking or wallet through Razorpay; cash on delivery is available on ready designs{storeConfig.codMaxOrderValue ? ` up to ₹${storeConfig.codMaxOrderValue.toLocaleString('en-IN')}` : ''}.</p>
+        <p>Prices are in rupees and include GST and all other taxes. Shipping and any cash-on-delivery fee (also inclusive of GST) are shown before you pay, and the total shown is the amount you pay. Pay by UPI, card, net banking or wallet through Razorpay; cash on delivery is available on ready designs{storeConfig.codMaxOrderValue ? ` up to ₹${storeConfig.codMaxOrderValue.toLocaleString('en-IN')}` : ''}.</p>
       </Section>
       <Section title="Made to order">
         <p>Every piece is cut for you, so small variations in finish are part of the craft, and colours may differ slightly from your screen. For custom pieces you confirm you have the right to use any artwork, logo or text you upload; we may decline designs that infringe rights or break the law.</p>

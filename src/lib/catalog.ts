@@ -6,7 +6,7 @@
  * the owner replaces it with real products, prices and photography.
  *
  * Pricing contract with the server (api/_lib/pricing.ts): the unit price is
- * `price + sizes[i].priceDelta` (rupees, excluding GST); `finishes` are normalised ids that must
+ * `price + sizes[i].priceDelta` (rupees, GST included); `finishes` are normalised ids that must
  * match what the customer picks; finish does not change catalogue prices.
  */
 import { shapeDefinitions } from './shapes';
@@ -43,7 +43,7 @@ export interface Product {
   tagline: string;
   description: string;
   category: ProductCategory;
-  /** Base price in rupees, excluding GST, for the first (smallest) size. */
+  /** Base price in rupees, GST included, for the first (smallest) size. */
   price: number;
   shapeId: string; // references shapeDefinitions
   finishes: FinishId[];
@@ -59,7 +59,7 @@ export interface Product {
   alloySpec?: string;
   /** Sample/placeholder data flag; admin shows a note, the storefront renders normally. */
   isSample?: boolean;
-  /** Strike-through list price (rupees, excl. GST) for the first size; larger sizes scale proportionally. */
+  /** Strike-through list price / MRP (rupees, incl. GST) for the first size; larger sizes scale proportionally. */
   mrp?: number;
   leadTimeDays?: number;
   hsnCode?: string;
@@ -131,7 +131,7 @@ export const mmToInches = (mm: number) => Math.round(mm / 25.4);
 export const formatSizeCm = (s: Pick<ProductSize, 'widthMm' | 'heightMm'>) => `${mmToCm(s.widthMm)} × ${mmToCm(s.heightMm)} cm`;
 export const formatSizeInches = (s: Pick<ProductSize, 'widthMm' | 'heightMm'>) => `${mmToInches(s.widthMm)} × ${mmToInches(s.heightMm)} in`;
 
-/** Unit price the server will charge before GST. */
+/** Unit price the server will charge, GST included. */
 export const unitPrice = (p: Pick<Product, 'price'>, size?: Pick<ProductSize, 'priceDelta'>) => p.price + (size?.priceDelta ?? 0);
 
 /** MRP for a size; scales with the price so the discount percentage is the same across sizes. */

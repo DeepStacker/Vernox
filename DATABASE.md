@@ -22,11 +22,13 @@ rate) and `leadTimeDays` (production days; default `defaultLeadTimeDays`).
 ### `settings/store` — public read, `settings.write`
 Shape: `StoreSettingsDoc` in `src/types/settings.ts`; parsing and defaults: `api/_lib/storeConfig.ts` (env `STORE_*` for absent
 fields; `npm run seed` writes the same defaults). **Public document: never store secrets here.**
+Every rupee amount here and on products (`price`, size `priceDelta`, `mrp`, custom-piece rates, fees, thresholds, coupon flat
+amounts) is **GST-inclusive**: what the customer pays (since 2026-11-15; see ROADMAP.md "Business and tax decisions").
 `gstRatePercent` (goods, default 5), `shippingFee` (₹, default 150), `freeShippingThreshold` (₹, free when subtotal ≥ it, default 1,499),
 `customPieces: { [finishId]: { label, setupFee (₹), ratePerCm2 (₹), minimum (₹) } }` merged over the built-in defaults,
 `codEnabled`, `codOtpRequired` (default true; SMS code before COD, effective only when MSG91 OTP is configured), `codFee` (₹), `codMaxOrderValue` (₹), `codMaxOpenOrdersPerPhone`, `returnWindowDays`, `defaultLeadTimeDays`,
 `customLeadTimeDays`, `manualTransitDays`, `defaultHsnCode`,
-`consultation: { enabled (default false), priceInr (default 999, before GST, ₹1–1,00,000), creditTowardsOrder (default true), creditValidityDays (default 60), turnaroundDays (default 3), sacCode (default 998391), gstRatePercent (default 18, the service rate, independent of the goods rate) }`,
+`consultation: { enabled (default false), priceInr (default 999, GST included, ₹1–1,00,000), creditTowardsOrder (default true), creditValidityDays (default 60), turnaroundDays (default 3), sacCode (default 998391), gstRatePercent (default 18, the service rate, independent of the goods rate) }`,
 `seller: { legalName, tradeName, gstin, address, city, state, stateCode (2-digit GST code = GSTIN prefix), pincode, email, phone }`
 (printed on invoices; invoices cannot be issued until legalName, gstin, address, state, stateCode and pincode are set).
 `npm run seed` writes placeholder seller, contact and grievance values (`PLACEHOLDER_*` in `src/types/settings.ts`). While the
@@ -47,6 +49,10 @@ pincode, country }`, `items[{ productId, name, category, sizeLabel, widthMm, hei
 lineTotalPaise, isCustom, customDesignRef, designFiles? }]` (frozen snapshot; `designFiles[{ path, name, contentType }]` only on a custom line of a staff-entered order: up to 5 Storage paths `staff-designs/{draftId}/{file}` of SVG, DXF, PDF, PNG, JPEG or WebP, uploaded from Admin > New order before the order existed; order staff read them, never overwritten or deleted; offered as downloads only, never inlined, because SVG can carry script), `amounts{ subtotalPaise, discountPaise, shippingPaise, taxPaise,
 totalPaise, gstRateBps }`, `coupon{ id, code, discountPaise } | null`, `stockReservation{ status: held|released|committed|none,
 items[{ productId, quantity }] }`, `reservationExpiresAt` (ms, placed + 15 min), `idempotencyKey`, `razorpayOrderId`,
+`pricesIncludeTax: true` (every order created since 2026-11-15: item, shipping and COD fee amounts include GST, `amounts.taxPaise`
+and the per-line `taxPaise` are the GST inside them, and `amounts.totalPaise` = subtotal − discount + shipping + COD fee; absent
+on older orders, which were GST-exclusive with total = subtotal − discount + shipping + COD fee + tax. Stored orders are never
+rewritten; only readers of frozen component amounts branch on it: invoice charge lines, receipts, order screens),
 `razorpayPaymentId`, `paidAt`, `refunds[{ refundId, amountPaise, at }]`, `refundedPaise`, `refundPendingPaise` (requested, not
 yet processed), `flags[]` (e.g. `AMOUNT_MISMATCH`, `STOCK_SHORTFALL_AFTER_LATE_PAYMENT`, `COUPON_LIMIT_EXCEEDED_AT_PAYMENT`,
 `DUPLICATE_PAYMENT`, `REFUND_NOT_STARTED`), `hold` (`{ kind: hold|material_shortage, reason, by, at }` or null: fulfilment paused
@@ -140,7 +146,10 @@ Phase 2 (India commerce):
 - `invoices/{orderId}` — immutable GST tax invoice (`TaxDocument`, `api/_lib/gst/invoice.ts`): `number`, `financialYear`,
   `issuedAt`, `seller`, `buyer`, `placeOfSupply{ state, stateCode }`, `supplyType` (`intra_state` = CGST+SGST, `inter_state` =
   IGST), `lines[{ description, hsnCode, quantity, unitPricePaise, grossPaise, discountPaise, taxablePaise, gstRateBps, cgstPaise,
-  sgstPaise, igstPaise, totalPaise }]`, `totals`, `taxInclusive: false`, `paymentMethod`. Issued once per order: goods when the shipment
+  sgstPaise, igstPaise, totalPaise }]`, `totals`, `taxInclusive`, `paymentMethod`. `taxInclusive` is copied from the order's
+  `pricesIncludeTax` when the document is issued: `true` means unit price and gross value include GST and each line's
+  taxable value + GST = its total; `false` (documents issued before 2026-11-15, or later for an older exclusive order) means GST
+  was added on top. Issued once per order: goods when the shipment
   is created (time of supply = removal of goods); services (`kind: 'service'`, design consultations) on payment
   confirmation, with the SAC code on the line. If seller settings are incomplete at payment, the service order is still
   marked Paid and flagged `INVOICE_PENDING_SELLER_SETTINGS`; finance issues it later with the admin action

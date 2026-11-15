@@ -11,7 +11,12 @@ Shared server code lives in `api/_lib/` (the underscore keeps Vercel from deploy
   `SIGNATURE_INVALID` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409),
   `METHOD_NOT_ALLOWED` (405), `RATE_LIMITED` (429), `PAYMENT_PROVIDER_ERROR` (502), `SHIPPING_PROVIDER_ERROR` (502), `CONFIG_ERROR` (500), `SELLER_DETAILS_MISSING` (409: seller GSTIN, legal name or address not saved; the message says what to add), `INTERNAL_ERROR` (500).
 - Money: the server computes in integer **paise**. `amount` fields are paise; every `pricing` object is in **rupees**
-  (decimal numbers, e.g. `634.84`). No endpoint accepts a price, tax rate or shipping fee from the client.
+  (decimal numbers, e.g. `484.2`). No endpoint accepts a price, tax rate or shipping fee from the client.
+- Prices are **GST-inclusive** (since 2026-11-15; ROADMAP.md "Business and tax decisions"): catalogue prices, size
+  differences, custom-piece rates, shipping, the COD fee, coupon amounts and the consultation fee are what the customer pays.
+  `pricing.total` = subtotal − discount + shipping + codFee, and `pricing.tax` is the GST **included** in it
+  (`pricing.taxIncluded: true`). Orders placed before that date were GST-exclusive: they report `taxIncluded: false` and their
+  `total` is subtotal − discount + shipping + codFee + tax.
 - Auth: optional/required `Authorization: Bearer <Firebase ID token>`.
 - Rate limits (per client IP, Firestore-backed, fixed 1-minute window): checkout-intent 20, validate-coupon 30,
   order-status 20, admin 120, serviceability 30, invoice 20, order-cancel 10, return-request 10; COD checkouts also 3 per hour
@@ -47,16 +52,17 @@ Item rules:
   `stainless`, `corten`, `corten_rust`, `brass`, `antique_brass`, `copper`, `verdigris`, `gold`, plus any added in
   `settings/store.customPieces`). Price = `max(minimum, setupFee + width_cm × height_cm × ratePerCm2)`.
 - `quantity` 1–100, at most 50 lines, `customDesignRef` ≤ 200 000 chars (≤ 700 000 total). Indian addresses need a 6-digit PIN.
-- Totals: GST per line on (line − its share of the discount), plus GST on shipping and the COD fee (see India commerce below);
-  shipping is free when the pre-discount subtotal is **≥** the threshold.
+- Totals: the total is the GST-inclusive amounts the customer saw; GST is taken out of each line (line − its share of the
+  discount), shipping and the COD fee (see India commerce below); shipping is free when the pre-discount subtotal is **≥** the
+  threshold.
 - `paymentMethod`: `"prepaid"` (default) or `"cod"` — see India commerce below.
 
 `200`:
 ```json
 { "success": true, "orderId": "Fh3k...", "orderNumber": "VX-20261105-7KQ2MZ", "razorpayOrderId": "order_...",
-  "keyId": "rzp_test_...", "amount": 57136, "currency": "INR",
+  "keyId": "rzp_test_...", "amount": 48420, "currency": "INR",
   "paymentMethod": "prepaid",
-  "pricing": { "subtotal": 538, "discount": 53.8, "shipping": 0, "codFee": 0, "tax": 87.16, "total": 571.36,
+  "pricing": { "taxIncluded": true, "subtotal": 538, "discount": 53.8, "shipping": 0, "codFee": 0, "tax": 73.86, "total": 484.2,
                "items": [{ "productId": "p-01", "name": "Ember Round Frame", "unitPrice": 269, "quantity": 2, "lineTotal": 538 }] } }
 ```
 
@@ -87,7 +93,7 @@ bearer token's uid owns the order. Unknown order and wrong email both return `NO
 the customer-facing order number (`VX-YYYYMMDD-XXXXXX`, any letter case); the response's `orderId` is always the internal id.
 
 `200`: `{ "success": true, "order": { orderId, orderNumber, status, placedAt, currency, couponCode,
-pricing: { subtotal, discount, shipping, tax, total }, items: [{ productId, name, unitPrice, quantity, lineTotal, sizeLabel, finish, isCustom }],
+pricing: { taxIncluded, subtotal, discount, shipping, codFee, tax, total }, items: [{ productId, name, unitPrice, quantity, lineTotal, sizeLabel, finish, isCustom }],
 timeline: [{ status, at }], tracking: { carrier, trackingNumber, url } | null, shipTo: { name, city } } }`.
 No street address, phone, payment ids or design files are returned.
 
@@ -96,7 +102,7 @@ No street address, phone, payment ids or design files are returned.
 Preview only (checkout re-evaluates). Body: `{ "code": "WELCOME10", "items": [<checkout items>], "customerEmail"?: "a@b.in" }`.
 Lines are priced on the server; coupons are read only from Firestore.
 `200`: `{ isValid, couponId?, couponCode?, discountType?, discountValue?, discountAmount /* ₹ */, description?, errorCode?, error?,
-pricing: { subtotal, discount, shipping, tax, total } }`. Invalid coupons return 200 with `isValid: false`; bad items return 400 `INVALID_ITEM`.
+pricing: { subtotal, discount, shipping, tax, total, taxIncluded: true } }` (`tax` is included in `total`). Invalid coupons return 200 with `isValid: false`; bad items return 400 `INVALID_ITEM`.
 
 ## `POST /api/razorpay-webhook`
 
@@ -182,11 +188,17 @@ existing order without a token). When OTP is not configured or switched off, COD
 the state machine. Staff-entered orders (`CREATE_STAFF_ORDER`) are not subject to either.
 
 `200` (COD): `{ "success": true, "orderId", "orderNumber", "paymentMethod": "cod",
-"pricing": { subtotal, discount, shipping, codFee, tax, total, items } }`. `pricing.codFee` is 0 for prepaid orders.
+"pricing": { taxIncluded, subtotal, discount, shipping, codFee, tax, total, items } }`. `pricing.codFee` is 0 for prepaid orders.
 
-GST (all orders, since Phase 2): prices are GST-exclusive. GST is computed per line (product `gstRatePercent`, else the store
-rate), after allocating any discount to lines pro rata, and on shipping and the COD fee at the highest line rate; each line is
-rounded to the paisa, so `tax` equals the invoice's tax total exactly.
+GST (since 2026-11-15): prices are GST-inclusive and GST is back-calculated, never added. Any discount is first allocated to lines
+pro rata (largest remainder) and taken off the inclusive line amount; then each line is split at its rate (product
+`gstRatePercent`, else the store rate) by `splitInclusiveTax` (`api/_lib/pricing.ts`, the only implementation):
+`tax = round(inclusive × r / (100 + r))` in integer paise, half up, and `taxable = inclusive − tax`, so taxable + tax is exactly
+the inclusive amount. Shipping and the COD fee are split the same way at the highest line rate (composite supply). `tax` is the
+sum of the per-line GST and equals the invoice's tax total exactly; `total` equals the sum of the inclusive amounts shown, to the
+paisa. Example (5%, intra-state): one ₹2,499 piece → taxable ₹2,380.00, CGST ₹59.50, SGST ₹59.50, total ₹2,499.00.
+Orders placed before 2026-11-15 (no `pricesIncludeTax` marker, DATABASE.md) keep their stored GST-exclusive amounts; their
+invoices, credit notes, receipts and refunds read those frozen values unchanged.
 
 ### `GET /api/serviceability?pincode=560001&productId=p-01`
 
@@ -375,7 +387,7 @@ Signed-in customer only (`Authorization: Bearer <ID token>`, else `401`); rate-l
 - `/api/checkout-intent` cannot buy the consultation: `design-consultation` is not a product, so it is rejected as `INVALID_ITEM`.
 
 ### Credit coupons (per-customer binding)
-`coupons/cc_{orderId}` is a `fixed` coupon for the consultation fee (before GST), `maxUsageCount: 1`, expiring after
+`coupons/cc_{orderId}` is a `fixed` coupon for the consultation fee paid (GST included), `maxUsageCount: 1`, expiring after
 `creditValidityDays`, with `boundEmail` = the buyer's email. The coupon engine (`api/_lib/coupons.ts`) now refuses a coupon whose
 `boundEmail` differs from the checkout email: `COUPON_NOT_FOR_CUSTOMER` in `/api/validate-coupon` ("This coupon was issued to
 another customer."), `INVALID_COUPON` at checkout. `/api/validate-coupon` therefore needs `customerEmail` for such codes (the cart

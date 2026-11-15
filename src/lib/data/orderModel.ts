@@ -135,6 +135,7 @@ function normalizeOps(raw: Raw): OrderOps {
     codFeePaise: paise(a.codFeePaise),
     taxPaise: paise(a.taxPaise),
     totalPaise: paise(a.totalPaise),
+    pricesIncludeTax: raw.pricesIncludeTax === true,
     refundedPaise: paise(raw.refundedPaise),
     refundPendingPaise: paise(raw.refundPendingPaise),
     manualRefundDuePaise: paise(raw.manualRefundDuePaise),

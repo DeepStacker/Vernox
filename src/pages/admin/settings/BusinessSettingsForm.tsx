@@ -114,12 +114,12 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
         <Field label="Largest COD order (₹)" error={errors.codMaxOrderValue}><input inputMode="decimal" value={draft.codMaxOrderValue} onChange={e => set('codMaxOrderValue', e.target.value)} className="field font-mono" /></Field>
       </Section>
 
-      <Section title="Design consultation" hint="A paid service: a designer proposes pieces on the customer's own walls. The fee is before GST, like catalogue prices.">
+      <Section title="Design consultation" hint="A paid service: a designer proposes pieces on the customer's own walls. The fee includes GST, like catalogue prices.">
         <label className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2">
           <input type="checkbox" checked={draft.consultation.enabled} onChange={e => setConsultation('enabled', e.target.checked)} className="h-5 w-5 accent-primary" />
           <span className="font-semibold">Offer design consultations</span>
         </label>
-        <Field label="Fee (₹, before GST)" error={errors.consultationPrice}><input inputMode="decimal" value={draft.consultation.priceInr} onChange={e => setConsultation('priceInr', e.target.value)} className="field font-mono" /></Field>
+        <Field label="Fee (₹, incl. GST)" error={errors.consultationPrice}><input inputMode="decimal" value={draft.consultation.priceInr} onChange={e => setConsultation('priceInr', e.target.value)} className="field font-mono" /></Field>
         <Field label="Turnaround (days)" hint="Shown to customers and used as the designer queue's deadline." error={errors.turnaroundDays}>
           <input inputMode="numeric" value={draft.consultation.turnaroundDays} onChange={e => setConsultation('turnaroundDays', e.target.value)} className="field font-mono" />
         </Field>

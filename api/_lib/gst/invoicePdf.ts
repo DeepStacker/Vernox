@@ -163,7 +163,8 @@ export async function renderTaxDocumentPdf(docData: TaxDocument): Promise<Uint8A
     w.text(amount(l.totalPaise), cols.total, { size: 8, align: 'right' });
     if (l.discountPaise > 0) {
       w.down(10);
-      w.text(`  Value ${amount(l.grossPaise)} less discount ${amount(l.discountPaise)}`, cols.desc, { size: 7 });
+      const valueLabel = docData.taxInclusive ? 'Price incl. GST' : 'Value';
+      w.text(`  ${valueLabel} ${amount(l.grossPaise)} less discount ${amount(l.discountPaise)}`, cols.desc, { size: 7 });
     }
     w.down(13);
   }
@@ -191,7 +192,10 @@ export async function renderTaxDocumentPdf(docData: TaxDocument): Promise<Uint8A
   w.down(10);
   w.ensure(50);
   for (const note of [
-    'Prices are exclusive of GST; GST is charged as shown above. Amounts in Indian Rupees.',
+    // Frozen per document: invoices issued before GST-inclusive pricing keep their original wording.
+    docData.taxInclusive
+      ? 'Prices are inclusive of GST; the taxable value and GST included in each line are shown above. Amounts in Indian Rupees.'
+      : 'Prices are exclusive of GST; GST is charged as shown above. Amounts in Indian Rupees.',
     'Tax payable on reverse charge: No.',
     docData.paymentMethod === 'cod' ? 'Payment: Cash on delivery.' : docData.paymentMethod === 'replacement' ? 'Replacement supply.' : 'Payment: Prepaid online.',
     'This is a computer-generated document and does not require a signature.',
