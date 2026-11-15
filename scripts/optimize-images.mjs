@@ -45,7 +45,7 @@ for (const file of files) {
 
 // Responsive variants for the images that are the LCP element (see Picture `widths`). Written as
 // <name>-<width>.webp and <name>-<width>.avif; never upscaled beyond the source.
-const RESPONSIVE = { "hero-art-lounge": [640, 960] };
+const RESPONSIVE = { "installation-round": [640, 960] };
 for (const [base, widths] of Object.entries(RESPONSIVE)) {
   const src = join(IMAGE_DIR, `${base}.jpg`);
   for (const w of widths) {

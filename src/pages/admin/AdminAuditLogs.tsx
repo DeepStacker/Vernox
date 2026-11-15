@@ -4,7 +4,7 @@
  * target resource tracking, IP logging, action filters, and CSV/JSON compliance exports.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { fetchAuditLogs } from '@/lib/data/staff';
 import type { AuditEntry as AuditLog } from '@/types/store';
@@ -22,7 +22,7 @@ export function AdminAuditLogs() {
   const [targetTypeFilter, setTargetTypeFilter] = useState<string>('all');
   const [inspectingLog, setInspectingLog] = useState<AuditLog | null>(null);
 
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setIsLoading(true);
     try {
       const fetched = await fetchAuditLogs(targetTypeFilter !== 'all' ? targetTypeFilter : undefined);
@@ -32,11 +32,11 @@ export function AdminAuditLogs() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [targetTypeFilter]);
 
   useEffect(() => {
-    if (permissions?.canViewAuditLogs) loadLogs();
-  }, [targetTypeFilter, permissions?.canViewAuditLogs]);
+    if (permissions?.canViewAuditLogs) void loadLogs();
+  }, [loadLogs, permissions?.canViewAuditLogs]);
 
   // Filtered Logs
   const filteredLogs = useMemo(() => {
