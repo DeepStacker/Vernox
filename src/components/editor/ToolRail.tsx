@@ -75,7 +75,7 @@ export function ToolRail({ orientation = 'vertical' }: { orientation?: 'vertical
           <Keyboard className="h-5 w-5" />
         </button>
       )}
-      <input ref={importRef} type="file" accept=".svg,.dxf,image/svg+xml" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void importVectorFile(f); e.target.value = ''; }} />
+      <input ref={importRef} type="file" accept=".svg,.dxf,.pdf,.ai,image/svg+xml,application/pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void importVectorFile(f); e.target.value = ''; }} />
     </nav>
   );
 }

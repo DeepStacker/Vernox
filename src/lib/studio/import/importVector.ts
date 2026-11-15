@@ -2,8 +2,8 @@
  * Vector import: SVG (paths and basic shapes, nested transforms, real-world units) and DXF
  * (LINE, LWPOLYLINE/POLYLINE with bulges, ARC, CIRCLE, ELLIPSE, SPLINE; $INSUNITS). Both
  * produce one path in millimetres, centred on (0,0), ready to become a `path` object.
- * dxf-parser is loaded only when a DXF is imported. PDF-vector import is not supported
- * (no small, maintained parser; see docs/adr/0001-studio-engine.md).
+ * dxf-parser is loaded only when a DXF is imported. PDF and Illustrator (.ai) files are handled
+ * by ./importPdf.ts (pdf.js, lazy-loaded); EPS is not supported.
  */
 import svgpath from 'svgpath';
 import { centrePathData, ringsToPathData, type Pt, type Ring, type Rings } from '../geometry/path';

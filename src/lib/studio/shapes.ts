@@ -1,7 +1,7 @@
 /**
  * Shape outlines for plates and shape objects. Reuses the storefront shape library
  * (src/lib/shapes.ts, shared with product thumbnails) and adds a few parametric
- * generators the studio needs (rounded rectangle, arch, rosette/mandala ring).
+ * generators the studio needs (rounded rectangle, arch, rosette/mandala ring, swastik).
  */
 import { getShapeById, shapeDefinitions } from '@/lib/shapes';
 
@@ -43,11 +43,21 @@ function rosette(w: number, h: number, petals = 16): string {
   return `${parts.join('')}Z`;
 }
 
+/**
+ * Swastik (right-facing, the Hindu auspicious symbol): a single 5 × 5 cell polygon with
+ * one-cell-wide arms, so the part stays one solid piece with generous metal at every bend.
+ */
+function swastik(w: number, h: number): string {
+  const grid = [[2, 0], [5, 0], [5, 1], [3, 1], [3, 2], [5, 2], [5, 5], [4, 5], [4, 3], [3, 3], [3, 5], [0, 5], [0, 4], [2, 4], [2, 3], [0, 3], [0, 0], [1, 0], [1, 2], [2, 2]];
+  return `${grid.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${(x * w) / 5} ${(y * h) / 5}`).join('')}Z`;
+}
+
 const GENERATORS: StudioShape[] = [
   { id: 'rectangle', name: 'Rectangle', path: roundedRect },
   { id: 'square', name: 'Square', path: roundedRect },
   { id: 'arch', name: 'Arch', path: arch },
   { id: 'rosette', name: 'Rosette', path: (w, h) => rosette(w, h) },
+  { id: 'swastik', name: 'Swastik', path: swastik },
 ];
 
 const FROM_LIBRARY = shapeDefinitions
