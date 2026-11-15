@@ -19,10 +19,17 @@ export function autoFitBoundText(obj: TextObject, plate: Plate): TextObject {
   const maxWidth = plate.widthMm - 2 * plateTextMargin(plate);
   if (width <= maxWidth || maxWidth <= 0) return obj;
   const k = maxWidth / width;
+  return { ...obj, ...scaledTextMetrics(obj, k), outline: transformPathData(obj.outline, [k, 0, 0, k, 0, 0]) };
+}
+
+/**
+ * Size fields of a text uniformly scaled by `k` (letter height, spacing, arc radius). Shaping
+ * is linear in all three, so the scaled outline equals a re-shaped one.
+ */
+export function scaledTextMetrics(obj: Pick<TextObject, 'sizeMm' | 'letterSpacingMm' | 'arcRadiusMm'>, k: number): Pick<TextObject, 'sizeMm' | 'letterSpacingMm' | 'arcRadiusMm'> {
   return {
-    ...obj,
     sizeMm: Math.round(obj.sizeMm * k * 100) / 100,
     letterSpacingMm: obj.letterSpacingMm * k,
-    outline: transformPathData(obj.outline, [k, 0, 0, k, 0, 0]),
+    ...(obj.arcRadiusMm ? { arcRadiusMm: obj.arcRadiusMm * k } : {}),
   };
 }

@@ -104,6 +104,24 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | BT-12 | Order limit | Sheet with 60 distinct names | Add to cart | Lines are added up to the order limit (50 lines, or fewer if designs are large); a message says how many did not fit; after checkout the rest can be added | |
 | BT-13 | Re-add guard | BT-10 | Return to Batch | Added rows show "In cart"; the button counts only the remaining rows | |
 
+## 1b. Studio drawing tools (Simple and Pro)
+
+| ID | Case | Preconditions | Steps | Expected result | Result |
+|---|---|---|---|---|---|
+| DR-01 | Pen: straight and curved points | `/studio`, blank plate, Simple mode | Click "Draw lines & curves" (or `P`); click two points, press-and-drag a third, click a fourth; press Enter | A blue draft follows the pointer; the dragged point gets mirrored handles and a curve; Enter adds one engraved (blue) line; the tool stays active | |
+| DR-02 | Pen: close a shape | DR-01 tool active | Click three points, then click the first point (it grows when the pointer is near) | A closed shape is cut out of the solid plate (solid metal on Frame / No plate); checks update | |
+| DR-03 | Pen: undo point, cancel, double-click | Pen active | Click 3 points; Backspace; Esc; click 2 points and double-click the last | Backspace removes the last point; Esc drops the draft (second Esc leaves the pen); double-click finishes an open line | |
+| DR-04 | Pencil with smoothing | Simple mode | "Draw freehand" (or `B`); draw a wavy line; set Smoothing to 100 and draw again; draw a loop ending near its start | Lines are smooth curves (fewer points at higher smoothing); the loop closes into a shape that is cut out | |
+| DR-05 | Edit points | A drawn path | Double-click it (or select and press `A` / Enter, or "Edit points") | Square (corner) and round (smooth) points appear; the transformer hides | |
+| DR-06 | Move, add, delete, toggle points | DR-05 | Drag a point; select a point and drag its handle; click the outline between points; select a point and press Delete; double-click a point; arrow keys with a point selected | Each change shows live and is one undo step (Ctrl Z restores it); a smooth point's handles stay in line; the new point keeps the curve unchanged; corner/smooth toggles; arrows move 1 mm (Shift 10 mm) | |
+| DR-07 | Edit a rotated / scaled path | A path rotated 30° and stretched | Edit points; drag a point | The point follows the pointer exactly; the rest of the path does not move | |
+| DR-08 | Convert to path | A text and a shape | Select each, "Convert to editable path" | The outline stays exactly in place and enters point editing; letters can be reshaped; one undo restores the text/shape | |
+| DR-09 | Text follows an arc | Round plate (circle shape), one text at the top, one at the bottom | Text: switch on "Follow arc", "Top of circle", radius 120; second text: "Bottom of circle" | Top text bends over the circle, bottom text along the bottom reading left to right; letters keep their exact shape; resizing the text with the handles keeps the arc proportional | |
+| DR-10 | Checks on drawn paths | Solid plate | Draw two closed shapes 0.5 mm apart; draw an island inside a closed cut-out using Solid | Thin-metal warning between the shapes; the island is a loose piece and auto-bridges connect it (or "Add bridges" when off) | |
+| DR-11 | Touch | Phone or tablet | Pen: tap points, drag for a curve, Finish button; Pencil: draw with a finger, pinch to zoom mid-stroke; Edit points on a path | Every action works by touch; the bar at the top offers Finish / Undo point / Cancel / Done / Delete point / Corner-smooth; a pinch zooms without leaving a stray point or stroke | |
+| DR-12 | Shortcuts | Desktop | Press `?` | P, B, V, A / Enter, Backspace, Esc and the arrow keys for points are listed | |
+| DR-13 | Old designs | A saved design from before these tools | Open it | It opens unchanged (no migration needed); texts without "Follow arc" stay straight | |
+
 ## 2. Customer (signed in)
 
 | ID | Case | Preconditions | Steps | Expected result | Result |

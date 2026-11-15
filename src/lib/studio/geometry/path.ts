@@ -25,6 +25,14 @@ export function applyMatrix(m: Matrix, p: Pt): Pt {
   return { x: m[0] * p.x + m[2] * p.y + m[4], y: m[1] * p.x + m[3] * p.y + m[5] };
 }
 
+/** Inverse of an affine matrix; null when it is singular (an object scaled to zero). */
+export function invertMatrix(m: Matrix): Matrix | null {
+  const det = m[0] * m[3] - m[1] * m[2];
+  if (Math.abs(det) < 1e-12) return null;
+  const a = m[3] / det, b = -m[1] / det, c = -m[2] / det, d = m[0] / det;
+  return [a, b, c, d, -(a * m[4] + c * m[5]), -(b * m[4] + d * m[5])];
+}
+
 export function transformPathData(d: string, m: Matrix): string {
   return svgpath(d).matrix(m).toString();
 }
@@ -115,7 +123,8 @@ function dedupeRing(ring: Ring): Ring {
   return out;
 }
 
-const fmt = (n: number, precision: number) => {
+/** Fixed-precision number with trailing zeros trimmed (compact path data). */
+export const formatCoord = (n: number, precision: number) => {
   const s = n.toFixed(precision);
   // Trim trailing zeros to keep stored designs compact.
   return s.includes('.') ? s.replace(/\.?0+$/, '') || '0' : s;
@@ -124,7 +133,7 @@ const fmt = (n: number, precision: number) => {
 export function ringsToPathData(rings: Rings, closed = true, precision = 2): string {
   return rings
     .filter(r => r.length > 1)
-    .map(r => `M${r.map(p => `${fmt(p.x, precision)} ${fmt(p.y, precision)}`).join('L')}${closed ? 'Z' : ''}`)
+    .map(r => `M${r.map(p => `${formatCoord(p.x, precision)} ${formatCoord(p.y, precision)}`).join('L')}${closed ? 'Z' : ''}`)
     .join('');
 }
 

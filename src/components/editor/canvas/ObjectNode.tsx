@@ -22,10 +22,12 @@ interface Props {
   onDragMove: (e: KonvaEventObject<DragEvent>) => void;
   onDragEnd: (e: KonvaEventObject<DragEvent>) => void;
   onTransformEnd: (e: KonvaEventObject<Event>) => void;
+  /** Double-click / double-tap (opens point editing on paths). */
+  onDoubleTap?: (id: string) => void;
 }
 
 /** One design object on the canvas. Memoised on the object itself: edits replace only changed objects. */
-export const ObjectNode = memo(function ObjectNode({ obj, paint, draggable, onPointerDown, onDragStart, onDragMove, onDragEnd, onTransformEnd }: Props) {
+export const ObjectNode = memo(function ObjectNode({ obj, paint, draggable, onPointerDown, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDoubleTap }: Props) {
   if (obj.hidden) return null;
   const common = {
     id: obj.id,
@@ -44,6 +46,7 @@ export const ObjectNode = memo(function ObjectNode({ obj, paint, draggable, onPo
     onDragMove,
     onDragEnd,
     onTransformEnd,
+    ...(onDoubleTap ? { onDblClick: () => onDoubleTap(obj.id), onDblTap: () => onDoubleTap(obj.id) } : {}),
   };
   if (obj.kind === 'hole') {
     return <Circle {...common} radius={obj.diameterMm / 2} fill={paint.wall} stroke="rgba(0,0,0,0.25)" strokeWidth={0.4} strokeScaleEnabled={false} />;

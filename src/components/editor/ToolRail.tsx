@@ -1,18 +1,22 @@
 import { useRef } from 'react';
-import { FileUp, Grid3x3, Keyboard, Layers, LayoutTemplate, MousePointer2, Shapes, Square, Type, Upload, type LucideIcon } from 'lucide-react';
+import { FileUp, Grid3x3, Keyboard, Layers, LayoutTemplate, MousePointer2, Pencil, PenTool, Shapes, Square, Type, Upload, type LucideIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { t, type MessageKey } from '@/lib/studio/i18n';
 import { hasFeature, toolsFor, type ToolId } from '@/lib/studio/modes';
 import { useStudio } from '@/lib/studio/store';
 import { cn } from '@/lib/utils';
 import { addTextObject, importVectorFile } from './actions';
+import { setDrawTool } from './drawActions';
+import { useDrawStore } from './drawStore';
 import { useStudioUi, type Panel } from './uiStore';
 
-const TOOL_META: Record<ToolId, { icon: LucideIcon; label: MessageKey; panel?: Panel }> = {
+const TOOL_META: Record<ToolId, { icon: LucideIcon; label: MessageKey; simpleLabel?: MessageKey; panel?: Panel }> = {
   select: { icon: MousePointer2, label: 'tool.select' },
   templates: { icon: LayoutTemplate, label: 'tool.templates', panel: 'templates' },
   text: { icon: Type, label: 'tool.text' },
   shape: { icon: Shapes, label: 'tool.shape', panel: 'shape' },
+  pen: { icon: PenTool, label: 'tool.pen', simpleLabel: 'tool.pen.simple' },
+  pencil: { icon: Pencil, label: 'tool.pencil', simpleLabel: 'tool.pencil.simple' },
   upload: { icon: Upload, label: 'tool.upload' },
   import: { icon: FileUp, label: 'tool.import' },
   plate: { icon: Square, label: 'tool.plate', panel: 'plate' },
@@ -24,12 +28,14 @@ export function ToolRail({ orientation = 'vertical' }: { orientation?: 'vertical
   const mode = useStudioUi(s => s.mode);
   const panel = useStudioUi(s => s.panel);
   const showGrid = useStudioUi(s => s.showGrid);
+  const drawTool = useDrawStore(s => s.tool);
   const importRef = useRef<HTMLInputElement>(null);
 
   const run = (id: ToolId) => {
     const ui = useStudioUi.getState();
     const meta = TOOL_META[id];
-    if (id === 'select') { useStudio.getState().select([]); ui.setPanel(null); return; }
+    if (id === 'select') { setDrawTool('select'); useStudio.getState().select([]); ui.setPanel(null); return; }
+    if (id === 'pen' || id === 'pencil') { setDrawTool(drawTool === id ? 'select' : id); return; }
     if (id === 'text') { addTextObject(); ui.setPanel('inspect'); return; }
     if (id === 'upload') { ui.openTrace(); return; }
     if (id === 'import') { importRef.current?.click(); return; }
@@ -45,21 +51,22 @@ export function ToolRail({ orientation = 'vertical' }: { orientation?: 'vertical
       {toolsFor(mode).map(id => {
         const meta = TOOL_META[id];
         const Icon = meta.icon;
-        const active = Boolean(meta.panel && panel === meta.panel);
+        const active = Boolean(meta.panel && panel === meta.panel) || drawTool === id;
+        const label = t(mode === 'simple' && meta.simpleLabel ? meta.simpleLabel : meta.label);
         return (
           <Tooltip key={id}>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 onClick={() => run(id)}
-                aria-label={t(meta.label)}
+                aria-label={label}
                 aria-pressed={active}
-                className={cn('flex h-11 w-11 items-center justify-center rounded-lg transition-colors', active ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted')}
+                className={cn('flex h-11 items-center justify-center rounded-lg transition-colors', horizontal ? 'w-10' : 'w-11', active ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted', id === 'pen' && !horizontal && 'mt-2')}
               >
                 <Icon className="h-5 w-5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side={horizontal ? 'top' : 'right'}>{t(meta.label)}</TooltipContent>
+            <TooltipContent side={horizontal ? 'top' : 'right'}>{label}</TooltipContent>
           </Tooltip>
         );
       })}

@@ -98,7 +98,7 @@ export function loadFont(fontId: string): Promise<LoadedFont> {
   return entry;
 }
 
-export type ShapeInput = Pick<TextObject, 'text' | 'fontId' | 'sizeMm' | 'letterSpacingMm' | 'lineHeight' | 'align'>;
+export type ShapeInput = Pick<TextObject, 'text' | 'fontId' | 'sizeMm' | 'letterSpacingMm' | 'lineHeight' | 'align'> & Partial<Pick<TextObject, 'arcRadiusMm'>>;
 
 export interface ShapedText {
   /** Outline in mm, centred on (0,0). Empty string for empty text. */
@@ -107,12 +107,42 @@ export interface ShapedText {
   heightMm: number;
 }
 
+/** Identity of a shaping request: equal keys give identical outlines. */
+export function shapeKey(input: ShapeInput): string {
+  return JSON.stringify([input.fontId, input.text, input.sizeMm, input.letterSpacingMm, input.lineHeight, input.align, input.arcRadiusMm || 0]);
+}
+
 const cache = new Map<string, ShapedText>();
 const CACHE_LIMIT = 300;
 
+/** A shaped cluster (a glyph plus its attached marks), in line mm with the baseline at y = 0. */
+interface Cluster {
+  d: string;
+  /** Horizontal centre of the cluster's advance. */
+  centre: number;
+}
+
+/**
+ * Places each cluster rigidly on a circle: rotated to the tangent at its advance centre and
+ * moved onto the arc. Glyph outlines are only rotated and translated, so curves stay exact
+ * (no warping) and letter shapes are cut true. Line `i` follows a concentric circle
+ * (`radius − baseline`), so a second line sits inside a top arc / outside a bottom one.
+ */
+function placeOnArc(clusters: Cluster[], offsetX: number, baseline: number, radius: number): string {
+  let rho = radius - baseline;
+  if (Math.sign(rho) !== Math.sign(radius) || Math.abs(rho) < 1) rho = Math.sign(radius) || 1;
+  return clusters
+    .map(c => {
+      const theta = (offsetX + c.centre) / rho;
+      const deg = (theta * 180) / Math.PI;
+      return svgpath(c.d).translate(-c.centre, 0).rotate(deg, 0, 0).translate(rho * Math.sin(theta), radius - rho * Math.cos(theta)).toString();
+    })
+    .join('');
+}
+
 /** Shapes `text` into an outline whose letter height (cap height) is `sizeMm`. */
 export async function shapeText(input: ShapeInput): Promise<ShapedText> {
-  const key = JSON.stringify([input.fontId, input.text, input.sizeMm, input.letterSpacingMm, input.lineHeight, input.align]);
+  const key = shapeKey(input);
   const hit = cache.get(key);
   if (hit) return hit;
 
@@ -125,23 +155,34 @@ export async function shapeText(input: ShapeInput): Promise<ShapedText> {
   const shapedLines = lines.map(line => {
     const glyphs = line ? shapeRun(hb, loaded.font, line) : [];
     let pen = 0;
-    const parts: string[] = [];
+    const clusters: (Cluster & { cl: number; start: number; end: number; parts: string[] })[] = [];
     glyphs.forEach((gl, i) => {
       const outline = loaded.font.glyphToPath(gl.g);
-      if (outline) {
+      const start = pen * s;
+      const part = outline
         // Font units are y-up; flip into the studio's y-down millimetre frame.
-        parts.push(svgpath(outline).matrix([s, 0, 0, -s, (pen + gl.dx) * s, -gl.dy * s]).toString());
+        ? svgpath(outline).matrix([s, 0, 0, -s, (pen + gl.dx) * s, -gl.dy * s]).toString()
+        : '';
+      const last = clusters[clusters.length - 1];
+      if (last && last.cl === gl.cl) {
+        if (part) last.parts.push(part);
+        last.end = Math.max(last.end, (pen + gl.ax) * s);
+      } else {
+        clusters.push({ cl: gl.cl, start, end: (pen + gl.ax) * s, parts: part ? [part] : [], d: '', centre: 0 });
       }
       pen += gl.ax;
       if (gl.ax > 0 && i < glyphs.length - 1) pen += input.letterSpacingMm / s;
     });
-    return { d: parts.join(''), width: pen * s };
+    const done = clusters.map(c => ({ d: c.parts.join(''), centre: (c.start + c.end) / 2 })).filter(c => c.d);
+    return { clusters: done, d: done.map(c => c.d).join(''), width: pen * s };
   });
 
   const maxWidth = Math.max(0, ...shapedLines.map(l => l.width));
+  const radius = input.arcRadiusMm ? Math.sign(input.arcRadiusMm) * Math.max(Math.abs(input.arcRadiusMm), input.sizeMm) : 0;
   const parts = shapedLines.map((l, i) => {
     if (!l.d) return '';
     const dx = input.align === 'left' ? 0 : input.align === 'right' ? maxWidth - l.width : (maxWidth - l.width) / 2;
+    if (radius) return placeOnArc(l.clusters, dx - maxWidth / 2, i * lineAdvance, radius);
     return svgpath(l.d).translate(dx, i * lineAdvance).toString();
   });
   const joined = parts.join('');
