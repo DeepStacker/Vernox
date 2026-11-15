@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { safeLocal } from './safeStorage';
-import { addLine, moveSavedToCart, saveLineForLater } from './cartLines';
+import { addLine, moveSavedToCart, saveLineForLater, clampLineQuantity } from './cartLines';
 
 export interface CartItem {
   id: string; // uuid per line
@@ -105,7 +105,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const removeSaved = (id: string) => setSaved(prev => prev.filter(i => i.id !== id));
 
   const updateQty = (id: string, qty: number) =>
-    setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(1, qty) } : i));
+    setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: clampLineQuantity(qty) } : i));
 
   const remove = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
 

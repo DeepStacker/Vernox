@@ -3,6 +3,7 @@
  * and moving a line between the cart and the "Saved for later" list. A saved line is a full CartItem, so size, finish
  * and custom Studio designs come back exactly as they were; the wishlist only keeps product ids and cannot do that.
  */
+import { ORDER_LIMITS } from '@/lib/pricing/orderLimits';
 import type { CartItem } from './cartContext';
 
 export type NewCartLine = Omit<CartItem, 'id' | 'quantity'> & { quantity?: number };
@@ -14,11 +15,14 @@ const sameStandardLine = (a: CartItem, b: Omit<CartItem, 'id' | 'quantity'>) =>
   && !isCustomLine(a) && !isCustomLine(b);
 
 /** Adds a line; a standard (non-custom) line with the same product, shape, size and finish only raises the quantity. */
+/** One line may hold at most what checkout accepts (ORDER_LIMITS); more stays out of the cart instead of failing at payment. */
+export const clampLineQuantity = (quantity: number) => Math.min(ORDER_LIMITS.maxQuantityPerLine, Math.max(1, Math.floor(quantity) || 1));
+
 export function addLine(lines: CartItem[], item: NewCartLine, newId: () => string): CartItem[] {
-  const quantity = item.quantity ?? 1;
+  const quantity = clampLineQuantity(item.quantity ?? 1);
   if (!isCustomLine(item)) {
     const at = lines.findIndex(l => sameStandardLine(l, item));
-    if (at > -1) return lines.map((l, i) => (i === at ? { ...l, quantity: l.quantity + quantity } : l));
+    if (at > -1) return lines.map((l, i) => (i === at ? { ...l, quantity: clampLineQuantity(l.quantity + quantity) } : l));
   }
   return [...lines, { ...item, id: newId(), quantity }];
 }

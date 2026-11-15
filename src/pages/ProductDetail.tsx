@@ -16,6 +16,8 @@ import { ProductGrid } from '@/components/shop/ProductGrid';
 import { RecentlyViewed } from '@/components/shop/RecentlyViewed';
 import { reviewStatsByProduct } from '@/lib/storefront/listing';
 import { recommendProducts } from '@/lib/storefront/recommend';
+import { clampLineQuantity } from '@/lib/cartLines';
+import { ORDER_LIMITS } from '@/lib/pricing/orderLimits';
 import { StarRating } from '@/components/shop/StarRating';
 import { finishLabels, finishName, formatSizeCm, formatSizeInches, getCategory, unitPrice } from '@/lib/catalog';
 import { useCart } from '@/lib/cartContext';
@@ -194,8 +196,11 @@ export default function ProductDetail() {
             <div className="flex items-center gap-3">
               <div className="flex items-center rounded-md border border-border bg-card" role="group" aria-label="Quantity">
                 <button type="button" aria-label="Decrease quantity" onClick={() => setQuantity(q => Math.max(1, q - 1))} className="flex h-11 w-11 items-center justify-center"><Minus className="h-4 w-4" /></button>
-                <span className="w-8 text-center text-sm font-semibold" aria-live="polite">{quantity}</span>
-                <button type="button" aria-label="Increase quantity" onClick={() => setQuantity(q => Math.min(10, q + 1))} className="flex h-11 w-11 items-center justify-center"><Plus className="h-4 w-4" /></button>
+                {/* Typed as well as stepped: bulk buyers order dozens (volume discount tiers), not one by one. */}
+                <input type="number" inputMode="numeric" min={1} max={ORDER_LIMITS.maxQuantityPerLine} aria-label="Quantity" value={quantity}
+                  onChange={e => setQuantity(clampLineQuantity(Number(e.target.value)))}
+                  className="w-12 bg-transparent text-center text-sm font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+                <button type="button" aria-label="Increase quantity" onClick={() => setQuantity(q => clampLineQuantity(q + 1))} className="flex h-11 w-11 items-center justify-center"><Plus className="h-4 w-4" /></button>
               </div>
               <button type="button" onClick={() => toggleWishlist(product.id)} aria-pressed={wished} aria-label={wished ? 'Remove from wishlist' : 'Add to wishlist'} className="btn-secondary px-3">
                 <Heart className={cn('h-5 w-5', wished && 'fill-burgundy text-burgundy')} aria-hidden="true" />

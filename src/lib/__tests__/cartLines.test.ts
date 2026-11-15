@@ -52,3 +52,17 @@ describe('save for later', () => {
     expect(moveSavedToCart(state, 'zzz', id)).toEqual(state);
   });
 });
+
+describe('per-line quantity limit', () => {
+  it('keeps a line within what checkout accepts, also when identical lines merge', async () => {
+    const { addLine: add, clampLineQuantity } = await import('@/lib/cartLines');
+    const { ORDER_LIMITS } = await import('@/lib/pricing/orderLimits');
+    expect(clampLineQuantity(0)).toBe(1);
+    expect(clampLineQuantity(Number.NaN)).toBe(1);
+    expect(clampLineQuantity(500)).toBe(ORDER_LIMITS.maxQuantityPerLine);
+    const bulk = { ...base, quantity: 60 };
+    const merged = add(add([], bulk, () => 'a'), bulk, () => 'b');
+    expect(merged).toHaveLength(1);
+    expect(merged[0].quantity).toBe(ORDER_LIMITS.maxQuantityPerLine);
+  });
+});
