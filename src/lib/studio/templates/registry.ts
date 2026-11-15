@@ -80,7 +80,7 @@ export function applyTemplateFields(doc: StudioDocument, fields: Record<string, 
     return {
       ...o,
       text: fields[o.binding],
-      ...(designed?.kind === 'text' ? { sizeMm: Math.round(designed.sizeMm * k * 10) / 10, letterSpacingMm: designed.letterSpacingMm * k } : {}),
+      ...(designed?.kind === 'text' ? { sizeMm: Math.round(designed.sizeMm * k * 10) / 10, letterSpacingMm: designed.letterSpacingMm * k, ...(designed.arcRadiusMm !== undefined ? { arcRadiusMm: designed.arcRadiusMm * k } : {}) } : {}),
       outline: undefined,
     };
   });
