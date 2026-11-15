@@ -196,6 +196,7 @@ export async function renderTaxDocumentPdf(docData: TaxDocument): Promise<Uint8A
     docData.taxInclusive
       ? 'Prices are inclusive of GST; the taxable value and GST included in each line are shown above. Amounts in Indian Rupees.'
       : 'Prices are exclusive of GST; GST is charged as shown above. Amounts in Indian Rupees.',
+    ...(docData.discountNote ? [docData.discountNote] : []),
     'Tax payable on reverse charge: No.',
     docData.paymentMethod === 'cod' ? 'Payment: Cash on delivery.' : docData.paymentMethod === 'replacement' ? 'Replacement supply.' : 'Payment: Prepaid online.',
     'This is a computer-generated document and does not require a signature.',

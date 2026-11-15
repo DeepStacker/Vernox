@@ -6,6 +6,7 @@
  * "incl." rows; older GST-exclusive orders list it above the total, as the amount that was added.
  */
 import { finishName } from '@/lib/catalog';
+import { volumeDiscountLabel } from '@/lib/pricing/volumeDiscount';
 import type { OrderDocuments } from '@/lib/data/orderOps';
 import type { Order, StoreConfig } from '@/types/store';
 import type { OfflinePaymentMode } from '@/types/staffOrders';
@@ -104,7 +105,9 @@ export function buildReceipt({ order, config, invoice }: ReceiptInput): Receipt 
   const ops = order.ops;
   const totals: ReceiptRow[] = [{ label: 'Subtotal', value: formatInr(ops?.subtotalPaise || Math.round(order.subtotal * 100)) }];
   const discount = ops?.discountPaise || Math.round(order.discountTotal * 100);
-  if (discount > 0) totals.push({ label: 'Discount', value: `-${formatInr(discount)}` });
+  const bulk = ops?.volumeDiscount ?? null;
+  if (bulk) totals.push({ label: volumeDiscountLabel(bulk), value: `-${formatInr(bulk.discountPaise)}` });
+  if (discount - (bulk?.discountPaise ?? 0) > 0) totals.push({ label: bulk ? 'Coupon' : 'Discount', value: `-${formatInr(discount - (bulk?.discountPaise ?? 0))}` });
   const shipping = ops?.shippingPaise || Math.round(order.shippingTotal * 100);
   if (shipping > 0) totals.push({ label: 'Shipping', value: formatInr(shipping) });
   const codFee = ops?.codFeePaise ?? 0;

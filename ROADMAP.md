@@ -152,6 +152,7 @@ a code change. A CA should review the tax rows once before the first invoice is 
 | Custom pieces | ₹750 setup + ₹1.10/cm² (steel finishes) or ₹1.40/cm² (copper alloys), minimum ₹1,499 | Finished-retail pricing anchored to the sample catalogue. Workshop cutting rates (about ₹120–₹1,200 per sq ft on IndiaMART) are the cost floor. |
 | Policies | Terms, Privacy, Shipping and Returns rewritten to the Consumer Protection (E-Commerce) Rules, 2020 (seller identity, grievance officer: acknowledge in 48 hours, resolve in one month, country of origin) and the DPDP Act, 2023 / Rules, 2025 (what is collected, purpose, sharing, retention, rights, Data Protection Board). Seller and officer details render from Settings | Razorpay checks these pages before activating a live account. Counsel to review once. |
 | Consultation launch | Off until a staff member has the `designer` role | Customers must not pay for a service nobody is staffed to deliver. Switch it on in Settings. |
+| Volume discounts (2026-11-15) | Tiers by **pieces per order** (catalogue and studio lines together; the consultation does not count): 10+ 5%, 25+ 10%, 50+ 15% (`settings/store.volumeDiscounts`, Settings > Volume discounts; `[]` = off). The percent comes off the GST-inclusive merchandise subtotal, rounded half up to the paisa, and is allocated to lines before each line's GST split, like a coupon, so the invoice shows each line's share and a "Bulk discount 10% (25+ pieces)" note. Shipping and the COD fee are not discounted; free shipping is still judged before discount. **No stacking with promotional coupons: the larger of coupon and volume discount applies**; a tie goes to the volume discount and the coupon stays unspent. A consultation credit is added on top. One implementation: `volumeDiscountFor` / `resolveDiscounts` in `api/_lib/pricing.ts`; the browser shows the server's figures (`POST /api/cart-quote`) | Per order, not per line: a hotel ordering 30 different room plates expects the 30-piece price, which per-line tiers would deny (every batch design is its own line). Best-of rather than volume-then-coupon: stacking 15% + a 20% launch coupon gives 32% off, below margin on studio pieces, and a cap would be a second rule to explain; best-of is one sentence for buyers ("one discount per order, the bigger one"), keeps the GST invoice to one kind of discount per order, and never burns a single-use coupon the buyer did not benefit from. The credit is excluded because it is money already paid for the consultation, not a promotion. Indian B2B norms for quantity slabs (IndiaMART sellers, corporate-gifting sites) are 5–15% from 10–50 units; the owner can tune them in Settings |
 
 ## Decision: room scanning and interior planning (2026-11-05)
 
@@ -203,9 +204,34 @@ one `quoteCustomPiece` price per design plus the total, and add the batch to the
 distinct design (each with its own `customDesignRef`; the server still re-prices). Production gets "All lines (zip)"
 in the order detail. Details: `docs/studio.md` ("Batch"). UAT: `BT-*` and `PR-12` in `UAT.md`.
 
+Follow-up (2026-11-15, after a browser test): template texts now link to same-named CSV columns by themselves (House name plate +
+`name,number,qty` gives one design per row), each text says which column it uses, rows and totals show exact paise with the
+server's batch quote and bulk discount, and `/studio?batch=1` opens the batch screen directly (Trade page link).
+
 Known limits: one order takes at most 50 lines and 700,000 design characters (`src/lib/pricing/orderLimits.ts`), so a
 large batch is added in several rounds (the screen says how many did not fit); too-long text is flagged, not shrunk;
 previews are the flat metal shape, not the wall preview.
+
+## Bulk buyers: volume discounts and the Trade page (2026-11-15, awaiting UAT)
+
+Built: volume discount tiers (decision and reasons in "Business and tax decisions"), applied by the server everywhere an order is
+priced (checkout and its idempotent retries, Razorpay amount, COD, staff orders and advances, invoices and credit notes, refunds,
+finance CSV `volume_discount` column, receipts) and shown from server quotes in the cart (`POST /api/cart-quote`: "Bulk discount 10%
+(25+ pieces)" and "Add 3 more pieces to save 10%"), the mini cart, checkout and the studio batch. `/trade` now shows the tiers
+from the public catalogue settings, a "Personalise many plates at once" card to `/studio?batch=1`, and how bulk orders work
+(quote, proof before cutting, production days, GST invoice) above the unchanged enquiry form. UAT: `VD-*`, `BT-14`–`BT-18`.
+
+Not built, on purpose:
+- **Logo/artwork upload on the trade enquiry.** There is no public upload path today: every Storage rule requires a signed-in
+  user or staff, and the enquiry is a guest form. Allowing anonymous writes to the bucket invites abuse (storage cost, hosting
+  malware under our domain) and would need App Check or a signed-upload API with size/type checks and scanning. For now the page
+  asks buyers to attach the file to their reply to our email. Follow-up: an API-issued, single-use signed upload URL under
+  `trade-uploads/{enquiryId}/` (PDF/SVG/PNG/JPEG, ≤ 10 MB, staff-only read, rules tests), once App Check is on.
+- **Company GSTIN at checkout (B2B invoice).** Invoices have no recipient-GSTIN field yet (`buyerOf` in `api/_lib/gst/invoice.ts`
+  prints "Unregistered buyer (B2C)"), so adding it only at checkout would be half a feature. Follow-up: optional `buyerGstin` on
+  the checkout request (GSTIN pattern, state code = first two digits, shown against the delivery state), frozen on the order,
+  printed as recipient GSTIN with B2B wording, and reported in the finance CSV for GSTR-1 (B2B section); the Trade page asks for
+  the GSTIN in the enquiry meanwhile.
 
 ## Performance and scale plan (2026-11-07)
 

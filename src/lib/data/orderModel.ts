@@ -121,6 +121,11 @@ export function normalizeOrder(id: string, raw: Raw): Order {
 const orNull = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
 const paise = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 
+function volumeOf(v: Raw | undefined | null): NonNullable<OrderOps['volumeDiscount']> | null {
+  if (!v || typeof v !== 'object' || typeof v.percent !== 'number' || typeof v.minUnits !== 'number') return null;
+  return { minUnits: v.minUnits, percent: v.percent, units: paise(v.units), discountPaise: paise(v.discountPaise) };
+}
+
 /** Staff view of the server-written money, payment and shipment fields. Absent on pre-Phase-2 orders (defaults apply). */
 function normalizeOps(raw: Raw): OrderOps {
   const a: Raw = raw.amounts ?? {};
@@ -131,6 +136,7 @@ function normalizeOps(raw: Raw): OrderOps {
     paidAt: toMillis(raw.paidAt) || null,
     subtotalPaise: paise(a.subtotalPaise),
     discountPaise: paise(a.discountPaise),
+    volumeDiscount: volumeOf(a.discountParts?.volume),
     shippingPaise: paise(a.shippingPaise),
     codFeePaise: paise(a.codFeePaise),
     taxPaise: paise(a.taxPaise),

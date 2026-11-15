@@ -28,6 +28,10 @@ amounts) is **GST-inclusive**: what the customer pays (since 2026-11-15; see ROA
 `customPieces: { [finishId]: { label, setupFee (₹), ratePerCm2 (₹), minimum (₹) } }` merged over the built-in defaults,
 `codEnabled`, `codOtpRequired` (default true; SMS code before COD, effective only when MSG91 OTP is configured), `codFee` (₹), `codMaxOrderValue` (₹), `codMaxOpenOrdersPerPhone`, `returnWindowDays`, `defaultLeadTimeDays`,
 `customLeadTimeDays`, `manualTransitDays`, `defaultHsnCode`,
+`volumeDiscounts: [{ minUnits, percent }]` (bulk discount by pieces per order; absent = 10+ 5%, 25+ 10%, 50+ 15%; `[]` = off;
+at most 6 tiers, `minUnits` 2–10,000 whole, `percent` above 0 and at most 50 with 2 decimals, each higher tier a larger percent;
+`SAVE_STORE_SETTINGS` refuses anything else and stores the list sorted; shared parser `src/lib/pricing/volumeDiscount.ts`, rules in
+API.md "Volume discounts"),
 `consultation: { enabled (default false), priceInr (default 999, GST included, ₹1–1,00,000), creditTowardsOrder (default true), creditValidityDays (default 60), turnaroundDays (default 3), sacCode (default 998391), gstRatePercent (default 18, the service rate, independent of the goods rate) }`,
 `seller: { legalName, tradeName, gstin, address, city, state, stateCode (2-digit GST code = GSTIN prefix), pincode, email, phone }`
 (printed on invoices; invoices cannot be issued until legalName, gstin, address, state, stateCode and pincode are set).
@@ -39,7 +43,7 @@ Other fields:
 storefront contact `whatsappNumber`, `supportPhone`, `supportEmail`, `supportHours`, `workshopAddress` (empty = hidden on the storefront),
 `grievanceOfficerName`, `grievanceOfficerEmail` (named on the Terms and Privacy pages with the seller block; email falls back to `supportEmail`).
 The admin Settings screen edits `seller`, the contact fields, `codEnabled`, `codFee`, `codMaxOrderValue`, `defaultLeadTimeDays`,
-`customLeadTimeDays`, `returnWindowDays` and the `consultation` block (form model and GSTIN check: `src/pages/admin/settings/settingsForm.ts`, mirroring
+`customLeadTimeDays`, `returnWindowDays`, `volumeDiscounts` and the `consultation` block (form model and GSTIN check: `src/pages/admin/settings/settingsForm.ts`, mirroring
 `GSTIN_PATTERN` in `api/_lib/storeConfig.ts`).
 
 ### `orders/{orderId}` — written only by the API (`api/_lib/orders.ts`)
@@ -69,7 +73,9 @@ retries record once) and `balanceLink{ id, url, expiresAt, amountPaise } | null`
 creation, `Shipped`, `Out_For_Delivery` and `Delivered` are refused while `balanceDuePaise` > 0; flag `BALANCE_PAYMENT_MISMATCH` marks
 a balance payment that did not match the open link (still recorded).
 Phase 2: `paymentMethod` (`prepaid` | `cod` | `replacement`; absent = prepaid), `phoneKey` (10-digit mobile, COD limits),
-`leadTimeDays`, `amounts.codFeePaise`, `amounts.taxBreakdown{ lines[{ discountPaise, taxablePaise, gstRateBps, taxPaise }],
+`leadTimeDays`, `amounts.codFeePaise`, `amounts.discountParts{ couponPaise, coupon: none|applied|superseded, volume{ minUnits,
+percent, units, discountPaise } | null }` (how `amounts.discountPaise` is made up; orders since volume discounts, 2026-11-15; absent
+before, when the whole discount was the coupon's; `coupon` is null on the order when a coupon was `superseded`), `amounts.taxBreakdown{ lines[{ discountPaise, taxablePaise, gstRateBps, taxPaise }],
 charges[{ kind: shipping|cod_fee, taxablePaise, gstRateBps, taxPaise }] }`, per item `hsnCode`, `gstRateBps`, `discountPaise`,
 `taxablePaise`, `taxPaise`; `shipment` (ShipmentRecord, API.md) and `shipmentAwb` (queried by the courier webhook),
 `cancelledShipments[]`, `invoiceId`/`invoiceNumber`, `deliveredAt`, `codCollectedPaise`/`codCollectedAt`/`codRemittance{ status }`,
@@ -146,7 +152,9 @@ Phase 2 (India commerce):
 - `invoices/{orderId}` — immutable GST tax invoice (`TaxDocument`, `api/_lib/gst/invoice.ts`): `number`, `financialYear`,
   `issuedAt`, `seller`, `buyer`, `placeOfSupply{ state, stateCode }`, `supplyType` (`intra_state` = CGST+SGST, `inter_state` =
   IGST), `lines[{ description, hsnCode, quantity, unitPricePaise, grossPaise, discountPaise, taxablePaise, gstRateBps, cgstPaise,
-  sgstPaise, igstPaise, totalPaise }]`, `totals`, `taxInclusive`, `paymentMethod`. `taxInclusive` is copied from the order's
+  sgstPaise, igstPaise, totalPaise }]`, `totals`, `taxInclusive`, `paymentMethod`, `discountNote` (what the line discounts are,
+  e.g. "Discount: Bulk discount 10% (25+ pieces) on 30 pieces.", printed with the notes; null or absent otherwise; a full credit
+  note repeats it, a partial one does not). `taxInclusive` is copied from the order's
   `pricesIncludeTax` when the document is issued: `true` means unit price and gross value include GST and each line's
   taxable value + GST = its total; `false` (documents issued before 2026-11-15, or later for an older exclusive order) means GST
   was added on top. Issued once per order: goods when the shipment

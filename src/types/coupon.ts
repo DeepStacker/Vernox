@@ -61,6 +61,8 @@ export interface CouponValidationResult {
   discountValue?: number;
   discountAmount: number;
   description?: string;
+  /** Valid, but the volume (bulk) discount is at least as large, so checkout uses that instead (coupons do not stack). */
+  supersededByVolume?: boolean;
   error?: string;
   errorCode?: 
     | 'COUPON_NOT_FOUND' 

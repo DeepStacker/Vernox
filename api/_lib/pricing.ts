@@ -25,6 +25,12 @@
  *  - shipping and the COD fee are part of a composite supply of goods, so they are
  *    split at the rate of the principal supply — the highest line rate.
  *
+ * Discounts (ROADMAP.md "Business and tax decisions", volume discounts): the order discount is either a coupon
+ * or the volume (bulk) discount, whichever is larger — they do not stack, and on a tie the volume discount is used
+ * so the coupon stays unspent. A consultation credit is money already paid, so it is added to the volume discount.
+ * The volume tier is chosen by the pieces in the whole order (volumeDiscountFor) and its percent comes off the
+ * GST-inclusive merchandise subtotal, rounded half up to the paisa, before the per-line GST split above.
+ *
  * Orders created before 2026-11-15 were priced GST-exclusive (tax added on top);
  * their frozen `amounts` stay as they were and carry no `pricesIncludeTax` marker
  * (api/_lib/orders.ts).
@@ -37,6 +43,7 @@ import type { StoreConfig } from './storeConfig';
 import { CONSULTATION_SERVICE_ID } from '../../src/types/consultation';
 import { CUSTOM_PRODUCT_ID } from '../../src/types/products';
 import { normaliseFinishId, quoteCustomPiece } from '../../src/lib/pricing/customPiece';
+import { tierBps, volumeTierFor, type VolumeDiscountTier } from '../../src/lib/pricing/volumeDiscount';
 
 export { CUSTOM_PRODUCT_ID };
 
@@ -118,9 +125,37 @@ export interface TaxBreakdown {
   charges: ChargeTax[];
 }
 
+/** The volume (bulk) discount an order received. */
+export interface AppliedVolumeDiscount {
+  minUnits: number;
+  percent: number;
+  /** Pieces in the order (goods lines; a service line does not count). */
+  units: number;
+  discountPaise: number;
+}
+
+/** What makes up OrderTotals.discountPaise. */
+export interface DiscountParts {
+  /** The coupon's share of the discount (0 unless `coupon` is 'applied'). */
+  couponPaise: number;
+  /** 'superseded': a coupon was entered but the volume discount was at least as large, so the coupon was not used. */
+  coupon: 'none' | 'applied' | 'superseded';
+  volume: AppliedVolumeDiscount | null;
+}
+
+/** A coupon evaluated by coupons.evaluateCoupon, as computeTotals weighs it against the volume discount. */
+export interface CouponDiscountInput {
+  discountPaise: number;
+  /** A consultation credit (coupon with consultationId): already paid for, so it adds to the volume discount. */
+  isCredit: boolean;
+}
+
 export interface OrderTotals {
   subtotalPaise: number;
+  /** All discounts together (coupon and/or volume); see discountParts. */
   discountPaise: number;
+  /** Absent on orders placed before volume discounts, where the whole discount was the coupon's. */
+  discountParts?: DiscountParts;
   shippingPaise: number;
   /** COD handling fee (0 for prepaid). */
   codFeePaise: number;
@@ -332,15 +367,43 @@ export function splitInclusiveTax(inclusivePaise: number, rateBps: number): { ta
   return { taxablePaise: inclusivePaise - taxPaise, taxPaise };
 }
 
+/**
+ * The volume discount `lines` earn under `tiers`: the tier is picked by the pieces in the whole order (per order, not
+ * per line, the usual B2B expectation), the percent applies to the GST-inclusive value of the goods lines and is
+ * rounded half up to the paisa in integer arithmetic. Service lines neither count nor are discounted.
+ */
+export function volumeDiscountFor(lines: PricedLine[], tiers: readonly VolumeDiscountTier[]): AppliedVolumeDiscount | null {
+  const goods = lines.filter(l => !l.isService);
+  const units = goods.reduce((sum, l) => sum + l.quantity, 0);
+  const tier = volumeTierFor(units, tiers);
+  if (!tier) return null;
+  const basePaise = goods.reduce((sum, l) => sum + l.lineTotalPaise, 0);
+  const discountPaise = Math.floor((2 * basePaise * tierBps(tier) + 10_000) / 20_000);
+  return discountPaise > 0 ? { minUnits: tier.minUnits, percent: tier.percent, units, discountPaise } : null;
+}
+
+/** Coupon versus volume discount (file comment, "Discounts"). */
+export function resolveDiscounts(lines: PricedLine[], coupon: CouponDiscountInput | null, tiers: readonly VolumeDiscountTier[]): DiscountParts {
+  const volume = volumeDiscountFor(lines, tiers);
+  if (!coupon) return { couponPaise: 0, coupon: 'none', volume };
+  const couponPaise = Math.max(0, Math.round(coupon.discountPaise));
+  if (coupon.isCredit) return { couponPaise, coupon: 'applied', volume };
+  if (volume && volume.discountPaise >= couponPaise) return { couponPaise: 0, coupon: 'superseded', volume };
+  return { couponPaise, coupon: 'applied', volume: null };
+}
+
 export function computeTotals(
   lines: PricedLine[],
-  discountPaise: number,
+  /** The evaluated coupon (a bare number is a promotional coupon's discount; 0 or null = no coupon). */
+  coupon: CouponDiscountInput | number | null,
   config: StoreConfig,
   /** `collected`: handed over at the counter (api/_lib/staffOrders.ts), so nothing ships and no shipping is charged. */
   options: { cod?: boolean; collected?: boolean } = {},
 ): OrderTotals {
   const subtotalPaise = lines.reduce((sum, l) => sum + l.lineTotalPaise, 0);
-  const discount = Math.min(subtotalPaise, Math.max(0, Math.round(discountPaise)));
+  const couponInput = typeof coupon === 'number' ? (coupon > 0 ? { discountPaise: coupon, isCredit: false } : null) : coupon;
+  const discountParts = resolveDiscounts(lines, couponInput, config.volumeDiscounts);
+  const discount = Math.min(subtotalPaise, discountParts.couponPaise + (discountParts.volume?.discountPaise ?? 0));
   // Free shipping is judged on the merchandise subtotal before discount, inclusive (>=).
   const shippable = !options.collected && lines.some(l => !l.isService);
   const shippingPaise = !shippable || subtotalPaise >= config.freeShippingThresholdPaise ? 0 : config.shippingFeePaise;
@@ -360,6 +423,7 @@ export function computeTotals(
   return {
     subtotalPaise,
     discountPaise: discount,
+    discountParts,
     shippingPaise,
     codFeePaise,
     // Included in the amounts above, not added to them.

@@ -10,6 +10,7 @@ import { parse } from 'url';
 import checkoutIntentHandler from '../api/checkout-intent';
 import verifyPaymentHandler from '../api/verify-payment';
 import validateCouponHandler from '../api/validate-coupon';
+import cartQuoteHandler from '../api/cart-quote';
 import orderStatusHandler from '../api/order-status';
 import adminHandler from '../api/admin';
 import razorpayWebhookHandler from '../api/razorpay-webhook';
@@ -36,6 +37,7 @@ const ROUTES: Record<string, Handler> = {
   '/api/csp-report': cspReportHandler,
   '/api/verify-payment': verifyPaymentHandler,
   '/api/validate-coupon': validateCouponHandler,
+  '/api/cart-quote': cartQuoteHandler,
   '/api/order-status': orderStatusHandler,
   '/api/admin': adminHandler,
   '/api/razorpay-webhook': razorpayWebhookHandler,

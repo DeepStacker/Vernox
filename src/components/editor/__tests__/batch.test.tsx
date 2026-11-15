@@ -1,11 +1,13 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { CartProvider } from '@/lib/cartContext';
 import { useDiskFonts } from '@/lib/studio/__tests__/testFonts';
 import Index from '@/pages/Index';
+import { useBatchStore } from '@/components/editor/batch/batchStore';
+import { useStudioUi } from '@/components/editor/uiStore';
 
 vi.mock('@/components/editor/canvas/StudioCanvas', () => ({ default: () => <div data-testid="canvas-stub" /> }));
 vi.mock('@/lib/data/settings', () => ({ useStoreConfig: () => ({ data: undefined }) }));
@@ -53,5 +55,41 @@ describe('Studio batch screen', () => {
     expect(lines[0].customDesignRef).toContain('Asha');
     expect(lines[1].customDesignRef).toContain('Mina');
     expect(lines[0].productName).toContain('Asha');
+  }, 60_000);
+
+  it('opens from /studio?batch=1 and links the template texts to same-named columns by itself', async () => {
+    localStorage.clear();
+    cleanup();
+    useBatchStore.getState().clearSheet();
+    useStudioUi.getState().setStep('start');
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <CartProvider>
+            <MemoryRouter initialEntries={['/studio?batch=1']}>
+              <Index />
+            </MemoryRouter>
+          </CartProvider>
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    // The batch screen, not the design step: the house name plate (`name`, `number`) is loaded behind it.
+    await screen.findByLabelText('Variable for The Sharmas', {}, { timeout: 10_000 });
+    fireEvent.change(screen.getByLabelText(/Paste CSV/), { target: { value: 'Name,Number,qty\nThe Iyers,7,2\nThe Raos,9,3' } });
+    await waitFor(() => expect(screen.getAllByTestId('batch-link').map(l => l.textContent)).toEqual([
+      'Linked to column "Name" (Family name).',
+      'Linked to column "Number" (House number).',
+    ]));
+    expect(screen.getAllByTestId('batch-row')).toHaveLength(2);
+
+    const add = screen.getByTestId('batch-add-to-cart') as HTMLButtonElement;
+    await waitFor(() => expect(add.disabled).toBe(false), { timeout: 20_000 });
+    expect(add.textContent).toBe('Add 2 to cart');
+    fireEvent.click(add);
+    await waitFor(() => expect(JSON.parse(localStorage.getItem('vernox-cart') ?? '[]')).toHaveLength(2), { timeout: 20_000 });
+    const lines = JSON.parse(localStorage.getItem('vernox-cart') ?? '[]');
+    expect(lines.map((l: { quantity: number }) => l.quantity)).toEqual([2, 3]);
+    expect(lines[0].customDesignRef).toContain('The Iyers');
+    expect(lines[1].customDesignRef).toContain('The Raos');
   }, 60_000);
 });

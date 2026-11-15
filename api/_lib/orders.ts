@@ -374,6 +374,18 @@ function advanceFields(advancePaise: number, totalPaise: number, offline: Offlin
 export const asOrder = (data: DocData | null) => data as unknown as OrderDoc | null;
 export const orderPath = (orderId: string) => `orders/${orderId}`;
 
+/**
+ * How the discount is made up (₹): the coupon's part and the volume discount with its tier. Orders placed before
+ * volume discounts have no `discountParts`; their whole discount was the coupon's.
+ */
+export function discountBreakdown(a: Pick<OrderTotals, 'discountPaise' | 'discountParts'>) {
+  const v = a.discountParts?.volume ?? null;
+  return {
+    couponDiscount: paiseToRupees(a.discountParts ? a.discountParts.couponPaise : a.discountPaise),
+    volumeDiscount: v ? { percent: v.percent, minUnits: v.minUnits, units: v.units, amount: paiseToRupees(v.discountPaise) } : null,
+  };
+}
+
 /** Rupee pricing block returned to the browser (checkout-intent response, order-status). */
 export function pricingPayload(order: Pick<OrderDoc, 'amounts' | 'items' | 'pricesIncludeTax'>) {
   const a = order.amounts;
@@ -386,6 +398,7 @@ export function pricingPayload(order: Pick<OrderDoc, 'amounts' | 'items' | 'pric
     codFee: paiseToRupees(a.codFeePaise ?? 0),
     tax: paiseToRupees(a.taxPaise),
     total: paiseToRupees(a.totalPaise),
+    ...discountBreakdown(a),
     items: order.items.map(i => ({
       productId: i.productId,
       name: i.name,

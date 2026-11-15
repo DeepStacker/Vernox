@@ -1,8 +1,13 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { MAX_BATCH_ROWS } from '@/lib/csv/parseCsv';
-import { templateFields } from '@/lib/studio/batch/variables';
+import { splitQuantity } from '@/lib/studio/batch/plan';
+import { templateFields, type TextLink } from '@/lib/studio/batch/variables';
+import { useCartQuote, type CartQuoteItem } from '@/lib/data/cartQuote';
+import { volumeDiscountLabel, volumeNudge } from '@/lib/pricing/volumeDiscount';
+import { formatPaise } from '@/lib/storefront/format';
+import { CUSTOM_PRODUCT_ID } from '@/types/products';
 import { t } from '@/lib/studio/i18n';
 import { ORDER_LIMITS } from '@/lib/pricing/orderLimits';
 import type { TextObject } from '@/lib/studio/schema';
@@ -13,24 +18,36 @@ import { useBatchStore } from './batchStore';
 import { useBatchAddToCart } from './useBatchAddToCart';
 import { useBatchModel } from './useBatchModel';
 
-const rupees = (paise: number) => `₹${Math.round(paise / 100).toLocaleString('en-IN')}`;
 const MAX_FILE_BYTES = 2_000_000;
 
-function VariableRow({ text, headers }: { text: TextObject; headers: readonly string[] }) {
-  const template = useBatchStore(s => s.bindings[text.id]) ?? '';
-  const setBinding = useBatchStore(s => s.setBinding);
+function VariableRow({ text, link, headers }: { text: TextObject; link: TextLink | undefined; headers: readonly string[] }) {
+  const template = link?.template ?? '';
+  const { setBinding, clearBinding } = useBatchStore.getState();
+  const name = text.text.split('\n')[0] || 'Text';
+  const fieldName = link?.label ?? link?.field ?? '';
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5" data-testid="batch-variable">
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-        <span className="truncate">{text.text.split('\n')[0] || 'Text'}</span>
+        <span className="truncate">{name}</span>
         <input
           className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
           value={template}
           placeholder={t('batch.fixed')}
           onChange={e => setBinding(text.id, e.target.value)}
-          aria-label={`Variable for ${text.text.split('\n')[0] || 'text'}`}
+          aria-label={`Variable for ${name}`}
         />
       </label>
+      {link?.source === 'auto' && (
+        <p className="text-[11px] text-emerald-700" data-testid="batch-link">{t('batch.linkAuto', { column: link.columns[0] ?? '', field: fieldName })}</p>
+      )}
+      {link?.source === 'unlinked' && headers.length > 0 && (
+        <p className="text-[11px] text-amber-700" data-testid="batch-link">{t('batch.linkMissing', { field: fieldName, text: name })}</p>
+      )}
+      {link?.source === 'manual' && link.field && (
+        <button type="button" className="self-start text-[11px] text-muted-foreground underline hover:text-foreground" onClick={() => clearBinding(text.id)}>
+          {t('batch.linkReset')}
+        </button>
+      )}
       {headers.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {headers.filter(Boolean).slice(0, 12).map(h => (
@@ -49,10 +66,29 @@ function VariableRow({ text, headers }: { text: TextObject; headers: readonly st
   );
 }
 
+/** The batch's price from the server (one quote for all priced designs, as cart lines), including the bulk discount. */
+function useBatchQuote(model: ReturnType<typeof useBatchModel>, priced: boolean) {
+  const { variants, results, version, doc } = model;
+  const finish = doc.material.finish;
+  const request = useMemo(() => {
+    if (!priced) return null;
+    const items: CartQuoteItem[] = [];
+    for (const v of variants) {
+      const r = results.get(v.key);
+      if (r?.state !== 'ok' || !r.size) continue;
+      for (const quantity of splitQuantity(v.quantity)) items.push({ productId: CUSTOM_PRODUCT_ID, widthMm: r.size.widthMm, heightMm: r.size.heightMm, finish, quantity });
+    }
+    // More lines than one order takes: the batch goes to the cart in rounds, and checkout prices each order.
+    return items.length > 0 && items.length <= ORDER_LIMITS.maxLines ? { items } : null;
+    // `version` signals that `results` changed.
+  }, [priced, variants, finish, version]); // eslint-disable-line react-hooks/exhaustive-deps
+  return useCartQuote(request);
+}
+
 /** Batch screen: variables, sheet, validated table with previews, total and add to cart. */
 export function BatchStep({ ctx }: { ctx: StudioRuntimeContext }) {
   const model = useBatchModel(ctx);
-  const { parsed, doc, checks, variants, results, totals, missing } = model;
+  const { parsed, doc, checks, variants, results, totals, missing, links, unusedColumns } = model;
   const csv = useBatchStore(s => s.csv);
   const fileName = useBatchStore(s => s.fileName);
   const added = useBatchStore(s => s.added);
@@ -63,6 +99,9 @@ export function BatchStep({ ctx }: { ctx: StudioRuntimeContext }) {
   const texts = doc.objects.filter((o): o is TextObject => o.kind === 'text');
   const orderable = variants.filter(v => results.get(v.key)?.state === 'ok' && !added.has(v.key));
   const priced = totals.pending === 0;
+  const { quote } = useBatchQuote(model, priced);
+  // The server's figures only when they price exactly the rows on screen (no stale quote after an edit).
+  const serverQuote = quote && quote.subtotalPaise === totals.totalPaise ? quote : null;
 
   const onFile = async (file: File) => {
     if (file.size > MAX_FILE_BYTES) return void toast.error(t('batch.inputTruncated'));
@@ -75,7 +114,10 @@ export function BatchStep({ ctx }: { ctx: StudioRuntimeContext }) {
         <Section title={t('batch.variables')}>
           {texts.length === 0 && <p className="text-sm text-muted-foreground">{t('batch.noText')}</p>}
           {texts.length > 0 && <p className="text-xs text-muted-foreground">{t('batch.variablesHint', { column: '{name}' })}</p>}
-          {texts.map(o => <VariableRow key={o.id} text={o} headers={parsed.headers} />)}
+          {texts.map(o => <VariableRow key={o.id} text={o} link={links.find(l => l.objectId === o.id)} headers={parsed.headers} />)}
+          {unusedColumns.length > 0 && (
+            <p className="text-xs text-muted-foreground" data-testid="batch-unused-columns">{t('batch.unusedColumns', { columns: unusedColumns.join(', ') })}</p>
+          )}
         </Section>
         <Section title={t('batch.data')}>
           <textarea
@@ -119,7 +161,15 @@ export function BatchStep({ ctx }: { ctx: StudioRuntimeContext }) {
         <div className="flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3">
           <div className="flex flex-col">
             <span className="text-[11px] uppercase tracking-wider text-muted-foreground">{t('batch.total')}</span>
-            <span className="text-lg font-semibold tabular-nums" data-testid="batch-total">{totals.variants > 0 ? rupees(totals.totalPaise) : '—'}</span>
+            <span className="text-lg font-semibold tabular-nums" data-testid="batch-total">
+              {totals.variants > 0 ? formatPaise(serverQuote ? serverQuote.totalPaise : totals.totalPaise) : '—'}
+            </span>
+            {serverQuote?.volumeDiscount && (
+              <span className="text-xs text-emerald-700" data-testid="batch-volume-discount">
+                {t('batch.bulk', { label: volumeDiscountLabel(serverQuote.volumeDiscount), amount: formatPaise(serverQuote.volumeDiscount.discountPaise), subtotal: formatPaise(serverQuote.subtotalPaise) })}
+              </span>
+            )}
+            {serverQuote?.nextVolumeTier && <span className="text-xs text-muted-foreground">{volumeNudge({ tier: serverQuote.nextVolumeTier, unitsToGo: serverQuote.nextVolumeTier.unitsToGo })}</span>}
           </div>
           <span className="text-xs text-muted-foreground sm:hidden">{t('batch.limits', { lines: ORDER_LIMITS.maxLines, qty: ORDER_LIMITS.maxQuantityPerLine })}</span>
           <button

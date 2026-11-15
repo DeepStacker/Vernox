@@ -1,4 +1,5 @@
 import type { ConsultationSettings } from './consultation';
+import type { VolumeDiscountTier } from '../lib/pricing/volumeDiscount';
 
 /**
  * `settings/store` document shape, shared by the storefront, admin UI, seed
@@ -98,5 +99,7 @@ export interface StoreSettingsDoc {
   /** Paid design consultation (Stage 2); absent = disabled with defaults. */
   consultation?: Partial<ConsultationSettings>;
   customPieces?: Record<string, { label?: string; setupFee?: number; ratePerCm2?: number; minimum?: number }>;
+  /** Bulk discount tiers (src/lib/pricing/volumeDiscount.ts); absent = defaults, [] = off. */
+  volumeDiscounts?: VolumeDiscountTier[];
   updatedAt?: number;
 }

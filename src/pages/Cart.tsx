@@ -12,8 +12,10 @@ import { useCart, type CartItem } from '@/lib/cartContext';
 import { useCatalog } from '@/lib/catalogContext';
 import { finishName } from '@/lib/catalog';
 import { previewCoupon } from '@/lib/data/couponPreview';
+import { cartQuoteItems, useCartQuote } from '@/lib/data/cartQuote';
+import { nextVolumeTier, volumeDiscountLabel, volumeNudge } from '@/lib/pricing/volumeDiscount';
 import { useSeo } from '@/lib/seo';
-import { formatINR, formatINRExact } from '@/lib/storefront/format';
+import { formatINR, formatINRExact, formatPaise } from '@/lib/storefront/format';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { useAutoApplyConsultationCredit } from '@/lib/consultations/useCreditAutoApply';
 import { reviewStatsByProduct, sortProducts } from '@/lib/storefront/listing';
@@ -60,9 +62,22 @@ export default function Cart() {
   const [checking, setChecking] = useState(false);
 
   const threshold = storeConfig.freeShippingThreshold;
-  // Same rule as the server: free shipping is judged on the merchandise subtotal before discount.
-  const shipping = subtotal >= threshold ? 0 : storeConfig.shippingFee;
-  const discount = appliedCoupon?.discountAmount ?? 0;
+  // Every amount in the summary is the server's (POST /api/cart-quote): volume discount, coupon, shipping and total.
+  const quoteRequest = useMemo(
+    () => ({ items: cartQuoteItems(items), couponCode: appliedCoupon?.code, customerEmail: user?.email ?? undefined }),
+    [items, appliedCoupon?.code, user?.email],
+  );
+  const { quote, error: quoteError, pending: quotePending } = useCartQuote(quoteRequest);
+  const pieces = items.reduce((n, i) => n + i.quantity, 0);
+  // Tier selection only (no amounts): the nudge shows at once and the server's quote confirms it.
+  const nextTier = quote?.nextVolumeTier
+    ? { tier: { minUnits: quote.nextVolumeTier.minUnits, percent: quote.nextVolumeTier.percent }, unitsToGo: quote.nextVolumeTier.unitsToGo }
+    : quote ? null : nextVolumeTier(pieces, storeConfig.volumeDiscounts);
+  // The server's line total once the quote matches this line; until then the cart's own unit price × quantity in paise.
+  const lineTotalPaise = (idx: number, item: CartItem) => {
+    const line = quote?.lines.length === items.length ? quote.lines[idx] : undefined;
+    return line && line.quantity === item.quantity ? line.lineTotalPaise : Math.round(item.unitPrice * 100) * item.quantity;
+  };
   const remaining = Math.max(0, threshold - subtotal);
   const progress = Math.min(100, Math.round((subtotal / threshold) * 100));
   const hasCustom = items.some(i => i.customDesignRef || i.productId === 'custom-bespoke');
@@ -135,7 +150,7 @@ export default function Cart() {
             </div>
 
             <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-              {items.map(item => (
+              {items.map((item, idx) => (
                 <li key={item.id} className="flex gap-3 p-3 sm:gap-4 sm:p-4">
                   <div className="flex h-24 w-24 shrink-0 items-center justify-center wall-tile rounded p-3">
                     {item.customDesignThumb
@@ -145,14 +160,14 @@ export default function Cart() {
                   <div className="flex min-w-0 flex-1 flex-col">
                     <Link to={`/product/${item.productSlug}`} className="font-medium hover:text-burgundy">{item.productName}</Link>
                     <p className="text-sm text-muted-foreground">{item.sizeLabel} · {finishName(item.finish)}</p>
-                    <p className="text-sm text-muted-foreground">{formatINR(item.unitPrice)} each, incl. GST</p>
+                    <p className="text-sm text-muted-foreground">{formatPaise(Math.round(item.unitPrice * 100))} each, incl. GST</p>
                     <div className="mt-auto flex items-center justify-between pt-2">
                       <div className="flex items-center rounded-md border border-border" role="group" aria-label={`Quantity of ${item.productName}`}>
                         <button type="button" aria-label="Decrease quantity" onClick={() => updateQty(item.id, item.quantity - 1)} disabled={item.quantity <= 1} className="flex h-10 w-10 items-center justify-center disabled:opacity-40"><Minus className="h-4 w-4" /></button>
                         <span className="w-8 text-center text-sm font-semibold" aria-live="polite">{item.quantity}</span>
                         <button type="button" aria-label="Increase quantity" onClick={() => updateQty(item.id, item.quantity + 1)} className="flex h-10 w-10 items-center justify-center"><Plus className="h-4 w-4" /></button>
                       </div>
-                      <p className="font-semibold">{formatINR(item.unitPrice * item.quantity)}</p>
+                      <p className="font-semibold">{formatPaise(lineTotalPaise(idx, item))}</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <button type="button" onClick={() => { saveForLater(item.id); toast.info(`${item.productName} saved for later.`); }} aria-label={`Save for later: ${item.productName}`} className="inline-flex min-h-10 items-center gap-1.5 text-sm text-muted-foreground hover:text-burgundy"><Bookmark className="h-4 w-4" aria-hidden="true" />Save for later</button>
@@ -184,16 +199,36 @@ export default function Cart() {
               </form>
             )}
 
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between"><dt>Subtotal</dt><dd>{formatINR(subtotal)}</dd></div>
-              {discount > 0 && <div className="flex justify-between text-emerald-800"><dt>Discount</dt><dd>-{formatINRExact(discount)}</dd></div>}
-              <div className="flex justify-between"><dt>Shipping</dt><dd>{shipping === 0 ? 'Free' : formatINR(shipping)}</dd></div>
-              <div className="flex justify-between border-t border-border pt-2 font-semibold"><dt>Total</dt><dd>{formatINRExact(subtotal - discount + shipping)}</dd></div>
-              <p className="text-xs text-muted-foreground">Inclusive of all taxes. A cash on delivery fee, if you choose it, is shown at checkout.</p>
+            <dl className="space-y-2 text-sm" aria-busy={quotePending}>
+              <div className="flex justify-between"><dt>Subtotal</dt><dd>{formatINRExact(quote ? quote.subtotalPaise / 100 : subtotal)}</dd></div>
+              {quote?.volumeDiscount && (
+                <div className="flex justify-between text-emerald-800" data-testid="cart-volume-discount">
+                  <dt>{volumeDiscountLabel(quote.volumeDiscount)}</dt><dd>-{formatINRExact(quote.volumeDiscount.discountPaise / 100)}</dd>
+                </div>
+              )}
+              {quote && quote.couponDiscountPaise > 0 && (
+                <div className="flex justify-between text-emerald-800"><dt>Coupon {appliedCoupon?.code}</dt><dd>-{formatINRExact(quote.couponDiscountPaise / 100)}</dd></div>
+              )}
+              {quote?.coupon === 'superseded' && (
+                <p className="text-xs text-muted-foreground">Your bulk discount is larger than coupon {appliedCoupon?.code}, so the coupon is not used. Discounts do not stack.</p>
+              )}
+              {quote?.coupon === 'invalid' && quote.couponMessage && <p role="alert" className="text-xs text-destructive">{quote.couponMessage}</p>}
+              {quote ? (
+                <>
+                  <div className="flex justify-between"><dt>Shipping</dt><dd>{quote.shippingPaise === 0 ? 'Free' : formatINRExact(quote.shippingPaise / 100)}</dd></div>
+                  <div className="flex justify-between border-t border-border pt-2 font-semibold"><dt>Total</dt><dd data-testid="cart-total">{formatINRExact(quote.totalPaise / 100)}</dd></div>
+                  <p className="text-xs text-muted-foreground">Inclusive of all taxes (GST {formatINRExact(quote.taxPaise / 100)}). A cash on delivery fee, if you choose it, is shown at checkout.</p>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {quoteError ? 'Discounts, shipping and the total are confirmed at checkout.' : 'Working out discounts and shipping…'}
+                </p>
+              )}
+              {nextTier && <p className="rounded-md bg-secondary p-2 text-xs font-semibold" data-testid="cart-volume-nudge">{volumeNudge(nextTier)}.</p>}
             </dl>
 
-            {/* Prices include GST, so goods less discount plus shipping is what a prepaid order costs. */}
-            <EmiWidget amountRupees={subtotal - discount + shipping} />
+            {/* Prices include GST, so the server's total is what a prepaid order costs. */}
+            {quote && <EmiWidget amountRupees={quote.totalPaise / 100} />}
 
             <button type="button" onClick={() => navigate('/checkout')} className="btn-primary w-full">Proceed to checkout</button>
 

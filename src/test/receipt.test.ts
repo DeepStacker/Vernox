@@ -32,6 +32,14 @@ describe('receipt helpers', () => {
 });
 
 describe('buildReceipt', () => {
+  it('names the bulk discount tier and shows any coupon part separately', () => {
+    const bulk = { minUnits: 25, percent: 10, units: 30, discountPaise: 6000 };
+    const rows = buildReceipt({ order: order({}, { volumeDiscount: bulk }), config }).totals;
+    expect(rows).toContainEqual({ label: 'Bulk discount 10% (25+ pieces)', value: expect.stringContaining('60') });
+    expect(rows).toContainEqual({ label: 'Coupon', value: expect.stringContaining('40') });
+    expect(buildReceipt({ order: order(), config }).totals).toContainEqual({ label: 'Discount', value: expect.stringContaining('100') });
+  });
+
   it('titles an order without an invoice "Order receipt" and one with an invoice "Tax invoice"', () => {
     expect(buildReceipt({ order: order(), config }).title).toBe('Order receipt');
     const r = buildReceipt({ order: order({}, { invoiceNumber: 'VX/26-27/0007' }), config });

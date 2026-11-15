@@ -9,6 +9,13 @@ import { StatusBadge } from '../shared/badges';
 import { OrderItemSpecs } from '../shared/OrderItemSpecs';
 import { OrderNotesPanel } from '../shared/OrderNotesPanel';
 import { MessageSnippets } from './MessageSnippets';
+import { volumeDiscountLabel } from '@/lib/pricing/volumeDiscount';
+
+/** "Discount (Bulk discount 10% (25+ pieces))" or "Discount (SAVE10)": what the order's discount was. */
+function discountLabel(order: Order): string {
+  const what = [order.ops?.volumeDiscount ? volumeDiscountLabel(order.ops.volumeDiscount) : null, order.couponCode].filter(Boolean);
+  return what.length ? `Discount (${what.join(', ')})` : 'Discount';
+}
 
 const inr = (n: number, currency: string) => `${currency}${n.toLocaleString('en-IN')}`;
 
@@ -43,7 +50,7 @@ export function OrderDetailPanel({ order, allOrders, currency, storeName }: { or
 
       <section aria-label="Totals" className="rounded-lg border border-border/70 p-3 text-sm space-y-0.5">
         <div className="flex justify-between"><span>Subtotal</span><span>{inr(order.subtotal, currency)}</span></div>
-        {order.discountTotal > 0 && <div className="flex justify-between"><span>Discount{order.couponCode ? ` (${order.couponCode})` : ''}</span><span>-{inr(order.discountTotal, currency)}</span></div>}
+        {order.discountTotal > 0 && <div className="flex justify-between"><span>{discountLabel(order)}</span><span>-{inr(order.discountTotal, currency)}</span></div>}
         <div className="flex justify-between"><span>Shipping</span><span>{inr(order.shippingTotal, currency)}</span></div>
         {(order.ops?.codFeePaise ?? 0) > 0 && <div className="flex justify-between"><span>COD fee</span><span>{inr((order.ops?.codFeePaise ?? 0) / 100, currency)}</span></div>}
         {!order.ops?.pricesIncludeTax && <div className="flex justify-between"><span>GST</span><span>{inr(order.taxTotal, currency)}</span></div>}

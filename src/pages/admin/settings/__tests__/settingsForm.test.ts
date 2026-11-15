@@ -3,7 +3,7 @@ import type { StoreConfig } from '@/types/store';
 import { PLACEHOLDER_CONTACT, PLACEHOLDER_SELLER } from '@/types/settings';
 import { draftFromConfig, launchChecklist, missingSellerFields, toStorePatch, validateBusiness } from '../settingsForm';
 
-const config: StoreConfig = { storeName: 'Vernox', currency: '₹', gstRatePercent: 18, freeShippingThreshold: 5000, shippingFee: 150 };
+const config: StoreConfig = { storeName: 'Vernox', currency: '₹', gstRatePercent: 18, freeShippingThreshold: 5000, shippingFee: 150, volumeDiscounts: [] };
 
 describe('business settings form', () => {
   it('accepts a valid GSTIN whose state code matches and rejects a malformed one', () => {

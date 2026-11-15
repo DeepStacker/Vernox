@@ -3,11 +3,17 @@ import { ShapeThumb } from '@/components/shop/ShapeThumb';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useCart } from '@/lib/cartContext';
 import { finishName } from '@/lib/catalog';
-import { formatINR } from '@/lib/storefront/format';
+import { useCatalog } from '@/lib/catalogContext';
+import { nextVolumeTier, volumeDiscountLabel, volumeNudge, volumeTierFor } from '@/lib/pricing/volumeDiscount';
+import { formatINR, formatPaise } from '@/lib/storefront/format';
 
 /** Mini cart shown after "Add to cart". Totals that depend on tax and shipping are on the cart and checkout pages. */
 export function CartDrawer() {
   const { items, subtotal, count, isDrawerOpen, setDrawerOpen } = useCart();
+  const { storeConfig } = useCatalog();
+  // Tier names only: the discount amount is the server's, shown on the cart page.
+  const tier = volumeTierFor(count, storeConfig.volumeDiscounts);
+  const next = nextVolumeTier(count, storeConfig.volumeDiscounts);
   const navigate = useNavigate();
   const go = (to: string) => { setDrawerOpen(false); navigate(to); };
 
@@ -36,7 +42,7 @@ export function CartDrawer() {
                   <div className="min-w-0 flex-1 text-sm">
                     <Link to={`/product/${item.productSlug}`} onClick={() => setDrawerOpen(false)} className="block truncate font-medium hover:text-burgundy">{item.productName}</Link>
                     <p className="text-xs text-muted-foreground">{item.sizeLabel} · {finishName(item.finish)}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Qty {item.quantity} × {formatINR(item.unitPrice)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Qty {item.quantity} × {formatPaise(Math.round(item.unitPrice * 100))}</p>
                   </div>
                 </li>
               ))}
@@ -44,8 +50,14 @@ export function CartDrawer() {
             <div className="space-y-3 border-t border-border p-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-sm text-muted-foreground">Subtotal (incl. GST)</span>
-                <span className="text-lg font-semibold">{formatINR(subtotal)}</span>
+                <span className="text-lg font-semibold">{formatPaise(Math.round(subtotal * 100))}</span>
               </div>
+              {(tier || next) && (
+                <p className="text-xs text-muted-foreground">
+                  {tier && <span className="font-semibold text-emerald-800">{volumeDiscountLabel(tier)} applies on the cart page. </span>}
+                  {next && `${volumeNudge(next)}.`}
+                </p>
+              )}
               <button type="button" onClick={() => go('/checkout')} className="btn-primary w-full">Checkout</button>
               <button type="button" onClick={() => go('/cart')} className="btn-secondary w-full">View cart</button>
             </div>

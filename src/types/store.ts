@@ -112,9 +112,12 @@ export interface StoreConfig {
   grievanceOfficerEmail?: string;
   /** Paid design consultation (display; the server prices it). */
   consultation?: Partial<ConsultationSettings>;
+  /** Bulk discount tiers, validated (toStoreConfig); display and nudges only, the server computes the amount. */
+  volumeDiscounts: VolumeDiscountTier[];
 }
 
 import type { ConsultationSettings } from './consultation';
+import type { VolumeDiscountTier } from '../lib/pricing/volumeDiscount';
 import type { DesignFile, OfflinePaymentMode, StaffOrderChannel } from './staffOrders';
 import type { SellerSettings } from './settings';
 export type { SellerSettings, StoreSettingsDoc } from './settings';

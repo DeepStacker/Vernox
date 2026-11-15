@@ -5,6 +5,7 @@ import { useSettingsMutations } from '@/lib/data/settings';
 import type { StoreConfig } from '@/types/store';
 import { stateForGstCode } from '@/types/gstStateCodes';
 import { isPlaceholderSeller } from '@/types/settings';
+import { VOLUME_DISCOUNT_LIMITS } from '@/lib/pricing/volumeDiscount';
 import { describeSellerFields, draftFromConfig, missingSellerFields, toStorePatch, validateBusiness, type BusinessDraft } from './settingsForm';
 
 const SELLER_TEXT: Array<{ key: keyof BusinessDraft['seller']; label: string; error?: string; hint?: string; mono?: boolean }> = [
@@ -43,6 +44,8 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
   const set = <K extends keyof BusinessDraft>(key: K, value: BusinessDraft[K]) => setDraft(d => ({ ...d, [key]: value }));
   const setConsultation = <K extends keyof BusinessDraft['consultation']>(key: K, value: BusinessDraft['consultation'][K]) =>
     setDraft(d => ({ ...d, consultation: { ...d.consultation, [key]: value } }));
+  const setTier = (index: number, key: 'minUnits' | 'percent', value: string) =>
+    setDraft(d => ({ ...d, volumeDiscounts: d.volumeDiscounts.map((t, i) => (i === index ? { ...t, [key]: value } : t)) }));
   const setSeller = (key: keyof BusinessDraft['seller'], value: string) =>
     setDraft(d => {
       const seller = { ...d.seller, [key]: value };
@@ -136,6 +139,27 @@ export function BusinessSettingsForm({ config }: { config: StoreConfig }) {
         <Field label="GST on the consultation (%)" hint="Services are taxed apart from products: 18% for SAC 998391." error={errors.consultationGst}>
           <input inputMode="decimal" value={draft.consultation.gstRatePercent} onChange={e => setConsultation('gstRatePercent', e.target.value)} className="field font-mono" />
         </Field>
+      </Section>
+
+      <Section title="Volume discounts" hint="Taken off the order automatically by the number of pieces in it (catalogue and studio together), before GST is worked out. A coupon is not added on top: the order gets whichever is larger (a consultation credit still applies). Remove every tier to switch volume discounts off.">
+        {draft.volumeDiscounts.map((tier, i) => (
+          <div key={i} className="flex items-end gap-2 sm:col-span-2">
+            <Field label={`From (pieces) – tier ${i + 1}`}>
+              <input inputMode="numeric" value={tier.minUnits} onChange={e => setTier(i, 'minUnits', e.target.value)} className="field font-mono" />
+            </Field>
+            <Field label="Discount (%)">
+              <input inputMode="decimal" value={tier.percent} onChange={e => setTier(i, 'percent', e.target.value)} className="field font-mono" />
+            </Field>
+            <button type="button" onClick={() => set('volumeDiscounts', draft.volumeDiscounts.filter((_, j) => j !== i))} className="btn-secondary mb-0.5" aria-label={`Remove tier ${i + 1}`}>Remove</button>
+          </div>
+        ))}
+        {draft.volumeDiscounts.length === 0 && <p className="text-sm text-muted-foreground sm:col-span-2">Volume discounts are off.</p>}
+        {errors.volumeDiscounts && <p role="alert" className="text-sm text-destructive sm:col-span-2">{errors.volumeDiscounts}</p>}
+        {draft.volumeDiscounts.length < VOLUME_DISCOUNT_LIMITS.maxTiers && (
+          <div className="sm:col-span-2">
+            <button type="button" onClick={() => set('volumeDiscounts', [...draft.volumeDiscounts, { minUnits: '', percent: '' }])} className="btn-secondary">Add a tier</button>
+          </div>
+        )}
       </Section>
 
       <Section title="Lead times and returns">

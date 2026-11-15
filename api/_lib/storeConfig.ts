@@ -25,6 +25,9 @@
  *                                        paid design consultation (see ConsultationSettings; price includes GST)
  *   seller: { legalName, tradeName, gstin, address, city, state, stateCode, pincode, email, phone }
  *                                        supplier block printed on GST invoices
+ *   volumeDiscounts: [{ minUnits, percent }]
+ *                                        bulk discount tiers by pieces per order (src/lib/pricing/volumeDiscount.ts);
+ *                                        absent = DEFAULT_VOLUME_DISCOUNTS, [] = no volume discount
  */
 import { DEFAULT_CONSULTATION_SETTINGS } from '../../src/types/consultation';
 import { PLACEHOLDER_CONTACT, PLACEHOLDER_SELLER, type StoreSettingsDoc } from '../../src/types/settings';
@@ -37,6 +40,7 @@ import {
   resolveCustomFinishRates,
   type CustomFinishRate,
 } from '../../src/lib/pricing/customPiece';
+import { DEFAULT_VOLUME_DISCOUNTS, resolveVolumeDiscounts, type VolumeDiscountTier } from '../../src/lib/pricing/volumeDiscount';
 
 // Custom-piece rates and limits live in the shared module so the studio's displayed price
 // is computed by the same code the server charges with.
@@ -101,6 +105,8 @@ export interface StoreConfig {
     maxHeightMm: number;
     finishes: Record<string, CustomFinishRate>;
   };
+  /** Bulk discount tiers, ascending by minUnits; empty = off. Applied by pricing.computeTotals. */
+  volumeDiscounts: VolumeDiscountTier[];
 }
 
 const EMPTY_SELLER: SellerDetails = {
@@ -167,6 +173,7 @@ export function defaultStoreConfig(env: NodeJS.ProcessEnv = process.env): StoreC
     },
     seller: { ...EMPTY_SELLER },
     customPieces: { ...CUSTOM_PIECE_LIMITS, finishes: { ...DEFAULT_CUSTOM_FINISH_RATES } },
+    volumeDiscounts: DEFAULT_VOLUME_DISCOUNTS.map(t => ({ ...t })),
   };
 }
 
@@ -180,6 +187,7 @@ export function mergeStoreConfig(defaults: StoreConfig, doc: DocData | null): St
     consultation: { ...defaults.consultation },
     seller: { ...defaults.seller },
     customPieces: { ...defaults.customPieces, finishes: { ...defaults.customPieces.finishes } },
+    volumeDiscounts: defaults.volumeDiscounts.map(t => ({ ...t })),
   };
   const warn = (field: string) => console.warn(`[storeConfig] ignoring invalid settings/store.${field}`);
 
@@ -267,6 +275,10 @@ export function mergeStoreConfig(defaults: StoreConfig, doc: DocData | null): St
       warn(`customPieces.${id}`),
     );
   }
+  if (doc.volumeDiscounts !== undefined) {
+    // An invalid list keeps the defaults rather than silently switching the discount off; saveSettings refuses it anyway.
+    config.volumeDiscounts = resolveVolumeDiscounts(doc.volumeDiscounts, () => warn('volumeDiscounts'));
+  }
   return config;
 }
 
@@ -299,6 +311,7 @@ export function defaultSettingsDoc(config: StoreConfig = defaultStoreConfig()): 
       sacCode: config.consultation.sacCode,
       gstRatePercent: config.consultation.gstRateBps / 100,
     },
+    volumeDiscounts: config.volumeDiscounts.map(t => ({ ...t })),
     // Seeded placeholders keep every flow working until the owner enters real details (invoices are specimens meanwhile).
     seller: { ...PLACEHOLDER_SELLER },
     ...PLACEHOLDER_CONTACT,

@@ -103,8 +103,15 @@ describe('CSV export', () => {
     const csv = buildOrdersCsv([order('a', 'Paid', { invoiceNumber: 'VX/26-27/000001' }, { customerName: 'Asha Rao', phone: '9876543210' })], { sellerState: 'Karnataka' });
     const [header, row] = csv.trim().split('\r\n');
     expect(header).toContain('cgst,sgst,igst,total_tax');
-    expect(row).toBe('VX-a,2026-11-06,Paid,prepaid,Karnataka,intra_state,100.00,9.00,9.00,0.00,18.00,0.00,0.00,0.00,118.00,118.00,0.00,VX/26-27/000001');
+    expect(row).toBe('VX-a,2026-11-06,Paid,prepaid,Karnataka,intra_state,100.00,9.00,9.00,0.00,18.00,0.00,0.00,0.00,118.00,118.00,0.00,VX/26-27/000001,0.00');
     expect(csv).not.toMatch(/Asha|9876543210|a@b\.in/);
+  });
+
+  it('appends the bulk part of the discount as the last column', () => {
+    const bulk = order('b', 'Paid', { discountPaise: 3000, volumeDiscount: { minUnits: 25, percent: 10, units: 30, discountPaise: 3000 } });
+    const [header, row] = buildOrdersCsv([bulk]).trim().split('\r\n');
+    expect(header.endsWith(',invoice_number,volume_discount')).toBe(true);
+    expect(row.split(',').at(-1)).toBe('30.00');
   });
 
   it('writes one row per refund and COD rows with the outstanding amount', () => {

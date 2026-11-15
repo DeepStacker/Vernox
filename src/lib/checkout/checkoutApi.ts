@@ -6,6 +6,7 @@
 import { auth } from '@/lib/firebase';
 import type { CartItem } from '@/lib/cartContext';
 import { CUSTOM_PRODUCT_ID } from '@/types/products';
+import { toCheckoutItems } from './checkoutItems';
 
 export interface CheckoutCustomer {
   email: string;
@@ -20,7 +21,11 @@ export interface CheckoutCustomer {
 
 export interface ServerPricing {
   subtotal: number;
+  /** All discounts together; couponDiscount and volumeDiscount say how it is made up. */
   discount: number;
+  couponDiscount?: number;
+  /** The bulk discount tier the order earned (api/_lib/orders.ts discountBreakdown); null when none. */
+  volumeDiscount?: { percent: number; minUnits: number; units: number; amount: number } | null;
   shipping: number;
   /** Cash on delivery fee (0 for prepaid). */
   codFee?: number;
@@ -95,18 +100,7 @@ export async function postJson(url: string, body: unknown): Promise<Record<strin
   return data;
 }
 
-/** Cart lines in the shape every pricing endpoint accepts; prices are never sent. */
-export function toCheckoutItems(items: CartItem[]) {
-  return items.map(i => ({
-    productId: i.productId,
-    sizeLabel: i.sizeLabel || undefined,
-    widthMm: i.widthMm || undefined,
-    heightMm: i.heightMm || undefined,
-    finish: i.finish,
-    quantity: i.quantity,
-    customDesignRef: i.customDesignRef,
-  }));
-}
+export { toCheckoutItems };
 
 export async function createCheckoutIntent(params: {
   items: CartItem[];

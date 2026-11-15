@@ -58,6 +58,7 @@ import {
   CUSTOM_PRODUCT_ID,
   computeTotals,
   priceConsultationLine,
+  type CouponDiscountInput,
   priceLines,
   productFromDoc,
   stockRequirements,
@@ -353,8 +354,8 @@ export async function createCheckoutIntent(
     const products = new Map<string, ProductRecord | null>(catalogIds.map((id, idx) => [id, productFromDoc(id, productDocs[idx])]));
     const lines = consultation ? [priceConsultationLine(config)] : priceLines(req.items, products, config);
 
-    let discountPaise = 0;
     let coupon: OrderDoc['coupon'] = null;
+    let couponInput: CouponDiscountInput | null = null;
     let couponConsultationId: string | null = null;
     if (couponId) {
       const evaluation = evaluateCoupon(couponFromDoc(couponId, couponDoc), lines, {
@@ -363,11 +364,16 @@ export async function createCheckoutIntent(
         customerEmail: req.customer.email,
       });
       if ('errorCode' in evaluation) throw new ApiError(400, 'INVALID_COUPON', evaluation.message);
-      discountPaise = evaluation.discountPaise;
-      coupon = { id: evaluation.coupon.id, code: evaluation.coupon.code, discountPaise };
+      couponInput = { discountPaise: evaluation.discountPaise, isCredit: evaluation.coupon.consultationId !== null };
+      coupon = { id: evaluation.coupon.id, code: evaluation.coupon.code, discountPaise: evaluation.discountPaise };
       couponConsultationId = evaluation.coupon.consultationId;
     }
-    const totals = computeTotals(lines, discountPaise, config, { cod, collected: Boolean(staff?.handover) });
+    const totals = computeTotals(lines, couponInput, config, { cod, collected: Boolean(staff?.handover) });
+    // A larger volume discount replaces a promotional coupon: the coupon is then not recorded and not redeemed.
+    if (totals.discountParts?.coupon !== 'applied') {
+      coupon = null;
+      couponConsultationId = null;
+    }
     if (totals.totalPaise < MIN_PAYABLE_PAISE) {
       throw new ApiError(400, 'VALIDATION_ERROR', 'The order total is below the minimum payable amount.');
     }
@@ -550,8 +556,8 @@ export async function previewCoupon(store: DocStore, config: StoreConfig, req: C
 }
 
 /**
- * Read-only price of a basket with the checkout engine: lines, optional coupon and the COD fee. Used by the
- * coupon preview and the staff New order screen; checkout re-prices everything in its transaction.
+ * Read-only price of a basket with the checkout engine: lines, optional coupon, volume discount and the COD fee. Used
+ * by the coupon preview, the cart quote and the staff New order screen; checkout re-prices everything in its transaction.
  */
 export async function quoteItems(
   store: DocStore,
@@ -576,7 +582,9 @@ export async function quoteItems(
     }
     evaluation = evaluateCoupon(coupon, lines, { now: opts.now ?? Date.now(), customerUsageCount, customerEmail: opts.customerEmail });
   }
-  const discountPaise = evaluation && 'discountPaise' in evaluation ? evaluation.discountPaise : 0;
-  const totals = computeTotals(lines, discountPaise, config, { cod: opts.cod, collected: opts.collected });
+  const couponInput: CouponDiscountInput | null = evaluation && 'coupon' in evaluation
+    ? { discountPaise: evaluation.discountPaise, isCredit: evaluation.coupon.consultationId !== null }
+    : null;
+  const totals = computeTotals(lines, couponInput, config, { cod: opts.cod, collected: opts.collected });
   return { evaluation, totals, lines };
 }

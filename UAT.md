@@ -98,11 +98,32 @@ End-to-end acceptance scripts for launching the business. Run them on a staging 
 | BT-06 | Missing column | Variable `{room}` but no `room` column | Load a sheet without it | Message "No column room"; no rows can be added | |
 | BT-07 | Text too long | A name much longer than the plate allows | Load a sheet with it | That row shows "Text is N mm too long for the plate"; other rows stay valid | |
 | BT-08 | 500-row cap and performance | Sheet with 800 rows | Load it | Notice that only the first 500 are used; the page stays responsive while previews fill in; scrolling shows previews for visible rows first | |
-| BT-09 | Price and total | 3 valid rows with qty 2, 1, 5 | Read the Price column and Total | Each row shows unit price x qty; Total is the sum; the price of a row equals the price shown in the normal studio for that text | |
+| BT-09 | Price and total | 3 valid rows with qty 2, 1, 5 | Read the Price column and Total | Each row shows unit price x qty to the paisa (e.g. 5 x ₹1,627.75 = ₹8,138.75, never a rounded ₹8,139); Total is the server's (cart quote) and matches the cart and checkout total for the same pieces; the price of a row equals the price shown in the normal studio for that text | |
 | BT-10 | Add to cart | BT-09 | Add to cart | Cart shows one custom line per distinct name with the right quantity; identical names are merged and quantities added | |
 | BT-11 | Checkout re-prices | BT-10 | Check out (prepaid) | Order total equals the server price for the sizes and finishes; each order line has its own design | |
 | BT-12 | Order limit | Sheet with 60 distinct names | Add to cart | Lines are added up to the order limit (50 lines, or fewer if designs are large); a message says how many did not fit; after checkout the rest can be added | |
 | BT-13 | Re-add guard | BT-10 | Return to Batch | Added rows show "In cart"; the button counts only the remaining rows | |
+| BT-14 | Template columns link by themselves | House name plate template | Batch; paste `name,number,qty` and 3 rows with different names | Each text says "Linked to column ..."; the table shows 3 designs (not 1) with the sheet's names and numbers; no `{name}` typed by hand | |
+| BT-15 | Label and spelling variants | BT-14 | Use headers `Family Name,house_number,qty` | Both texts link (field label and `_`/case ignored); a column no text uses is listed as "Not used" | |
+| BT-16 | Missing template column | BT-14 | Sheet with only `name,qty` | The number text says "No column for House number: every piece will read ..."; typing `{name}` or a fixed text in its box overrides it, "Link to the matching column again" undoes that | |
+| BT-17 | Deep link | Signed out, empty cart | Open `/studio?batch=1`, then `/studio?batch=1&template=office-plaque` | The batch screen opens directly with the house name plate (then the office plaque) behind it; "Open the batch studio" on /trade lands here too | |
+| BT-18 | Bulk discount in the batch | BT-14 with qty adding up to 30 | Read the total area | "Bulk discount 10% (25+ pieces): −₹… on ₹…" and the server total; the nudge names the next tier | |
+
+## 1a2. Volume (bulk) discounts
+
+| ID | Scenario | Setup | Steps | Expected | Result |
+|---|---|---|---|---|---|
+| VD-01 | Tier boundaries | Default tiers (Settings > Volume discounts: 10/5%, 25/10%, 50/15%) | Cart with 9, then 10, 24, 25, 49, 50 pieces (any mix of catalogue and studio lines) | No discount at 9; "Bulk discount 5% (10+ pieces)" at 10 and 24; 10% at 25 and 49; 15% at 50; amounts to the paisa | |
+| VD-02 | Nudge | 22 pieces | Open the cart and the mini cart | "Add 3 more pieces to save 10%." in both | |
+| VD-03 | Coupon versus bulk | 30 pieces at ₹1,000, coupon 10% | Apply the coupon | Cart says the bulk discount is larger and the coupon is not used; total ₹27,000; after payment the coupon's used count is unchanged | |
+| VD-04 | Bigger coupon wins | 30 pieces, a 15% coupon | Apply it and pay | Only the coupon line shows; total ₹25,500; the coupon is redeemed once | |
+| VD-05 | Consultation credit stacks | A customer with a consultation credit, 30 pieces | Cart and checkout | Bulk 10% and the credit both apply | |
+| VD-06 | Checkout, COD and Razorpay | 10 pieces, prepaid; again COD (catalogue only) | Check out | Checkout shows the bulk line; Razorpay asks for exactly the shown total; the COD order total and COD limit use the discounted total | |
+| VD-07 | Invoice and credit note | VD-06 order shipped | Download the invoice; refund part, then the rest | Each line shows "less discount"; the notes say "Discount: Bulk discount 5% (10+ pieces) on 10 pieces."; credit notes add up to the discounted total and a refund above it is refused | |
+| VD-08 | Staff order | Admin > New order, 25 pieces | Read the summary, create with an advance | Summary shows the bulk line; advance and balance are against the discounted total; receipt names the tier | |
+| VD-09 | Finance export | VD-06 and VD-08 orders | Finance > export orders CSV | `discount` is the whole discount and the new last column `volume_discount` its bulk part | |
+| VD-10 | Settings | Admin > Settings | Set 20 pieces 8% and 5 pieces 3%, save; then enter tier 25 at 5% above tier 10 at 10%; then remove all tiers | Saved sorted; the second is refused with "A tier for more pieces must give a larger discount ..."; with no tiers the cart shows no bulk line and /trade asks for project pricing | |
+| VD-11 | Trade page | /trade | Read it | Volume table matches Settings; "Open the batch studio" opens `/studio?batch=1`; the four steps (quote, proof, production days, GST invoice) show; the enquiry form still sends | |
 
 ## 1b. Studio drawing tools (Simple and Pro)
 

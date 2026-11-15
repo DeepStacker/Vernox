@@ -243,6 +243,10 @@ canvas, toolbar, inspector and the shortcut table. Text arcs live in `text/shape
 `/studio?template=house-name&text=The%20Iyers&finish=brass&w=400&h=180` — `text` fills the template's first field; without
 `template`, a blank plate is created with that text, finish and size.
 
+`/studio?batch=1` opens the Batch screen directly (the Trade page's "Personalise many plates at once" links here). With
+`template=…` it starts from that template; without one, from the House name plate (`house-name`, fields `name` and `number`), so a
+sheet with `name,number,qty` columns works with nothing typed. The other parameters apply as above.
+
 ### Batch (CSV) for business buyers
 
 The **Batch** button in the studio header opens a screen for many personalised variants of one design (door plates,
@@ -250,6 +254,11 @@ apartment numbers). Code: `src/lib/studio/batch/` (pure logic, tested) and `src/
 
 - **Variables:** each text object gets an optional template such as `{name}` or `Flat {block}-{number}`; `{field}` is
   replaced by the CSV cell (column names match case-insensitively). Bindings live in `batchStore.ts`, not in the design.
+- **Automatic links:** a text a template bound to a field (`TextObject.binding`, e.g. `name` with label "Family name") links
+  itself to the sheet column named like the field key or its label, ignoring case, spaces, `_` and `-` (`resolveBindings` in
+  `variables.ts`). Each text shows "Linked to column …" or "No column for …: every piece will read …"; columns no text uses are
+  listed as "Not used". A template the buyer types (including an empty one, fixed text) replaces the automatic link; "Link to the
+  matching column again" removes it. Only typed templates are stored; automatic links are derived from the sheet each time.
 - **Sheet:** paste or upload CSV (`csv.ts`: BOM, CRLF, quotes, comma/semicolon/tab, first row = headers, max 500 rows).
   An optional `qty` (or `quantity`) column gives pieces per row (1 to 100); blank means 1.
 - **Checks per row:** empty row, empty variable value, bad or too-high quantity (`plan.ts`, instant); text too long for
@@ -258,8 +267,12 @@ apartment numbers). Code: `src/lib/studio/batch/` (pure logic, tested) and `src/
 - **Performance:** rows are grouped into distinct designs (identical resolved text is one design; quantities add up).
   Each design is evaluated once, one at a time in the geometry worker with a yield between jobs, rows on screen first.
   The table is virtualised (fixed 60 px rows).
-- **Price:** `quoteCustomPiece` per design (the function the server uses), total = unit price x quantity. The server
-  still re-prices every line from width, height and finish at checkout.
+- **Price:** `quoteCustomPiece` per design (the function the server uses), integer paise; each row shows unit price x
+  quantity to the paisa (`formatPaise`: whole rupees only when there are no paise), never a re-rounded unit price. Once every
+  design is priced, the batch asks the server for a quote of all its lines (`POST /api/cart-quote`, as cart lines of at most 100)
+  and shows that total, with the bulk discount tier and the next-tier nudge (API.md "Volume discounts"); the server figure is
+  shown only while it prices exactly the rows on screen. More than 50 lines (one order) shows the row sum instead. Checkout
+  re-prices every line from width, height and finish, and the discount counts the whole cart, not the batch alone.
 - **Cart:** one custom line per distinct design via `toCartLine`, so each line carries its own `customDesignRef` (the
   existing order storage; nothing new). Quantity above 100 for one design is split into several lines. Checkout limits
   come from `src/lib/pricing/orderLimits.ts` (also used by `api/_lib/checkout.ts`): 50 lines per order, 100 per line,

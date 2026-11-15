@@ -18,7 +18,7 @@ Shared server code lives in `api/_lib/` (the underscore keeps Vercel from deploy
   (`pricing.taxIncluded: true`). Orders placed before that date were GST-exclusive: they report `taxIncluded: false` and their
   `total` is subtotal − discount + shipping + codFee + tax.
 - Auth: optional/required `Authorization: Bearer <Firebase ID token>`.
-- Rate limits (per client IP, Firestore-backed, fixed 1-minute window): checkout-intent 20, validate-coupon 30,
+- Rate limits (per client IP, Firestore-backed, fixed 1-minute window): checkout-intent 20, validate-coupon 30, cart-quote 60,
   order-status 20, admin 120, serviceability 30, invoice 20, order-cancel 10, return-request 10; COD checkouts also 3 per hour
   per mobile number and per email.
 
@@ -55,6 +55,10 @@ Item rules:
 - Totals: the total is the GST-inclusive amounts the customer saw; GST is taken out of each line (line − its share of the
   discount), shipping and the COD fee (see India commerce below); shipping is free when the pre-discount subtotal is **≥** the
   threshold.
+- Discount: the coupon **or** the volume (bulk) discount, whichever is larger (see "Volume discounts" below); `pricing.discount`
+  is the whole discount, `pricing.couponDiscount` the coupon's part and `pricing.volumeDiscount` the tier earned
+  (`{ percent, minUnits, units, amount }` or null). A coupon that loses to the volume discount is not recorded on the order
+  and not redeemed; the request does not fail.
 - `paymentMethod`: `"prepaid"` (default) or `"cod"` — see India commerce below.
 
 `200`:
@@ -62,7 +66,8 @@ Item rules:
 { "success": true, "orderId": "Fh3k...", "orderNumber": "VX-20261105-7KQ2MZ", "razorpayOrderId": "order_...",
   "keyId": "rzp_test_...", "amount": 48420, "currency": "INR",
   "paymentMethod": "prepaid",
-  "pricing": { "taxIncluded": true, "subtotal": 538, "discount": 53.8, "shipping": 0, "codFee": 0, "tax": 73.86, "total": 484.2,
+  "pricing": { "taxIncluded": true, "subtotal": 538, "discount": 53.8, "couponDiscount": 53.8, "volumeDiscount": null,
+               "shipping": 0, "codFee": 0, "tax": 73.86, "total": 484.2,
                "items": [{ "productId": "p-01", "name": "Ember Round Frame", "unitPrice": 269, "quantity": 2, "lineTotal": 538 }] } }
 ```
 
@@ -102,7 +107,32 @@ No street address, phone, payment ids or design files are returned.
 Preview only (checkout re-evaluates). Body: `{ "code": "WELCOME10", "items": [<checkout items>], "customerEmail"?: "a@b.in" }`.
 Lines are priced on the server; coupons are read only from Firestore.
 `200`: `{ isValid, couponId?, couponCode?, discountType?, discountValue?, discountAmount /* ₹ */, description?, errorCode?, error?,
-pricing: { subtotal, discount, shipping, tax, total, taxIncluded: true } }` (`tax` is included in `total`). Invalid coupons return 200 with `isValid: false`; bad items return 400 `INVALID_ITEM`.
+pricing: { subtotal, discount, couponDiscount, volumeDiscount, shipping, tax, total, taxIncluded: true }, supersededByVolume? }`
+(`tax` is included in `total`). `supersededByVolume: true`: the coupon is valid but the basket's volume discount is at least as
+large, so checkout would use that instead. Invalid coupons return 200 with `isValid: false`; bad items return 400 `INVALID_ITEM`.
+
+## `POST /api/cart-quote`
+
+The server's price of a basket, for the cart page and the studio batch (`api/_lib/cartQuote.ts`, the checkout engine read-only;
+checkout re-prices). Body: `{ "items": [<checkout items without customDesignRef>], "couponCode"?: "WELCOME10", "customerEmail"?: "a@b.in" }`
+(a design reference is dropped: width, height and finish price a studio line). Amounts are integer **paise**:
+`200`: `{ success: true, lines: [{ unitPricePaise, lineTotalPaise, quantity }], subtotalPaise, discountPaise, couponDiscountPaise,
+coupon: "none"|"applied"|"superseded"|"invalid", couponMessage, volumeDiscount: { minUnits, percent, units, discountPaise } | null,
+nextVolumeTier: { minUnits, percent, unitsToGo } | null, shippingPaise, taxPaise, totalPaise }` (prepaid total; a COD fee is added
+at checkout). An invalid coupon does not fail the quote (`coupon: "invalid"`, `couponMessage` in the server's words); bad items
+return 400 `INVALID_ITEM`. Shape: `src/types/cartQuote.ts`.
+
+## Volume discounts
+
+`settings/store.volumeDiscounts` (DATABASE.md) sets tiers by **pieces per order**: catalogue and studio lines together, service
+lines (the consultation) excluded. Defaults: 10+ pieces 5%, 25+ 10%, 50+ 15%; `[]` switches them off. The tier's percent comes off
+the GST-inclusive merchandise subtotal, rounded half up to the paisa (`volumeDiscountFor` in `api/_lib/pricing.ts`), and is then
+allocated to lines like any discount, before each line's GST split. Shipping and the COD fee are not discounted; free shipping is
+still judged on the pre-discount subtotal. A promotional coupon does not stack: the larger of coupon and volume discount applies (a
+tie goes to the volume discount, so the coupon stays unused); a consultation credit (coupon with `consultationId`) is money
+already paid and is added to the volume discount. The frozen order records the split in `amounts.discountParts`. Invoices show
+each line's share of the discount and a note such as "Discount: Bulk discount 10% (25+ pieces) on 30 pieces."; refunds are capped
+by the discounted total like any order.
 
 ## `POST /api/razorpay-webhook`
 
@@ -341,7 +371,7 @@ engine (`api/_lib/staffOrders.ts`), so prices, GST, stock, coupons and idempoten
 
 | Action | Params | Result |
 | --- | --- | --- |
-| `QUOTE_STAFF_ORDER` | `items[]` (checkout item shape; a custom piece is `productId: 'custom-bespoke'` with `widthMm`, `heightMm`, `finish`, priced by the server and refused when out of the Studio size range or with `handover`), `couponCode?`, `customerEmail?`, `cod`, `handover` | `{ lines[], coupon: { ok, discountPaise \| message } \| null, totals{ subtotalPaise, discountPaise, shippingPaise, codFeePaise, taxPaise, totalPaise } }`; read-only |
+| `QUOTE_STAFF_ORDER` | `items[]` (checkout item shape; a custom piece is `productId: 'custom-bespoke'` with `widthMm`, `heightMm`, `finish`, priced by the server and refused when out of the Studio size range or with `handover`), `couponCode?`, `customerEmail?`, `cod`, `handover` | `{ lines[], coupon: { ok, discountPaise, superseded? \| message } \| null, volumeDiscount: { minUnits, percent, units, discountPaise } \| null, totals{ subtotalPaise, discountPaise, couponDiscountPaise, shippingPaise, codFeePaise, taxPaise, totalPaise } }`; read-only (`superseded`: the volume discount is larger, so the order would not use the coupon) |
 | `FIND_CUSTOMER_BY_PHONE` (GET) | `phone` | `{ found: false }` or `{ found: true, orderCount, lastOrderNumber, name, email, address{ address, city, state, pincode } \| null }` from the customer's latest orders (counter handovers are not used as an address) |
 | `CREATE_STAFF_ORDER` | `channel (counter\|phone\|whatsapp\|email\|trade)`, `items[]` (custom pieces as in `QUOTE_STAFF_ORDER`, each with a required plain-text `customDesignRef` of at most 300 characters, not starting with `{`; refused on catalogue lines; a custom piece cannot be combined with `handover` or `cod`), `couponCode?` (needs `customer.email`), `customer{ name, phone, email?, address?, city?, state?, pincode? }` (address required unless `handover`), `payment: { method: offline, mode: cash\|upi\|card\|bank_transfer, reference (required except cash), advancePaise? } \| { method: payment_link, advancePaise? } \| { method: cod }` (`advancePaise`: take or ask for only this part, integer paise ≥ 100 and below the total; not with `handover`), `handover` (counter + offline only), `idempotencyKey`, `note?`, `tradeEnquiryId?` | `{ staff: true, orderId, orderNumber, status, paymentMethod, paymentLink{ id, url, expiresAt } \| null, invoiceNumber \| null, pricing, advance (₹) \| null, balanceDue (₹) \| null }`; audited `STAFF_ORDER_CREATED` |
 | `RECORD_ORDER_PAYMENT` | `orderId`, `amountPaise` (≤ balance), `mode`, `reference` (required except cash), `idempotencyKey` | `{ balanceDuePaise, duplicate }`; balance money taken in person; cancels an open balance link; audited `ORDER_BALANCE_PAYMENT`; `orders.create` |

@@ -4,6 +4,11 @@
  * CSV cell of that column (column names match case-insensitively, ignoring spaces at the ends).
  * Bindings live in the batch UI state, not in the design document, so the design itself
  * stays a normal single design.
+ *
+ * Template-bound texts (TextObject.binding, set by parametric templates) link themselves: a
+ * column whose name matches the field key or its label ("name" or "Family name"; case, spaces,
+ * `_` and `-` ignored) becomes `{that column}` unless the buyer typed a template of their own
+ * (resolveBindings). A typed template, including an empty one (fixed text), always wins.
  */
 import type { StudioDocument, TextObject } from '../schema';
 
@@ -49,6 +54,83 @@ export function activeBindings(bindings: Bindings, doc: Pick<StudioDocument, 'ob
     if (o.kind === 'text' && template && templateFields(template).length > 0) out[o.id] = template;
   }
   return out;
+}
+
+/** Column and field names compared ignoring case, spaces, `_` and `-`: "Family name" = "family_name" = "FAMILYNAME". */
+export const matchKey = (name: string) => name.toLowerCase().replace(/[\s_-]+/g, '');
+
+/** How one text object gets its value in the batch. */
+export interface TextLink {
+  objectId: string;
+  /** Template field the text is bound to (TextObject.binding), if any. */
+  field: string | null;
+  /** That field's label in the template ("Family name"), if known. */
+  label: string | null;
+  /** The template in force (typed or automatic); '' = fixed text. */
+  template: string;
+  /** auto: linked to a matching column; manual: typed by the buyer; unlinked: bound field without a matching column; fixed: neither. */
+  source: 'auto' | 'manual' | 'unlinked' | 'fixed';
+  /** Sheet columns the template uses that exist in the sheet. */
+  columns: string[];
+}
+
+export interface ResolvedBindings {
+  /** Active bindings (only templates with a `{field}`), as the rest of the batch uses them. */
+  bindings: Bindings;
+  links: TextLink[];
+  /** Sheet columns no text uses (the quantity column excluded). */
+  unusedColumns: string[];
+}
+
+/**
+ * Effective bindings: what the buyer typed, else the automatic link of a template-bound text to the column named like
+ * its field key or label. `labels` maps a field key to its label (from the template definition).
+ */
+export function resolveBindings(
+  stored: Bindings,
+  doc: Pick<StudioDocument, 'objects'>,
+  headers: readonly string[],
+  labels: Readonly<Record<string, string>> = {},
+  isQtyColumn: (header: string) => boolean = () => false,
+): ResolvedBindings {
+  const byKey = new Map<string, string>();
+  for (const h of headers) {
+    const k = matchKey(h);
+    if (k && !byKey.has(k)) byKey.set(k, h.trim());
+  }
+  const columnFor = (field: string): string | null => {
+    const label = labels[field];
+    return byKey.get(matchKey(field)) ?? (label ? byKey.get(matchKey(label)) ?? null : null);
+  };
+  const have = new Set(headers.map(normaliseField));
+  const links: TextLink[] = [];
+  const merged: Bindings = {};
+  for (const o of doc.objects) {
+    if (o.kind !== 'text') continue;
+    const field = o.binding ?? null;
+    let template = '';
+    let source: TextLink['source'] = 'fixed';
+    if (o.id in stored) {
+      template = stored[o.id];
+      source = 'manual';
+    } else if (field) {
+      const column = columnFor(field);
+      template = column ? `{${column}}` : '';
+      source = column ? 'auto' : 'unlinked';
+    }
+    merged[o.id] = template;
+    links.push({
+      objectId: o.id,
+      field,
+      label: field ? labels[field] ?? null : null,
+      template,
+      source,
+      columns: templateFields(template).filter(f => have.has(normaliseField(f))),
+    });
+  }
+  const used = new Set(links.flatMap(l => l.columns.map(normaliseField)));
+  const unused = headers.map(h => h.trim()).filter(h => h && !isQtyColumn(h) && !used.has(normaliseField(h)));
+  return { bindings: activeBindings(merged, doc), links, unusedColumns: [...new Set(unused)] };
 }
 
 /** Fields referenced by the bindings that the CSV has no column for. */

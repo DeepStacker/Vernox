@@ -4,12 +4,12 @@ import type { VariantEval } from '@/lib/studio/batch/evaluate';
 import { qtyColumn, type BatchProblem, type RowCheck } from '@/lib/studio/batch/plan';
 import { t } from '@/lib/studio/i18n';
 import { finishPreset } from '@/lib/studio/materials';
+import { formatPaise } from '@/lib/storefront/format';
 import { cn } from '@/lib/utils';
 
 const ROW_HEIGHT = 60;
 const OVERSCAN = 4;
 
-const rupees = (paise: number) => `₹${Math.round(paise / 100).toLocaleString('en-IN')}`;
 
 function problemMessage(p: BatchProblem): string {
   switch (p.code) {
@@ -61,7 +61,7 @@ const Row = memo(function Row({ check, cells, columns, result, inCart, fill, tem
       {columns.map(i => <span key={i} className="truncate" title={cells[i] ?? ''}>{cells[i] ?? ''}</span>)}
       <span className="text-right tabular-nums">{check.state === 'valid' ? check.quantity : ''}</span>
       <span className="text-right tabular-nums">
-        {result?.unitPricePaise !== undefined && check.state === 'valid' ? rupees(result.unitPricePaise * check.quantity) : ''}
+        {result?.unitPricePaise !== undefined && check.state === 'valid' ? formatPaise(result.unitPricePaise * check.quantity) : ''}
       </span>
       <div className="flex min-w-0 items-center gap-1.5 text-xs">
         {flagged ? (

@@ -20,6 +20,7 @@ import { CUSTOM_PIECE_LIMITS, DEFAULT_CUSTOM_FINISH_RATES } from '@/lib/pricing/
 import { CUSTOM_PRODUCT_ID } from '@/types/products';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { checkDesignFile, newDesignDraftId, STAFF_DESIGN_FILE_ACCEPT, uploadDesignFile } from '@/lib/data/staffDesignFiles';
+import { volumeDiscountLabel } from '@/lib/pricing/volumeDiscount';
 import { PrintReceiptButton } from './PrintReceiptButton';
 import {
   OFFLINE_PAYMENT_MODES, OFFLINE_PAYMENT_MODE_LABELS, PAYMENT_LINK_TTL_HOURS, STAFF_ORDER_CHANNELS, STAFF_ORDER_CHANNEL_LABELS,
@@ -520,8 +521,10 @@ export function NewOrderConsole() {
                 ))}
               </ul>
               <dl className="space-y-1 border-t border-border pt-2">
-                {quote.totals.discountPaise > 0 && <div className="flex justify-between"><dt>Discount</dt><dd className="font-mono">−{formatInr(quote.totals.discountPaise)}</dd></div>}
+                {quote.volumeDiscount && <div className="flex justify-between"><dt>{volumeDiscountLabel(quote.volumeDiscount)}</dt><dd className="font-mono">−{formatInr(quote.volumeDiscount.discountPaise)}</dd></div>}
+                {quote.totals.couponDiscountPaise > 0 && <div className="flex justify-between"><dt>Coupon</dt><dd className="font-mono">−{formatInr(quote.totals.couponDiscountPaise)}</dd></div>}
                 {quote.coupon && 'message' in quote.coupon && <p className="text-destructive">{quote.coupon.message}</p>}
+                {quote.coupon && 'superseded' in quote.coupon && <p className="text-muted-foreground">The bulk discount is larger, so the coupon is not used.</p>}
                 {!handingOver && <div className="flex justify-between"><dt>Shipping</dt><dd className="font-mono">{quote.totals.shippingPaise ? formatInr(quote.totals.shippingPaise) : 'Free'}</dd></div>}
                 {quote.totals.codFeePaise > 0 && <div className="flex justify-between"><dt>COD fee</dt><dd className="font-mono">{formatInr(quote.totals.codFeePaise)}</dd></div>}
                 <div className="flex justify-between text-base font-semibold"><dt>Total</dt><dd className="font-mono">{formatInr(quote.totals.totalPaise)}</dd></div>

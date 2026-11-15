@@ -104,7 +104,10 @@ function Header() {
   );
 }
 
-/** `/studio?template=…&text=…&finish=…&w=…&h=…` (used by "Customise this design" links). */
+/** Template the batch deep link starts from when none is given. */
+const BATCH_DEFAULT_TEMPLATE = 'house-name';
+
+/** `/studio?template=…&text=…&finish=…&w=…&h=…&batch=1` (used by "Customise this design" links and the Trade page). */
 function useDeepLink() {
   const [params] = useSearchParams();
   const done = useRef(false);
@@ -116,9 +119,14 @@ function useDeepLink() {
     const finish = params.get('finish') ?? undefined;
     const w = Number(params.get('w')) || undefined;
     const h = Number(params.get('h')) || undefined;
-    if (template && getTemplate(template)) {
-      const first = getTemplate(template)?.fields[0]?.key;
-      void startFromTemplate(template, text && first ? { [first]: text } : {}, { finish, widthMm: w, heightMm: h });
+    // `batch=1`: open the CSV batch screen directly (Trade page, "Personalise many plates at once"); without a
+    // known template it starts from the house name plate, whose texts link to `name` and `number` columns.
+    const batch = params.get('batch') === '1';
+    const templateId = template && getTemplate(template) ? template : batch ? BATCH_DEFAULT_TEMPLATE : null;
+    if (templateId) {
+      const first = getTemplate(templateId)?.fields[0]?.key;
+      void startFromTemplate(templateId, text && first ? { [first]: text } : {}, { finish, widthMm: w, heightMm: h })
+        .then(() => { if (batch) useStudioUi.getState().setStep('batch'); });
     } else if (text || finish || w || h) {
       startBlank({ ...(w ? { widthMm: w } : {}), ...(h ? { heightMm: h } : {}) }, finish);
       if (text) {

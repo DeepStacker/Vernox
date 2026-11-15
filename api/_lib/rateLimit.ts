@@ -22,6 +22,8 @@ export interface RateLimitRule {
 export const RATE_LIMITS = {
   checkoutIntent: { scope: 'checkout', limit: 20, windowMs: 60_000 },
   validateCoupon: { scope: 'coupon', limit: 30, windowMs: 60_000 },
+  // The cart re-quotes (debounced) as quantities change, so it gets more room than a coupon check.
+  cartQuote: { scope: 'cart_quote', limit: 60, windowMs: 60_000 },
   orderStatus: { scope: 'order_status', limit: 20, windowMs: 60_000 },
   admin: { scope: 'admin', limit: 120, windowMs: 60_000 },
   serviceability: { scope: 'serviceability', limit: 30, windowMs: 60_000 },

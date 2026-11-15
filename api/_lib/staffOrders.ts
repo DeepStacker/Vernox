@@ -178,10 +178,16 @@ export async function quoteStaffOrder(store: DocStore, config: StoreConfig, inpu
   });
   return {
     lines: lines.map(l => ({ productId: l.productId, name: l.name, sizeLabel: l.sizeLabel, finish: l.finish, quantity: l.quantity, unitPricePaise: l.unitPricePaise, lineTotalPaise: l.lineTotalPaise })),
-    coupon: evaluation ? ('errorCode' in evaluation ? { ok: false, message: evaluation.message } : { ok: true, discountPaise: evaluation.discountPaise }) : null,
+    coupon: evaluation
+      ? 'errorCode' in evaluation
+        ? { ok: false, message: evaluation.message }
+        : { ok: true, discountPaise: evaluation.discountPaise, ...(totals.discountParts?.coupon === 'superseded' ? { superseded: true } : {}) }
+      : null,
+    volumeDiscount: totals.discountParts?.volume ?? null,
     totals: {
       subtotalPaise: totals.subtotalPaise,
       discountPaise: totals.discountPaise,
+      couponDiscountPaise: totals.discountParts?.couponPaise ?? 0,
       shippingPaise: totals.shippingPaise,
       codFeePaise: totals.codFeePaise,
       taxPaise: totals.taxPaise,

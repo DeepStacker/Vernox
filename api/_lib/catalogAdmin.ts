@@ -12,6 +12,7 @@ import { auditInTransaction, buildAuditEntry } from './audit';
 import { ApiError, badRequest } from './errors';
 import { productFromDoc } from './pricing';
 import { GSTIN_PATTERN, defaultStoreConfig, mergeStoreConfig } from './storeConfig';
+import { parseVolumeDiscounts } from '../../src/lib/pricing/volumeDiscount';
 import type { DocData, DocStore } from './store';
 
 type Actor = Parameters<typeof buildAuditEntry>[0]['actor'];
@@ -161,6 +162,12 @@ export async function saveSettings(store: DocStore, kind: 'store' | 'homepage', 
     const next: DocData = { ...current, ...updates, updatedAt: now };
     if (kind === 'store') {
       assertSellerShape(next.seller);
+      // mergeStoreConfig falls back to the default tiers on a bad list; a save must say what is wrong instead.
+      if (next.volumeDiscounts !== undefined) {
+        const tiers = parseVolumeDiscounts(next.volumeDiscounts);
+        if ('error' in tiers) throw badRequest(tiers.error);
+        next.volumeDiscounts = tiers.tiers;
+      }
       assertNoNegativeNumbers({ ...next, updatedAt: 0 }, '');
       mergeStoreConfig(defaultStoreConfig(), next); // throws on shapes the API cannot read
     }

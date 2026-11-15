@@ -7,6 +7,7 @@
 import { isPlaceholderSeller, isPlaceholderValue, type SellerSettings } from '@/types/settings';
 import type { StoreConfig } from '@/types/store';
 import { DEFAULT_CONSULTATION_SETTINGS } from '@/types/consultation';
+import { parseVolumeDiscounts, type VolumeDiscountTier } from '@/lib/pricing/volumeDiscount';
 
 /** Mirror of GSTIN_PATTERN in api/_lib/storeConfig.ts. */
 export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
@@ -32,6 +33,8 @@ export interface BusinessDraft {
   customLeadTimeDays: string;
   returnWindowDays: string;
   consultation: { enabled: boolean; priceInr: string; creditTowardsOrder: boolean; creditValidityDays: string; turnaroundDays: string; sacCode: string; gstRatePercent: string };
+  /** Bulk discount tiers as typed; an empty list switches the discount off. */
+  volumeDiscounts: Array<{ minUnits: string; percent: string }>;
 }
 
 export type BusinessErrors = Partial<Record<string, string>>;
@@ -65,7 +68,14 @@ export function draftFromConfig(config: StoreConfig): BusinessDraft {
       sacCode: str(config.consultation?.sacCode ?? DEFAULT_CONSULTATION_SETTINGS.sacCode),
       gstRatePercent: str(config.consultation?.gstRatePercent ?? DEFAULT_CONSULTATION_SETTINGS.gstRatePercent),
     },
+    volumeDiscounts: (config.volumeDiscounts ?? []).map(t => ({ minUnits: str(t.minUnits), percent: str(t.percent) })),
   };
+}
+
+/** The typed tiers, checked by the server's own parser (api/_lib/catalogAdmin.ts saveSettings runs it again). */
+export function draftVolumeDiscounts(d: BusinessDraft): { tiers: VolumeDiscountTier[] } | { error: string } {
+  const parsed = parseVolumeDiscounts(d.volumeDiscounts.map(t => ({ minUnits: Number(t.minUnits), percent: Number(t.percent) })));
+  return 'tiers' in parsed ? { tiers: parsed.tiers } : { error: parsed.error };
 }
 
 /** Invoice-critical seller fields that are still empty (the Shipping console warns about these). */
@@ -118,6 +128,8 @@ export function validateBusiness(d: BusinessDraft): BusinessErrors {
   checkNumber(errors, 'turnaroundDays', c.turnaroundDays, 'Turnaround', { integer: true, max: 30 });
   if (c.sacCode.trim() && !/^\d{4,8}$/.test(c.sacCode.trim())) errors.sacCode = 'A SAC code is 4 to 8 digits, for example 998391.';
   if (c.gstRatePercent.trim() !== '' && !(Number(c.gstRatePercent) >= 0 && Number(c.gstRatePercent) <= 100)) errors.consultationGst = 'Enter a GST rate between 0 and 100.';
+  const tiers = draftVolumeDiscounts(d);
+  if ('error' in tiers) errors.volumeDiscounts = tiers.error;
   return errors;
 }
 
@@ -149,6 +161,8 @@ export function toStorePatch(d: BusinessDraft): Partial<StoreConfig> {
       ...(num(d.consultation.gstRatePercent) !== undefined ? { gstRatePercent: num(d.consultation.gstRatePercent) } : {}),
     },
   };
+  const tiers = draftVolumeDiscounts(d);
+  if ('tiers' in tiers) patch.volumeDiscounts = tiers.tiers;
   const optional: Array<[keyof StoreConfig, number | undefined]> = [
     ['codFee', num(d.codFee)], ['codMaxOrderValue', num(d.codMaxOrderValue)], ['defaultLeadTimeDays', num(d.defaultLeadTimeDays)],
     ['customLeadTimeDays', num(d.customLeadTimeDays)], ['returnWindowDays', num(d.returnWindowDays)],

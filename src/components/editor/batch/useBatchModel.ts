@@ -7,8 +7,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BatchEvaluator, type VariantEval } from '@/lib/studio/batch/evaluate';
 import { parseCsv } from '@/lib/csv/parseCsv';
-import { batchTotals, checkRows, groupVariants } from '@/lib/studio/batch/plan';
-import { activeBindings, missingColumns, type Bindings } from '@/lib/studio/batch/variables';
+import { batchTotals, checkRows, groupVariants, qtyColumn } from '@/lib/studio/batch/plan';
+import { missingColumns, resolveBindings, type Bindings, type TextLink } from '@/lib/studio/batch/variables';
+import { getTemplate } from '@/lib/studio/templates/registry';
 import { useStudio } from '@/lib/studio/store';
 import type { StudioRuntimeContext } from '../useStudioRuntime';
 import { useBatchStore } from './batchStore';
@@ -26,9 +27,21 @@ export function useBatchModel(ctx: StudioRuntimeContext) {
   const storedBindings = useBatchStore(s => s.bindings);
 
   const parsed = useMemo(() => parseCsv(csv), [csv]);
+  const templateId = doc.template?.id;
+  const labels = useMemo(
+    () => Object.fromEntries((templateId ? getTemplate(templateId)?.fields ?? [] : []).map(f => [f.key, f.label])),
+    [templateId],
+  );
+  const qtyHeader = parsed.headers[qtyColumn(parsed.headers)];
+  const resolved = resolveBindings(storedBindings, doc, parsed.headers, labels, h => h === qtyHeader?.trim());
   // Keyed by content: the document object changes whenever an outline is shaped.
-  const bindingsKey = JSON.stringify(activeBindings(storedBindings, doc));
+  const bindingsKey = JSON.stringify(resolved.bindings);
   const bindings = useMemo(() => JSON.parse(bindingsKey) as Bindings, [bindingsKey]);
+  const linksKey = JSON.stringify([resolved.links, resolved.unusedColumns]);
+  const { links, unusedColumns } = useMemo(() => {
+    const [l, u] = JSON.parse(linksKey) as [TextLink[], string[]];
+    return { links: l, unusedColumns: u };
+  }, [linksKey]);
   const missing = useMemo(() => missingColumns(bindings, parsed.headers), [bindings, parsed.headers]);
   const checks = useMemo(() => checkRows(parsed.headers, parsed.rows, bindings), [parsed, bindings]);
   const variants = useMemo(() => (missing.length ? [] : groupVariants(checks)), [checks, missing]);
@@ -76,5 +89,5 @@ export function useBatchModel(ctx: StudioRuntimeContext) {
 
   const prioritise = useCallback((keys: string[]) => evaluator.current?.setPriority(keys), []);
 
-  return { doc, parsed, bindings, missing, checks, variants, results: results.current, version, totals, prioritise };
+  return { doc, parsed, bindings, links, unusedColumns, missing, checks, variants, results: results.current, version, totals, prioritise };
 }

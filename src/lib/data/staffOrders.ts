@@ -21,8 +21,10 @@ export interface StaffOrderItem {
 
 export interface StaffOrderQuote {
   lines: Array<{ productId: string; name: string; sizeLabel: string | null; finish: string; quantity: number; unitPricePaise: number; lineTotalPaise: number }>;
-  coupon: { ok: true; discountPaise: number } | { ok: false; message: string } | null;
-  totals: { subtotalPaise: number; discountPaise: number; shippingPaise: number; codFeePaise: number; taxPaise: number; totalPaise: number };
+  /** `superseded`: valid, but the volume discount is at least as large, so the order uses that instead. */
+  coupon: { ok: true; discountPaise: number; superseded?: true } | { ok: false; message: string } | null;
+  volumeDiscount: { minUnits: number; percent: number; units: number; discountPaise: number } | null;
+  totals: { subtotalPaise: number; discountPaise: number; couponDiscountPaise: number; shippingPaise: number; codFeePaise: number; taxPaise: number; totalPaise: number };
 }
 
 /** `advancePaise`: take (or ask the link for) only this part now; the balance is collected before dispatch. */

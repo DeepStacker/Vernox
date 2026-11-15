@@ -23,6 +23,7 @@
  * `credit_notes/{refundId}` (one per refund), both server-only.
  */
 import { isPlaceholderSeller } from '../../../src/types/settings';
+import { volumeDiscountLabel } from '../../../src/lib/pricing/volumeDiscount';
 import { ApiError } from '../errors';
 import type { OrderDoc } from '../orders';
 import { allocateProRata, splitInclusiveTax } from '../pricing';
@@ -83,6 +84,8 @@ export interface TaxDocument {
   paymentMethod: OrderDoc['paymentMethod'];
   /** Issued under placeholder seller details: not a valid tax invoice (see PLACEHOLDER_GSTIN). */
   specimen?: boolean;
+  /** What the line discounts are (bulk tier and/or coupon), printed with the notes; absent on older documents. */
+  discountNote?: string | null;
   /** Credit notes only. */
   againstInvoice?: { id: string; number: string } | null;
   refundId?: string | null;
@@ -207,6 +210,16 @@ function orderTaxLines(order: OrderDoc, supplyType: SupplyType): TaxDocumentLine
   return items;
 }
 
+/** "Discount: Bulk discount 10% (25+ pieces) on 30 pieces." — only for orders that record how their discount is made up. */
+export function discountNoteOf(order: Pick<OrderDoc, 'amounts' | 'coupon'>): string | null {
+  const parts = order.amounts.discountParts;
+  if (!parts || order.amounts.discountPaise <= 0) return null;
+  const what: string[] = [];
+  if (parts.volume) what.push(`${volumeDiscountLabel(parts.volume)} on ${parts.volume.units} pieces`);
+  if (parts.coupon === 'applied' && order.coupon) what.push(`coupon ${order.coupon.code}`);
+  return what.length ? `Discount: ${what.join(' and ')}. Each line shows its share, which reduces its taxable value.` : null;
+}
+
 function buyerOf(order: OrderDoc) {
   const c = order.customer;
   const stateCode = gstStateCode(c.state);
@@ -243,6 +256,7 @@ export function buildInvoice(order: OrderDoc, seller: SellerDetails, reservation
     reverseCharge: false,
     paymentMethod: order.paymentMethod ?? 'prepaid',
     ...(reservation.series === 'specimen_invoice' ? { specimen: true } : {}),
+    discountNote: discountNoteOf(order),
     againstInvoice: null,
     refundId: null,
     reason: null,
@@ -307,6 +321,8 @@ export function buildCreditNote(params: {
     issuedAt: params.now,
     lines,
     totals: totalsOf(lines),
+    // Only a full credit repeats the invoice's per-line discounts, so only then does the invoice's discount note hold.
+    discountNote: amountPaise === invoice.totals.totalPaise ? invoice.discountNote ?? null : null,
     againstInvoice: { id: invoice.id, number: invoice.number },
     refundId: params.refundId,
     reason: params.reason.slice(0, 300),

@@ -4,7 +4,7 @@
  * again by /api/checkout-intent; this is only a display estimate.
  */
 import type { CartItem } from '@/lib/cartContext';
-import { toCheckoutItems } from '@/lib/checkout/checkoutApi';
+import { toCheckoutItems } from '@/lib/checkout/checkoutItems';
 import type { CouponValidationResult } from '@/types/coupon';
 
 export async function previewCoupon(params: {

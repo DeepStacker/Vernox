@@ -20,6 +20,7 @@ import {
   CheckoutError, cartHasCustomItem, createCheckoutIntent, openRazorpay, verifyPayment,
   type CheckoutCustomer, type CheckoutIntent, type PaymentMethod,
 } from '@/lib/checkout/checkoutApi';
+import { volumeDiscountLabel } from '@/lib/pricing/volumeDiscount';
 import { formatDeliveryDate } from '@/lib/shipping/deliveryEstimate';
 import { useDeliveryEstimate } from '@/lib/shipping/useDeliveryEstimate';
 import { usePincodeAutofill } from '@/lib/shipping/usePincodeAutofill';
@@ -473,10 +474,18 @@ export default function Checkout() {
                   <div className="flex justify-between text-muted-foreground">
                     <span>Subtotal</span><span className="font-mono text-foreground">{money(pricing.subtotal)}</span>
                   </div>
-                  {pricing.discount > 0 && (
+                  {pricing.volumeDiscount && (
                     <div className="flex justify-between text-emerald-600 font-semibold">
-                      <span>Discount{couponCode ? ` (${couponCode})` : ''}</span><span className="font-mono">-{money(pricing.discount)}</span>
+                      <span>{volumeDiscountLabel(pricing.volumeDiscount)}</span><span className="font-mono">-{money(pricing.volumeDiscount.amount)}</span>
                     </div>
+                  )}
+                  {(pricing.couponDiscount ?? (pricing.volumeDiscount ? 0 : pricing.discount)) > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-semibold">
+                      <span>Discount{couponCode ? ` (${couponCode})` : ''}</span><span className="font-mono">-{money(pricing.couponDiscount ?? pricing.discount)}</span>
+                    </div>
+                  )}
+                  {couponCode && pricing.volumeDiscount && !pricing.couponDiscount && (
+                    <p className="text-muted-foreground">Your bulk discount is larger than coupon {couponCode}, so the coupon was not used.</p>
                   )}
                   <div className="flex justify-between text-muted-foreground">
                     <span>Shipping</span><span className="font-mono">{pricing.shipping === 0 ? 'Free' : money(pricing.shipping)}</span>

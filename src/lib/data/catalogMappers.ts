@@ -5,6 +5,7 @@
  * Deliberately free of Firebase imports: the storefront must not pull the Firestore SDK to use these.
  */
 import type { CategoryDoc, HeroSlide, HomepageSettings, Product, Review, StoreConfig, Topic } from '@/types/store';
+import { DEFAULT_VOLUME_DISCOUNTS, resolveVolumeDiscounts } from '@/lib/pricing/volumeDiscount';
 
 export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   {
@@ -72,6 +73,7 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
   gstRatePercent: 5,
   freeShippingThreshold: 1499,
   shippingFee: 150,
+  volumeDiscounts: DEFAULT_VOLUME_DISCOUNTS.map(t => ({ ...t })),
 };
 
 export function toProduct(id: string, raw: Record<string, unknown>): Product {
@@ -107,7 +109,8 @@ export function toTopic(id: string, raw: Record<string, unknown>): Topic {
 }
 
 export function toStoreConfig(raw: Record<string, unknown> | null | undefined): StoreConfig {
-  return { ...DEFAULT_STORE_CONFIG, ...((raw ?? {}) as Partial<StoreConfig>) };
+  // Same parser as the server (api/_lib/storeConfig.ts), so the tiers shown are the tiers charged.
+  return { ...DEFAULT_STORE_CONFIG, ...((raw ?? {}) as Partial<StoreConfig>), volumeDiscounts: resolveVolumeDiscounts(raw?.volumeDiscounts) };
 }
 
 export function toHomepageSettings(raw: Record<string, unknown> | null | undefined): HomepageSettings {

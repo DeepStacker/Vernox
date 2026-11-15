@@ -164,6 +164,8 @@ export function buildOrdersCsv(orders: readonly Order[], { sellerState }: Export
   const header = [
     'order_number', 'placed_on_ist', 'status', 'payment_method', 'place_of_supply_state', 'supply_type', 'taxable_value',
     'cgst', 'sgst', 'igst', 'total_tax', 'shipping', 'cod_fee', 'discount', 'order_total', 'collected', 'refunded', 'invoice_number',
+    // Appended so existing column positions stay put: the bulk part of `discount` (0.00 when none).
+    'volume_discount',
   ] as const;
   const rows = orders.map(o => {
     const g = gstSplit(o, sellerState);
@@ -173,7 +175,7 @@ export function buildOrdersCsv(orders: readonly Order[], { sellerState }: Export
       g.supply === 'unknown' ? '' : amount(g.cgstPaise), g.supply === 'unknown' ? '' : amount(g.sgstPaise), g.supply === 'unknown' ? '' : amount(g.igstPaise),
       amount(g.taxPaise), amount(o.ops?.shippingPaise ?? Math.round(o.shippingTotal * 100)), amount(o.ops?.codFeePaise ?? 0),
       amount(o.ops?.discountPaise ?? Math.round(o.discountTotal * 100)), amount(totalPaise(o)), amount(collectedPaise(o)),
-      amount(o.ops?.refundedPaise ?? 0), o.ops?.invoiceNumber ?? '',
+      amount(o.ops?.refundedPaise ?? 0), o.ops?.invoiceNumber ?? '', amount(o.ops?.volumeDiscount?.discountPaise ?? 0),
     ];
   });
   return toCsv(header, rows);

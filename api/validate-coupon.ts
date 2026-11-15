@@ -11,6 +11,7 @@ import { sendError } from './_lib/errors';
 import { getStore } from './_lib/firebaseAdmin';
 import { assertMethod, parseBody } from './_lib/http';
 import { paiseToRupees } from './_lib/money';
+import { discountBreakdown } from './_lib/orders';
 import { enforceRateLimit, RATE_LIMITS } from './_lib/rateLimit';
 import { loadStoreConfig } from './_lib/storeConfig';
 import { withStoredIntegrations } from './_lib/withIntegrations';
@@ -31,6 +32,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       tax: paiseToRupees(totals.taxPaise),
       total: paiseToRupees(totals.totalPaise),
       taxIncluded: true,
+      ...discountBreakdown(totals),
     };
 
     const result: CouponValidationResult & { pricing: typeof pricing } = 'coupon' in evaluation
@@ -45,6 +47,8 @@ async function handler(req: VercelRequest, res: VercelResponse) {
               : evaluation.coupon.discountValue,
           discountAmount: paiseToRupees(evaluation.discountPaise),
           description: evaluation.coupon.description,
+          // Valid, but the order's volume discount is at least as large, so checkout would not use the coupon.
+          ...(totals.discountParts?.coupon === 'superseded' ? { supersededByVolume: true } : {}),
           pricing,
         }
       : { isValid: false, discountAmount: 0, errorCode: evaluation.errorCode, error: evaluation.message, pricing };
