@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { finishPreset } from '@/lib/studio/materials';
 import { studioShapePath } from '@/lib/studio/shapes';
-import { listTemplates, templateDefaults, type StudioTemplate } from '@/lib/studio/templates/registry';
+import { listTemplates, TEMPLATE_CATEGORIES, templateDefaults, type StudioTemplate, type TemplateCategory } from '@/lib/studio/templates/registry';
 import '@/lib/studio/templates/definitions';
 import { fontById } from '@/lib/studio/text/fonts';
 import { cn } from '@/lib/utils';
@@ -50,26 +50,48 @@ export function TemplateThumb({ template }: { template: StudioTemplate }) {
 
 export function TemplatesGrid({ className, columns = 2 }: { className?: string; columns?: number }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [category, setCategory] = useState<TemplateCategory | 'all'>('all');
+  const all = listTemplates();
+  const categories = TEMPLATE_CATEGORIES.filter(c => all.some(t => t.category === c.id));
+  const shown = category === 'all' ? all : all.filter(t => t.category === category);
   return (
-    <div className={cn('grid gap-3', columns === 3 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2', className)}>
-      {listTemplates().map(tpl => (
-        <button
-          key={tpl.id}
-          type="button"
-          disabled={busy !== null}
-          onClick={async () => {
-            setBusy(tpl.id);
-            try { await startFromTemplate(tpl.id); } finally { setBusy(null); }
-          }}
-          className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card text-left transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span className="relative flex h-40 items-center justify-center overflow-hidden bg-muted p-3">
-            <TemplateThumb template={tpl} />
-            {busy === tpl.id && <Loader2 className="absolute h-6 w-6 animate-spin text-primary" />}
-          </span>
-          <span className="px-3 py-2 text-sm text-foreground">{tpl.name}</span>
-        </button>
-      ))}
+    <div className={cn('flex flex-col gap-3', className)}>
+      <div role="group" aria-label="Template categories" className="flex flex-wrap gap-1.5">
+        {[{ id: 'all' as const, label: 'All' }, ...categories].map(c => (
+          <button
+            key={c.id}
+            type="button"
+            aria-pressed={category === c.id}
+            onClick={() => setCategory(c.id)}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+              category === c.id ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-foreground hover:bg-muted',
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+      <div className={cn('grid gap-3', columns === 3 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2')}>
+        {shown.map(tpl => (
+          <button
+            key={tpl.id}
+            type="button"
+            disabled={busy !== null}
+            onClick={async () => {
+              setBusy(tpl.id);
+              try { await startFromTemplate(tpl.id); } finally { setBusy(null); }
+            }}
+            className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card text-left transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="relative flex h-40 items-center justify-center overflow-hidden bg-muted p-3">
+              <TemplateThumb template={tpl} />
+              {busy === tpl.id && <Loader2 className="absolute h-6 w-6 animate-spin text-primary" />}
+            </span>
+            <span className="px-3 py-2 text-sm text-foreground">{tpl.name}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

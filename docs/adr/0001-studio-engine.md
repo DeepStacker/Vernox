@@ -47,5 +47,6 @@ Design rules that follow from the choice:
 - Legacy order designs (VDM 3.0.0) remain exportable through `migrateLegacyDesign` in `camDocument.ts`.
 - HarfBuzz WASM (~160 kB gzip) is the largest lazy asset; it is cached after first use. Fonts (self-hosted, OFL) load per
   font on first use; Great Vibes and Pacifico could be subset later to cut ~0.6 MB.
-- PDF-vector import is not supported: no small, maintained PDF path parser exists (pdf.js is ~1 MB). Customers can export
-  SVG from their PDF tool.
+- PDF and Illustrator (.ai, PDF-compatible) vector import uses pdf.js (~1 MB), loaded with a dynamic import on the first
+  PDF import only, never in the storefront bundle (`src/lib/studio/import/importPdf.ts`). EPS is not supported; customers
+  export SVG or PDF.

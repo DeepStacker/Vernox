@@ -24,7 +24,7 @@ Switch **Pro** in the header (remembered in this browser). Same document — not
 - Per-object role: **Cut out**, **Solid** (added metal) or **Engrave** (score line).
 - Align / distribute, booleans (union, subtract, intersect, exclude), offset outline, mirror, mirror copy, group / ungroup,
   lock, hide, rename (Layers panel, `L`), z-order (`[` `]`).
-- Import SVG or DXF (lines, polylines with bulges, arcs, circles, ellipses, splines; DXF units honoured).
+- Import SVG, DXF, PDF or Illustrator `.ai` (see "Import formats" below).
 - Every finish and thickness, mounting hole size and inset, auto-bridges on/off.
 - Review → **Download** SVG, DXF (nominal), DXF (kerf-compensated) and a PDF sheet of your own design.
 - `?` lists every shortcut (undo `Ctrl Z`, redo `Ctrl Shift Z`, duplicate `Ctrl D`, nudge with arrows, zoom `+ −`, fit `0`).
@@ -96,9 +96,63 @@ and add a migration for any breaking change.
 `toCartLine`. Each accepts an optional context `{ rates, limits, cutRuleOverrides }`. In Node, call
 `configureTextEngine({ loadWasm, loadFont })` first (see `src/lib/studio/__tests__/testFonts.ts`).
 
+### Import formats
+
+`src/lib/studio/import/`. Each importer returns one path in millimetres centred on (0,0); the studio places it at its
+true size, or fits it to 60 % of the plate when larger.
+
+- **SVG** (`importSvg`): paths and basic shapes, nested transforms, real-world units.
+- **DXF** (`importDxf`): lines, polylines with bulges, arcs, circles, ellipses, splines; `$INSUNITS` honoured.
+- **PDF and Illustrator `.ai`** (`importPdf`): first page only. pdf.js interprets the page; the operator list is walked with
+  the current transformation matrix and the viewport transform (y flip, MediaBox origin, /Rotate), collecting filled and
+  stroked paths (moveTo, lineTo, curveTo, rectangle, closePath) in points, converted to mm (1 pt = 25.4/72 mm). Clip-only
+  paths and a page-sized background rectangle are skipped. An `.ai` file is a PDF only when saved with "Create PDF
+  Compatible File"; older or PostScript-based files get a message. A raster-only PDF (scan or placed photo) is refused
+  with a pointer to image tracing; a PDF with live text and no outlines asks for "Create Outlines". Limits: 30 MB,
+  first page, no gradients or patterns (paths are cut lines, colour is ignored), no password-protected files.
+  pdf.js (`pdfjs-dist`, pinned) is loaded with a dynamic `import()` on the first PDF import, from `importPdf.ts`, which is
+  itself only imported lazily from `components/editor/actions.ts`; it is not in the storefront entry chunk. The path
+  operand layout (`constructPath`: `[op, [drawOps], minMax]`) is that of the pinned version; check it when upgrading
+  (`__tests__/importPdf.test.ts` builds real PDFs with pdf-lib).
+- **EPS** is not supported (PostScript): the message says to export SVG or PDF.
+
+### Templates
+
+The registry is `src/lib/studio/templates/` (`registry.ts`: types, categories, `registerTemplate`; `definitions.ts`: the
+built-in templates). Categories (gallery filter chips in the Start screen and the Templates panel): Name plates,
+Spiritual, Office, Shop & signage, Gifts & kids, Wall decor, Quotes, Festive.
+
+Built in: house name plate, Hindi name plate (arch), round and oval name plates, arch name plate with Om, door number
+plate; Om mandala, Swastik Shubh Labh, cross blessing panel, Islamic star panel; office plaque, doctor / cabin door sign;
+cafe sign, shop name board; house-warming gift, wedding gift, kids room name sign; family tree panel, jali screen panel;
+quote panel; Shubh Deepawali.
+
+Not offered, because the asset is not bundled: Gujarati, Marathi (Devanagari works) and Tamil name plates (no
+Gujarati or Tamil font is bundled), Ganesha, Khanda, Ik Onkar and Allah calligraphy (no licensed vector or Gurmukhi /
+Arabic font). The Islamic panel uses an eight-pointed star and Latin text for that reason. To add one: bundle an OFL font
+(see "Font" below) or a vector, then register a template.
+
+**Template rules.** A template must build with zero manufacturability issues at its default finish and thickness for its
+default text and for each entry of its `samples` (realistic edits); `__tests__/templates.test.ts` builds every registered
+template through the real pipeline (HarfBuzz shaping with the bundled fonts, `compose`, `analyzeDocument`) and fails on any
+issue, so a template cannot ship broken. What that taught (measured, Poppins SemiBold):
+
+- Letters below about 24 mm cap height close their counters on 2 mm-web finishes (black, copper, corten); 22 mm on
+  brass/gold, 20 mm on stainless. Keep every line at least that tall, and remember auto-fit shrinks long text.
+- Abril Fatface and Pacifico (hairlines, near-touching loops) and Bebas Neue (thin stems) do not survive any
+  default finish; they stay in the font list for Pro users but no template uses them. Rozha One and Yatra One are fine
+  for short, large display text (the Om glyph); Poppins is the workhorse in Latin and Devanagari.
+- Text added as metal (`add`) leaves loose letters that auto-bridges connect with many narrow gaps; lettering is cut out of
+  a solid plate instead.
+- Known limit of the checks, not of the templates: the pointed spike of plate metal inside a cut-out **M, N, W, V, v, w**
+  is flagged as thin metal in every bundled font (N only on brass, gold and stainless). Default and sample text avoid those
+  letters; a customer typing such a name sees a warning (it does not block ordering). Raise with the workshop whether to
+  relax the check or accept the spike; the rule lives in `manufacturability.ts` (extent threshold of the opening residue).
+- Library shapes such as heart and cloud fill only part of their box; place text by the real outline.
+
 ### Extending
 
-- **Template:** add a `registerTemplate({...})` entry in `src/lib/studio/templates/definitions.ts` (fields + pure `build`).
+- **Template:** add a `registerTemplate({...})` entry in `src/lib/studio/templates/definitions.ts` (fields, `samples` of realistic edits, pure `build`); run `npx vitest run src/lib/studio/__tests__/templates.test.ts`.
 - **Font:** drop the file (with its licence) in `public/fonts/studio/` and add an entry to `src/lib/studio/text/fonts.ts`.
 - **Finish / material rule:** `FINISH_PRESETS` / `MACHINE.gauges` in `src/lib/studio/materials.ts`; only server-priced
   finish ids are offered.
@@ -141,4 +195,4 @@ the bound text must be a text object, not a traced image.
 
 ### Not built yet
 
-Path node editing, draggable ruler guides, multiple artboards, PDF-vector import, the Hindi string dictionary.
+Path node editing, draggable ruler guides, multiple artboards, EPS and multi-page PDF import, the Hindi string dictionary.

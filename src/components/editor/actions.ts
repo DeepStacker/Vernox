@@ -97,12 +97,23 @@ export function startBlank(overrides: Partial<StudioDocument['plate']> = {}, fin
   useStudioUi.getState().requestFit();
 }
 
-/** Imports an SVG or DXF file as a path object. */
+/** Vector file types the studio imports (SVG, DXF, PDF and PDF-compatible Illustrator); EPS gets an explanation. */
+export const VECTOR_IMPORT_PATTERN = /\.(svg|dxf|pdf|ai|eps)$/i;
+
+/** Imports an SVG, DXF, PDF or Illustrator (.ai) file as a path object. */
 export async function importVectorFile(file: File) {
   try {
-    const { importDxf, importSvg } = await import('@/lib/studio/import/importVector');
-    const text = await file.text();
-    const v = /\.dxf$/i.test(file.name) ? await importDxf(text) : importSvg(text);
+    if (/\.eps$/i.test(file.name)) throw new Error('EPS files are not supported. Export the artwork as SVG or PDF and import that.');
+    let v;
+    if (/\.(pdf|ai)$/i.test(file.name)) {
+      // pdf.js is heavy: loaded only now, and only inside the studio chunk graph.
+      const { importPdf } = await import('@/lib/studio/import/importPdf');
+      v = await importPdf(await file.arrayBuffer());
+    } else {
+      const { importDxf, importSvg } = await import('@/lib/studio/import/importVector');
+      const text = await file.text();
+      v = /\.dxf$/i.test(file.name) ? await importDxf(text) : importSvg(text);
+    }
     placePath(v.d, v.widthMm, v.heightMm, 'import', file.name);
   } catch (err) {
     toast.error(err instanceof Error ? err.message : 'Could not import this file.');

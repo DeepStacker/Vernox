@@ -18,7 +18,7 @@ import { hasFeature } from '@/lib/studio/modes';
 import { redo, undo, useStudio } from '@/lib/studio/store';
 import { getTemplate } from '@/lib/studio/templates/registry';
 import { cn } from '@/lib/utils';
-import { importVectorFile, startBlank, startFromTemplate } from './actions';
+import { importVectorFile, startBlank, startFromTemplate, VECTOR_IMPORT_PATTERN } from './actions';
 import { BatchStep } from './batch/BatchStep';
 import { BottomBar } from './BottomBar';
 import { Inspector, InspectorBody } from './Inspector';
@@ -148,7 +148,7 @@ export function StudioApp() {
     if (!file) return;
     e.preventDefault();
     if (file.type.startsWith('image/') && file.type !== 'image/svg+xml') useStudioUi.getState().openTrace(file);
-    else if (/\.(svg|dxf)$/i.test(file.name)) void importVectorFile(file);
+    else if (VECTOR_IMPORT_PATTERN.test(file.name)) void importVectorFile(file);
   }, []);
 
   const designPrimary = isMobile

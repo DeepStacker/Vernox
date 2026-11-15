@@ -7,7 +7,19 @@
 import type { CreateDocumentOptions } from '../document';
 import type { StudioDocument, StudioObject } from '../schema';
 
-export type TemplateCategory = 'name-plate' | 'spiritual' | 'office' | 'quote' | 'festive';
+export type TemplateCategory = 'name-plate' | 'spiritual' | 'office' | 'signage' | 'gift' | 'decor' | 'quote' | 'festive';
+
+/** Gallery order and labels of the categories (the StartStep and Templates panel filters). */
+export const TEMPLATE_CATEGORIES: readonly { id: TemplateCategory; label: string }[] = [
+  { id: 'name-plate', label: 'Name plates' },
+  { id: 'spiritual', label: 'Spiritual' },
+  { id: 'office', label: 'Office' },
+  { id: 'signage', label: 'Shop & signage' },
+  { id: 'gift', label: 'Gifts & kids' },
+  { id: 'decor', label: 'Wall decor' },
+  { id: 'quote', label: 'Quotes' },
+  { id: 'festive', label: 'Festive' },
+];
 
 export interface TemplateField {
   key: string;
@@ -23,6 +35,12 @@ export interface StudioTemplate {
   fields: TemplateField[];
   /** Finish used for the gallery thumbnail and as the starting finish. */
   finish: string;
+  /**
+   * Realistic customer edits (longer or differently shaped text), each a set of field values.
+   * The template test builds every one and requires zero manufacturability issues, so a
+   * template cannot ship that only works for its default text.
+   */
+  samples?: Record<string, string>[];
   build: (fields: Record<string, string>) => CreateDocumentOptions;
 }
 
