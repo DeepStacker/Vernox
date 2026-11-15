@@ -91,13 +91,20 @@ export function OrderDetails({ order, email }: Props) {
               {typeof item.lineTotal === 'number' && <span>{formatINR(item.lineTotal)}</span>}
             </li>
           ))}
+          {/* The total includes it, so name it: otherwise the lines do not add up to the total. */}
+          {(order.codFee ?? 0) > 0 && (
+            <li className="flex justify-between gap-3 py-2 text-muted-foreground">
+              <span>Cash on delivery fee</span>
+              <span>{formatINR(order.codFee ?? 0)}</span>
+            </li>
+          )}
         </ul>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-muted-foreground">{[order.shippingCity, order.shippingState].filter(Boolean).join(', ')}</span>
         <span className="text-right">
-          {typeof order.total === 'number' && <strong>{formatINR(order.total)}</strong>}
+          {typeof order.total === 'number' && <strong>Total {formatINR(order.total)}</strong>}
           {cod && <span className="ml-2 badge-pill">Pay on delivery</span>}
         </span>
       </div>

@@ -11,6 +11,8 @@ import { CodOtpStep, type CodOtpState } from '@/components/shop/CodOtpStep';
 import { ShapeThumb } from '@/components/shop/ShapeThumb';
 import { useCart } from '@/lib/cartContext';
 import { useCatalog } from '@/lib/catalogContext';
+import { finishName } from '@/lib/catalog';
+import { rememberConfirmationEmail } from '@/lib/orders/confirmationEmail';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { trackStoreEvent } from '@/lib/storeAnalytics';
 import { previewCoupon } from '@/lib/data/couponPreview';
@@ -205,7 +207,8 @@ export default function Checkout() {
         trackStoreEvent('purchase', { orderId: created.orderId, orderTotal: created.pricing.total });
         clear();
         toast.success('Order placed. Pay in cash when it is delivered.');
-        navigate(`/order-confirmation/${created.orderId}?email=${encodeURIComponent(customer.email)}`);
+        rememberConfirmationEmail(created.orderId, customer.email);
+        navigate(`/order-confirmation/${created.orderId}`);
         return;
       }
       setIntent(created);
@@ -247,7 +250,8 @@ export default function Checkout() {
       if (isCreditCode(couponCode)) trackSpaceEvent('consultation_credit_redeemed', { orderId: verified.orderId });
       clear();
       toast.success('Payment received. Your order is confirmed.');
-      navigate(`/order-confirmation/${verified.orderId}?email=${encodeURIComponent(customer.email)}`);
+      rememberConfirmationEmail(verified.orderId, customer.email);
+      navigate(`/order-confirmation/${verified.orderId}`);
     } catch (err) {
       // Money may have moved: say so explicitly rather than implying nothing happened.
       setPhase('ready');
@@ -258,7 +262,7 @@ export default function Checkout() {
   const busy = phase === 'creating' || phase === 'paying' || phase === 'verifying';
   const set = (key: keyof AddressForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [key]: e.target.value }));
-  const money = (n: number) => `${currency}${n.toFixed(2)}`;
+  const money = (n: number) => `${currency}${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // Opened from a stale link or Back after an order: say so instead of an address form that cannot be submitted.
   if (items.length === 0 && phase === 'details' && !intent) {
@@ -430,7 +434,7 @@ export default function Checkout() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-dark-brown truncate">{i.productName}</div>
-                    <div className="text-muted-foreground text-xs mt-0.5 capitalize">{i.finish} · {i.sizeLabel}</div>
+                    <div className="text-muted-foreground text-xs mt-0.5">{finishName(i.finish)} · {i.sizeLabel}</div>
                   </div>
                 </div>
               ))}

@@ -2,7 +2,7 @@
 import type { OrderStatus } from './orderStateMachine';
 
 export const FULFILMENT_STAGES = [
-  { title: 'Order confirmed', desc: 'Payment received and order queued' },
+  { title: 'Order confirmed', desc: 'Order received and queued for the workshop' },
   { title: 'Design check', desc: 'Artwork and dimensions are prepared for cutting' },
   { title: 'Cutting', desc: 'Your piece is being laser-cut' },
   { title: 'Finishing and inspection', desc: 'Surface finishing and quality check' },
@@ -14,7 +14,7 @@ export const FULFILMENT_STAGES = [
 /** Index of the stage the order has reached, or -1 when not confirmed or off the happy path. */
 export function fulfilmentStageIndex(status: OrderStatus): number {
   switch (status) {
-    case 'Paid': return 0;
+    case 'Paid': case 'Confirmed_COD': return 0;
     case 'In_Design': return 1;
     case 'Cutting': return 2;
     case 'Finishing': case 'Quality_Check': return 3;

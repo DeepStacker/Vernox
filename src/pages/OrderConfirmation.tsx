@@ -1,4 +1,5 @@
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { confirmationEmail } from '@/lib/orders/confirmationEmail';
 import { CheckCircle2, Clock } from 'lucide-react';
 import { StoreLayout } from '@/components/shop/StoreLayout';
 import { PageHeader } from '@/components/shop/PageHeader';
@@ -13,7 +14,8 @@ export default function OrderConfirmation() {
   useSeo({ title: 'Order confirmation', noindex: true });
   const { orderId } = useParams<{ orderId: string }>();
   const [searchParams] = useSearchParams();
-  const email = searchParams.get('email') ?? undefined;
+  // Session storage from checkout; ?email= is still read for links opened before the change.
+  const email = confirmationEmail(orderId) ?? searchParams.get('email') ?? undefined;
   const { user } = useAuth();
   const { data: order, isLoading, error } = useOrderLookup(orderId, email, user?.uid);
 

@@ -40,3 +40,17 @@ describe('app resilience', () => {
     expect(txt).toContain('Disallow: /checkout');
   });
 });
+
+describe('order confirmation details', () => {
+  it('puts cash-on-delivery orders on the first progress stage', async () => {
+    const { fulfilmentStageIndex } = await import('@/lib/orders/fulfilmentStages');
+    expect(fulfilmentStageIndex('Confirmed_COD')).toBe(0);
+  });
+
+  it('keeps the guest email out of the URL but available to this tab', async () => {
+    const { confirmationEmail, rememberConfirmationEmail } = await import('@/lib/orders/confirmationEmail');
+    rememberConfirmationEmail('ord1', 'a@example.test');
+    expect(confirmationEmail('ord1')).toBe('a@example.test');
+    expect(confirmationEmail('other')).toBeUndefined();
+  });
+});
