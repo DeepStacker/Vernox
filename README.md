@@ -22,6 +22,11 @@ Vernox is a professional web-based tool for designing and visualizing custom met
 
 ## Getting Started
 
+### Try it locally (one command)
+Node 22+ and Java 21+, then `npm install && npm run demo`: shop, studio, every staff console and the API on
+http://localhost:8080 with sample products, a login per role and orders at every stage (Firebase emulators, project
+`demo-vernox`, nothing real is touched). Logins and a tour: [GETTING_STARTED.md](GETTING_STARTED.md).
+
 ### Production on any VM (one command)
 On a Linux VM with a domain pointing at it and a Firebase project (Firestore, Storage, Auth, a web app and a service-account key):
 ```bash

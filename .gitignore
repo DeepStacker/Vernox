@@ -30,3 +30,7 @@ dist-ssr
 .env.*.local
 .claude/worktrees/
 .env.production
+
+# Local demo data (npm run demo)
+.demo-data/
+.demo-seeded

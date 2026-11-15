@@ -1,0 +1,16 @@
+{
+  "_note": "Local demo only: these accounts exist only in the Firebase emulators started by `npm run demo` (project demo-vernox). Never use them on a real project.",
+  "password": "VernoxDemo#2026",
+  "accounts": [
+    { "email": "owner@demo.vernox.test", "name": "Demo Owner", "role": "super_admin", "does": "Everything: team, settings, integrations, launch checklist" },
+    { "email": "admin@demo.vernox.test", "name": "Demo Admin", "role": "admin", "does": "All operations except team and integrations" },
+    { "email": "catalog@demo.vernox.test", "name": "Demo Catalogue", "role": "catalog_manager", "does": "Products, categories, photos, reviews" },
+    { "email": "orders@demo.vernox.test", "name": "Demo Orders", "role": "order_manager", "does": "Orders, new staff orders, COD confirmation, returns" },
+    { "email": "production@demo.vernox.test", "name": "Demo Workshop", "role": "production", "does": "Production queue, QC and packing" },
+    { "email": "shipping@demo.vernox.test", "name": "Demo Shipping", "role": "shipping", "does": "Courier booking, labels, delivery status" },
+    { "email": "finance@demo.vernox.test", "name": "Demo Finance", "role": "finance", "does": "Payments, refunds, invoices, reconciliation, exports" },
+    { "email": "support@demo.vernox.test", "name": "Demo Support", "role": "support", "does": "Order lookup, tickets, notes, staff orders" },
+    { "email": "designer@demo.vernox.test", "name": "Demo Designer", "role": "designer", "does": "Paid design consultations and proposals" },
+    { "email": "customer@demo.vernox.test", "name": "Asha Rao", "role": null, "does": "Shopper: account, orders, tracking, returns, Studio" }
+  ]
+}
