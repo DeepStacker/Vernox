@@ -17,6 +17,7 @@ import { formatINR, formatINRExact } from '@/lib/storefront/format';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { useAutoApplyConsultationCredit } from '@/lib/consultations/useCreditAutoApply';
 import { reviewStatsByProduct, sortProducts } from '@/lib/storefront/listing';
+import { recommendProducts } from '@/lib/storefront/recommend';
 
 /** Items moved out of the cart; each can go back with its size, finish and design intact. */
 function SavedForLater({ lines, onMove, onRemove }: { lines: CartItem[]; onMove: (id: string) => void; onRemove: (id: string) => void }) {
@@ -67,6 +68,12 @@ export default function Cart() {
   const hasCustom = items.some(i => i.customDesignRef || i.productId === 'custom-bespoke');
 
   const bestsellers = useMemo(() => sortProducts(products, 'popular', reviewStatsByProduct(reviews)).slice(0, 4), [products, reviews]);
+  // Suggestions that go with what is already in the cart (same rooms, themes and budget), never the lines themselves.
+  const goesWith = useMemo(() => {
+    const ratings = new Map([...reviewStatsByProduct(reviews)].map(([id, st]) => [id, st.average]));
+    const seeds = items.map(i => products.find(p => p.id === i.productId)).filter((p): p is (typeof products)[number] => Boolean(p));
+    return seeds.length ? recommendProducts(products, seeds, { ratings }) : [];
+  }, [items, products, reviews]);
 
   const applyCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,6 +201,12 @@ export default function Cart() {
             </p>
           </aside>
         </div>
+        {goesWith.length > 0 && (
+          <section className="mt-12" aria-labelledby="goes-with-heading">
+            <h2 id="goes-with-heading" className="section-title mb-4">Goes well with your picks</h2>
+            <ProductGrid products={goesWith} />
+          </section>
+        )}
       </div>
     </StoreLayout>
   );

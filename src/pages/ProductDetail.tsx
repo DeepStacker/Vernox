@@ -14,6 +14,8 @@ import { ProductFaq, ProductReviews, SpecsTable } from '@/components/shop/Produc
 import { ReviewForm } from '@/components/shop/ReviewForm';
 import { ProductGrid } from '@/components/shop/ProductGrid';
 import { RecentlyViewed } from '@/components/shop/RecentlyViewed';
+import { reviewStatsByProduct } from '@/lib/storefront/listing';
+import { recommendProducts } from '@/lib/storefront/recommend';
 import { StarRating } from '@/components/shop/StarRating';
 import { finishLabels, finishName, formatSizeCm, formatSizeInches, getCategory, unitPrice } from '@/lib/catalog';
 import { useCart } from '@/lib/cartContext';
@@ -53,10 +55,11 @@ export default function ProductDetail() {
   }, [product?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on product identity only
 
   const productReviews = useMemo(() => (product ? reviews.filter(r => r.productId === product.id) : []), [product, reviews]);
-  const related = useMemo(
-    () => (product ? products.filter(p => p.id !== product.id && (p.category === product.category || p.themes?.some(t => product.themes?.includes(t)))).slice(0, 4) : []),
-    [product, products],
-  );
+  const related = useMemo(() => {
+    if (!product) return [];
+    const ratings = new Map([...reviewStatsByProduct(reviews)].map(([id, st]) => [id, st.average]));
+    return recommendProducts(products, [product], { ratings });
+  }, [product, products, reviews]);
 
   useSeo({
     title: product ? `${product.name} | Laser-cut metal wall art` : 'Product',
