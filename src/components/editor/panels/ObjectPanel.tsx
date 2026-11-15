@@ -1,6 +1,6 @@
 import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical,
-  ArrowDownToLine, ArrowUpToLine, Combine, Copy, FlipHorizontal2, FlipVertical2, Group, Lock, Maximize2, Spline, Trash2, Ungroup, Unlock,
+  ArrowDownToLine, ArrowUpToLine, Combine, Copy, FlipHorizontal2, FlipVertical2, Flower2, Group, Lock, Maximize2, Repeat, Spline, Trash2, Ungroup, Unlock,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Switch } from '@/components/ui/switch';
@@ -11,7 +11,7 @@ import { selectedObjects, useStudio } from '@/lib/studio/store';
 import { fontById, fontsForText } from '@/lib/studio/text/fonts';
 import { t } from '@/lib/studio/i18n';
 import { useStudioUi } from '../uiStore';
-import { deleteSelection, duplicateSelection, groupSelection } from '../actions';
+import { centreSelection, combineSelection, deleteSelection, duplicateSelection, flipSelection, groupSelection } from '../actions';
 import { convertSelectionToPath, enterNodeEdit } from '../drawActions';
 import { Field, IconButton, NumberField, Section, Segmented } from './fields';
 
@@ -23,7 +23,8 @@ export function ObjectPanel() {
   const objects = useStudio(useShallow(s => selectedObjects(s)));
   const doc = useStudio(s => s.doc);
   const mode = useStudioUi(s => s.mode);
-  const { updateObjects, reorder, replaceObjects, addObjects } = useStudio.getState();
+  const { updateObjects, reorder, addObjects } = useStudio.getState();
+  const openRepeat = useStudioUi.getState().openRepeat;
   if (objects.length === 0) return null;
   const one: StudioObject | undefined = objects.length === 1 ? objects[0] : undefined;
   const patch = (p: Record<string, unknown>) => updateObjects(Object.fromEntries(objects.map(o => [o.id, p])));
@@ -155,6 +156,16 @@ export function ObjectPanel() {
         </Section>
       )}
 
+      {hasFeature(mode, 'centre') && (
+        <Section title="Position">
+          <div className="grid grid-cols-3 gap-1">
+            {([['both', 'Centre on plate'], ['x', 'Centre across'], ['y', 'Centre down']] as const).map(([axis, label]) => (
+              <button key={axis} type="button" className="h-9 rounded-md border border-border px-1 text-xs hover:bg-muted" onClick={() => void centreSelection(axis)}>{label}</button>
+            ))}
+          </div>
+        </Section>
+      )}
+
       {hasFeature(mode, 'align') && (
         <Section>
           <div className="flex flex-wrap gap-1">
@@ -173,18 +184,6 @@ export function ObjectPanel() {
               </>
             )}
           </div>
-          {hasFeature(mode, 'booleans') && objects.length >= 2 && (
-            <div className="grid grid-cols-4 gap-1">
-              {(['union', 'subtract', 'intersect', 'exclude'] as const).map(op => (
-                <button key={op} type="button" className="h-8 rounded-md border border-border text-xs capitalize hover:bg-muted" onClick={() => runGeometry(ops => {
-                  const result = ops.booleanObjects(objects, op);
-                  if (result) replaceObjects(ids, [result]);
-                })}>
-                  {op}
-                </button>
-              ))}
-            </div>
-          )}
           {hasFeature(mode, 'offset') && one && (
             <button type="button" className="btn-secondary h-9 text-sm" onClick={() => runGeometry(ops => {
               const outline = ops.offsetOutline(one, 6, 4);
@@ -196,17 +195,55 @@ export function ObjectPanel() {
         </Section>
       )}
 
+      {hasFeature(mode, 'combine') && objects.length >= 2 && (
+        <Section title="Combine">
+          {hasFeature(mode, 'booleans') ? (
+            <div className="grid grid-cols-4 gap-1">
+              {(['union', 'subtract', 'intersect', 'exclude'] as const).map(op => (
+                <button key={op} type="button" className="h-8 rounded-md border border-border text-xs capitalize hover:bg-muted" onClick={() => void combineSelection(op)}>{op}</button>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-1">
+              <button type="button" className="flex flex-col items-start rounded-md border border-border px-2 py-1.5 text-left hover:bg-muted" onClick={() => void combineSelection('union')}>
+                <span className="text-sm font-medium">Combine</span><span className="text-[11px] text-muted-foreground">Merge into one shape</span>
+              </button>
+              <button type="button" className="flex flex-col items-start rounded-md border border-border px-2 py-1.5 text-left hover:bg-muted" onClick={() => void combineSelection('subtract')}>
+                <span className="text-sm font-medium">Cut out of</span><span className="text-[11px] text-muted-foreground">Top shapes cut out of the lowest</span>
+              </button>
+            </div>
+          )}
+        </Section>
+      )}
+
+      {hasFeature(mode, 'repeat') && (
+        <Section title="Repeat">
+          <div className="grid grid-cols-2 gap-1">
+            <button type="button" className="btn-secondary h-9 text-sm" onClick={() => openRepeat('row')}><Repeat className="mr-1.5 h-4 w-4" /> Repeat…</button>
+            <button type="button" className="btn-secondary h-9 text-sm" onClick={() => openRepeat('mandala')}><Flower2 className="mr-1.5 h-4 w-4" /> Mandala…</button>
+          </div>
+        </Section>
+      )}
+
       <Section>
         <div className="flex flex-wrap gap-1">
           <IconButton label="Duplicate (Ctrl+D)" onClick={duplicateSelection}><Copy className="h-4 w-4" /></IconButton>
-          <IconButton label="Mirror horizontally" onClick={() => patch({ scaleX: -(one?.scaleX ?? 1) })} disabled={!one}><FlipHorizontal2 className="h-4 w-4" /></IconButton>
-          <IconButton label="Mirror vertically" onClick={() => patch({ scaleY: -(one?.scaleY ?? 1) })} disabled={!one}><FlipVertical2 className="h-4 w-4" /></IconButton>
+          {hasFeature(mode, 'flip') && (
+            <>
+              <IconButton label="Flip left-right" onClick={() => void flipSelection('x')}><FlipHorizontal2 className="h-4 w-4" /></IconButton>
+              <IconButton label="Flip top-bottom" onClick={() => void flipSelection('y')}><FlipVertical2 className="h-4 w-4" /></IconButton>
+            </>
+          )}
           <IconButton label="Bring to front (])" onClick={() => reorder(ids, 'front')}><ArrowUpToLine className="h-4 w-4" /></IconButton>
           <IconButton label="Send to back ([)" onClick={() => reorder(ids, 'back')}><ArrowDownToLine className="h-4 w-4" /></IconButton>
-          {mode === 'pro' && (
+          {hasFeature(mode, 'group') && (
             <>
               <IconButton label="Group (Ctrl+G)" onClick={() => groupSelection(true)} disabled={objects.length < 2}><Group className="h-4 w-4" /></IconButton>
               <IconButton label="Ungroup (Ctrl+Shift+G)" onClick={() => groupSelection(false)}><Ungroup className="h-4 w-4" /></IconButton>
+            </>
+          )}
+          {mode === 'pro' && (
+            <>
               <IconButton label={one?.locked ? 'Unlock' : 'Lock'} onClick={() => patch({ locked: !one?.locked })} disabled={!one}>{one?.locked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}</IconButton>
               <IconButton label="Mirror copy" onClick={() => runGeometry(ops => {
                 if (!one) return;

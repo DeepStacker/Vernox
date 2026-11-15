@@ -25,6 +25,16 @@ function arch(w: number, h: number): string {
   return `M0 ${h}L0 ${ry}A${rx} ${ry} 0 0 1 ${w} ${ry}L${w} ${h}Z`;
 }
 
+/** Teardrop: a round bottom with a point at the top (the tip is tangent to the circle). */
+function teardrop(w: number, h: number): string {
+  const r = w / 2;
+  const d = Math.max(h - r, r * 1.05);
+  const alpha = Math.acos(r / d);
+  const cx = w / 2, cy = h - r;
+  const px = r * Math.sin(alpha), py = r * Math.cos(alpha);
+  return `M${cx} 0L${cx + px} ${cy - py}A${r} ${r} 0 1 1 ${cx - px} ${cy - py}Z`;
+}
+
 /** A petal rosette: n lobes around the centre (mandala/Om frames). */
 function rosette(w: number, h: number, petals = 16): string {
   const cx = w / 2, cy = h / 2;
@@ -56,6 +66,7 @@ const GENERATORS: StudioShape[] = [
   { id: 'rectangle', name: 'Rectangle', path: roundedRect },
   { id: 'square', name: 'Square', path: roundedRect },
   { id: 'arch', name: 'Arch', path: arch },
+  { id: 'teardrop', name: 'Teardrop', path: teardrop },
   { id: 'rosette', name: 'Rosette', path: (w, h) => rosette(w, h) },
   { id: 'swastik', name: 'Swastik', path: swastik },
 ];

@@ -52,8 +52,8 @@ Switch **Pro** in the header (remembered in this browser). Same document — not
 - Rulers (mm), grid (`G`) with snapping, smart guides to the plate and other objects, marquee selection, shift-click.
 - Numeric X / Y / angle and sizes in mm (units follow the field suffix), letter height and spacing.
 - Per-object role: **Cut out**, **Solid** (added metal) or **Engrave** (score line).
-- Align / distribute, booleans (union, subtract, intersect, exclude), offset outline, mirror, mirror copy, group / ungroup,
-  lock, hide, rename (Layers panel, `L`), z-order (`[` `]`).
+- Align / distribute, all four booleans (union, subtract, intersect, exclude), offset outline, mirror copy, lock, hide,
+  rename (Layers panel, `L`). Duplicate, flip, centre, group, z-order, combine and repeat are in Simple too.
 - Import SVG, DXF, PDF or Illustrator `.ai` (see "Import formats" below).
 - Every finish and thickness, mounting hole size and inset, auto-bridges on/off.
 - Review → **Download** SVG, DXF (nominal), DXF (kerf-compensated) and a PDF sheet of your own design.
@@ -179,11 +179,44 @@ issue, so a template cannot ship broken. What that taught (measured, Poppins Sem
   for short, large display text (the Om glyph); Poppins is the workhorse in Latin and Devanagari.
 - Text added as metal (`add`) leaves loose letters that auto-bridges connect with many narrow gaps; lettering is cut out of
   a solid plate instead.
-- Known limit of the checks, not of the templates: the pointed spike of plate metal inside a cut-out **M, N, W, V, v, w**
-  is flagged as thin metal in every bundled font (N only on brass, gold and stainless). Default and sample text avoid those
-  letters; a customer typing such a name sees a warning (it does not block ordering). Raise with the workshop whether to
-  relax the check or accept the spike; the rule lives in `manufacturability.ts` (extent threshold of the opening residue).
+- Pointed letters (**M, N, W, V, v, w**) are fine: the sharp wedge of plate metal inside a cut-out letter is a tapering tip,
+  which a laser cuts, so the thin-metal check ignores it (`thinFeatures.ts`; see "Thin metal and tips"). Tests cover
+  "Vivek", "AARAV", "Welcome", "MWNV" at 24 mm on 2 mm steel.
 - Library shapes such as heart and cloud fill only part of their box; place text by the real outline.
+
+### Thin metal and tips
+
+`src/lib/studio/thinFeatures.ts`. Thin metal is found by a morphological opening (shrink by half the minimum web, grow back).
+Both offsets use a high miter limit (apex 10 degrees), so a wedge shrinks to a smaller similar wedge and grows back with
+its apex: tapering tips leave no residue and are not reported. Strips and necks of near-constant width vanish when shrunk
+and are reported; tips sharper than about 7 degrees (needles) are still reported. The narrow-slot check uses the same limit,
+so the sharp end of a cut-out (star point, lens tip) is not a slot. `offset()` in `geometry/clipper.ts` takes the limit.
+
+### Complex designs: repeat, symmetry, patterns, elements
+
+- **Repeat and symmetry** (`repeat.ts`, UI `RepeatDialog.tsx`, toolbar Repeat or `R`): row (count, gap, angle), grid, circle
+  (count, radius, sweep, turn copies) and mandala (N-fold turns, optional mirror) around the plate centre. Pure functions
+  return the originals plus copies (fresh ids, same op, groups kept); the UI applies them with `replaceObjects`, one undo
+  step. Limits: 400 copies per action, 2000 objects per design. Mandala is "Apply symmetry", not live; apply again after
+  editing the original.
+- **Patterns / jali** (`patterns/`): ten patterns (hexagon, honeycomb, diamond, circles, scales, quatrefoil, star and cross
+  octagons, waves, triangles, arabesque lens). Each is a set of non-overlapping nominal cells; the generator insets every
+  cell by half the web (so the web is guaranteed), clips to the region shrunk by the margin (cells cut below half are
+  dropped) and opens by the minimum hole. Targets (`patterns/region.ts`): solid plate gets holes; frame plate gets a lattice
+  welded into the border; no plate gets a perforated panel; a selected shape gets holes (a cut-out is replaced). Defaults
+  (`patterns/catalog.ts`): web 25 % over the minimum web, size from the minimum hole, margin that clears mounting holes.
+  Generation runs in `workers/patternWorker.ts` via a latest-wins client, previewed after 300 ms; at most 6000 cells. The path
+  is one object; very detailed fills (over 70,000 characters) warn that they may exceed the order limit
+  (`ORDER_LIMITS.maxDesignRefChars`). `__tests__/patterns.test.ts` requires zero issues at defaults for every pattern on
+  several finishes.
+- **Elements** (`elements/motifs.ts`): 19 original motifs built from primitives (leaf, circle, bar, polygon) in a 100-unit box
+  as one connected silhouette without enclosed islands. `__tests__/elements.test.ts` cuts each out of a plate and as a
+  free-standing piece at 150 mm on 2 mm steel and requires zero issues. Add a motif to `ELEMENTS` and run the test.
+- **Shapes** (`elements/parametric.ts`, `shapes.ts`): polygon, star, ring and spiral (engraved) become path objects; teardrop,
+  arch and rounded rectangle are shapes.
+- **Simple mode** (`modes.ts`): rail with Templates, Text, Elements, Shapes, Draw, Freehand, Patterns, Upload, Plate; a
+  floating object toolbar (Duplicate, Mirror, Flip, Forward, Backward, Centre, Repeat, Combine, Group, Delete); Combine and
+  Cut out of. Pro adds numeric fields, align and distribute, offset, all four booleans, layers, rulers, lock, mirror copy.
 
 ### Extending
 

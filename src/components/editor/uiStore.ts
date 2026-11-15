@@ -8,7 +8,8 @@ import { readSavedMode, saveMode, type StudioMode } from '@/lib/studio/modes';
 
 export type StudioStep = 'start' | 'design' | 'review' | 'batch';
 export type LengthUnit = 'mm' | 'cm' | 'in';
-export type Panel = 'templates' | 'text' | 'shape' | 'plate' | 'layers' | 'inspect' | null;
+export type Panel = 'templates' | 'text' | 'shape' | 'elements' | 'patterns' | 'plate' | 'layers' | 'inspect' | null;
+export type RepeatTab = 'row' | 'grid' | 'circle' | 'mandala';
 
 export interface StudioUi {
   step: StudioStep;
@@ -17,6 +18,8 @@ export interface StudioUi {
   traceOpen: boolean;
   traceFile: File | null;
   shortcutsOpen: boolean;
+  /** Which tab of the Repeat dialog is open; null when closed. */
+  repeatTab: RepeatTab | null;
   geometry: GeometryResult | null;
   geometryError: string | null;
   /** Number of text outlines currently being shaped. */
@@ -33,6 +36,8 @@ export interface StudioUi {
   openTrace: (file?: File | null) => void;
   closeTrace: () => void;
   setShortcutsOpen: (open: boolean) => void;
+  openRepeat: (tab?: RepeatTab) => void;
+  closeRepeat: () => void;
   setGeometry: (g: GeometryResult) => void;
   setGeometryError: (message: string | null) => void;
   shapingDelta: (delta: number) => void;
@@ -48,6 +53,7 @@ export const useStudioUi = create<StudioUi>()(set => ({
   traceOpen: false,
   traceFile: null,
   shortcutsOpen: false,
+  repeatTab: null,
   geometry: null,
   geometryError: null,
   shaping: 0,
@@ -65,6 +71,8 @@ export const useStudioUi = create<StudioUi>()(set => ({
   openTrace: (file = null) => set({ traceOpen: true, traceFile: file }),
   closeTrace: () => set({ traceOpen: false, traceFile: null }),
   setShortcutsOpen: shortcutsOpen => set({ shortcutsOpen }),
+  openRepeat: (tab = 'row') => set({ repeatTab: tab }),
+  closeRepeat: () => set({ repeatTab: null }),
   setGeometry: geometry => set({ geometry, geometryError: null }),
   setGeometryError: geometryError => set({ geometryError }),
   shapingDelta: delta => set(s => ({ shaping: Math.max(0, s.shaping + delta) })),

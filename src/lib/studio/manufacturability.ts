@@ -3,13 +3,14 @@
  * in i18n.ts), a severity, where it is (plate mm) and, when one exists, a one-click fix.
  * Only `error` issues block add-to-cart.
  *
- * Thin features use a morphological opening (shrink by w/2, grow back): metal that does not
- * survive is narrower than the minimum web. Narrow slots use the dual closing.
+ * Thin features: thinFeatures.ts (morphological opening, tapering tips exempt). Narrow slots
+ * use the dual closing (grow the cuts by w/2, shrink back).
  */
 import { CUSTOM_PIECE_LIMITS, type CustomPieceLimits } from '@/lib/pricing/customPiece';
-import { difference, offset, pieces, ringAreaAbs, type Piece } from './geometry/clipper';
-import { ringLength, ringsBounds, type Bounds, type Rings } from './geometry/path';
+import { ringAreaAbs, type Piece } from './geometry/clipper';
+import { ringLength, ringsBounds, type Bounds } from './geometry/path';
 import { composeDocument, objectRings, plateOutline, type Composition } from './compose';
+import { findNarrowSlots, findThinFeatures } from './thinFeatures';
 import type { CutRules } from './materials';
 import type { StudioDocument } from './schema';
 
@@ -65,13 +66,6 @@ export function billableSize(c: Composition): { widthMm: number; heightMm: numbe
     widthMm: Math.ceil(c.bounds.maxX - c.bounds.minX - 1e-6),
     heightMm: Math.ceil(c.bounds.maxY - c.bounds.minY - 1e-6),
   };
-}
-
-function residuePieces(residue: Rings, minArea: number, minExtent: number): Bounds[] {
-  return pieces(residue)
-    .filter(p => p.area >= minArea)
-    .map(p => ringsBounds([p.outer]) as Bounds)
-    .filter(b => Math.max(b.maxX - b.minX, b.maxY - b.minY) >= minExtent);
 }
 
 function mergeBounds(list: Bounds[]): Bounds | undefined {
@@ -139,18 +133,14 @@ export function analyzeComposition(
     });
   }
 
-  // Thin metal (opening residue). Corner rounding leaves tiny slivers; ignore those.
-  const r = rules.minFeatureMm / 2;
-  const opened = offset(offset(c.material, -r, 'miter'), r, 'miter');
-  const thin = residuePieces(difference(c.material, opened), r * r * 1.5, rules.minFeatureMm * 1.5);
+  // Thin metal: strips and necks narrower than the minimum web. Tapering tips are fine (thinFeatures.ts).
+  const thin = findThinFeatures(c.material, rules.minFeatureMm);
   if (thin.length > 0) {
     issues.push({ id: 'thin-feature', rule: 'thin-feature', severity: 'warning', params: { mm: rules.minFeatureMm, count: thin.length }, at: mergeBounds(thin) });
   }
 
   // Narrow slots between cuts (closing residue).
-  const s = rules.minHoleMm / 2;
-  const closed = offset(offset(c.material, s, 'miter'), -s, 'miter');
-  const slots = residuePieces(difference(closed, c.material), s * s * 1.5, rules.minHoleMm * 1.5);
+  const slots = findNarrowSlots(c.material, rules.minHoleMm);
   if (slots.length > 0) {
     issues.push({ id: 'narrow-slot', rule: 'narrow-slot', severity: 'warning', params: { mm: rules.minHoleMm, count: slots.length }, at: mergeBounds(slots) });
   }
