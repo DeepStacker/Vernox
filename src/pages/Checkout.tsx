@@ -266,6 +266,7 @@ export default function Checkout() {
       <div className="min-h-screen flex flex-col bg-background">
         <SiteHeader />
         <section className="max-w-6xl mx-auto px-4 sm:px-6 py-10 md:py-14 w-full flex-1">
+          <h1 className="sr-only">Checkout</h1>
           <EmptyState title="Your cart is empty" action={{ label: 'Shop designs', to: '/shop' }} />
         </section>
         <SiteFooter />

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { ChevronDown, Heart, Menu, Search, ShoppingBag, User } from 'lucide-react';
 import { useCart } from '@/lib/cartContext';
@@ -32,6 +32,8 @@ const PLAIN_LINKS: MenuLink[] = [
 function SearchBox({ className, onDone }: { className?: string; onDone?: () => void }) {
   const [q, setQ] = useState('');
   const navigate = useNavigate();
+  // The header renders one box for desktop and one in the mobile panel; each needs its own id for its label.
+  const inputId = useId();
   return (
     <form
       role="search"
@@ -42,9 +44,9 @@ function SearchBox({ className, onDone }: { className?: string; onDone?: () => v
         onDone?.();
       }}
     >
-      <label htmlFor="site-search" className="sr-only">Search designs</label>
+      <label htmlFor={inputId} className="sr-only">Search designs</label>
       <input
-        id="site-search"
+        id={inputId}
         type="search"
         value={q}
         onChange={e => setQ(e.target.value)}
