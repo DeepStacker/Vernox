@@ -119,7 +119,11 @@ export async function renderTaxDocumentPdf(docData: TaxDocument): Promise<Uint8A
   const b = docData.buyer;
   w.text('Bill to / Ship to', col2, { bold: true });
   w.down(12);
-  for (const row of [b.name, b.address, `${b.city}, ${b.state} ${b.pincode}`, `Place of supply: ${docData.placeOfSupply.state} (${docData.placeOfSupply.stateCode ?? '--'})`, 'Unregistered buyer (B2C)']) {
+  const buyerRows = b.gstin
+    ? [b.legalName ?? b.name, `GSTIN: ${b.gstin}`, `Attn: ${b.name}`, b.address, `${b.city}, ${b.state} ${b.pincode}`]
+    : [b.name, b.address, `${b.city}, ${b.state} ${b.pincode}`];
+  const placeOfSupply = `Place of supply: ${docData.placeOfSupply.state} (${docData.placeOfSupply.stateCode ?? '--'})`;
+  for (const row of [...buyerRows, placeOfSupply, b.gstin ? 'Registered buyer (B2B)' : 'Unregistered buyer (B2C)']) {
     w.text(row, col2, { width: right - col2 });
     w.down(11);
   }

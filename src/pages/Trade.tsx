@@ -106,7 +106,7 @@ export default function Trade() {
             { title: 'Tell us the project', body: 'Quantities, sizes, finish and your logo or text. We reply with a quote, usually within one working day.' },
             { title: 'Approve a proof', body: 'For logos and custom artwork we send a drawing of every piece to approve. Nothing is cut before you say yes.' },
             { title: 'Production', body: `Custom pieces take about ${leadDays} working days to make; large runs are scheduled with you, and dispatch dates are confirmed in the quote.` },
-            { title: 'GST invoice', body: 'Every order comes with a GST tax invoice. Need your company GSTIN on it? Give it in the enquiry and we confirm the invoicing with you before you pay.' },
+            { title: 'GST invoice', body: 'Every order comes with a GST tax invoice. Add your company name and GSTIN at checkout ("Buying for a business?") and they are printed on it for input tax credit.' },
           ].map((step, i) => (
             <li key={step.title} className="rounded-lg border border-border bg-card p-4">
               <p className="text-xs font-semibold text-brass">Step {i + 1}</p>
@@ -144,7 +144,7 @@ export default function Trade() {
               <select value={form.timeline} onChange={set('timeline')} className="field mt-1 font-normal">{TRADE_TIMELINES.map(t => <option key={t}>{t}</option>)}</select>
             </label>
             <label className="text-sm font-medium sm:col-span-2">Project details
-              <textarea rows={4} value={form.notes} onChange={set('notes')} maxLength={4000} className="field mt-1 font-normal" placeholder="Sizes, text or logo, where it will be installed, and your company GSTIN if you need it on the invoice" />
+              <textarea rows={4} value={form.notes} onChange={set('notes')} maxLength={4000} className="field mt-1 font-normal" placeholder="Sizes, text or logo, and where it will be installed" />
             </label>
             <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
               <label>Leave this empty<input tabIndex={-1} autoComplete="off" value={form.website} onChange={set('website')} /></label>

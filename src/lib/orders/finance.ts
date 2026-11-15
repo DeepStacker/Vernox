@@ -158,14 +158,15 @@ export interface ExportOptions {
 
 /**
  * Orders with their GST split. Columns carry what finance and the CA need (order number, date,
- * status, payment method, place of supply by state, amounts); no name, email, phone or address.
+ * status, payment method, place of supply by state, amounts, a B2B buyer's GSTIN); no name, email, phone or address.
  */
 export function buildOrdersCsv(orders: readonly Order[], { sellerState }: ExportOptions = {}): string {
   const header = [
     'order_number', 'placed_on_ist', 'status', 'payment_method', 'place_of_supply_state', 'supply_type', 'taxable_value',
     'cgst', 'sgst', 'igst', 'total_tax', 'shipping', 'cod_fee', 'discount', 'order_total', 'collected', 'refunded', 'invoice_number',
-    // Appended so existing column positions stay put: the bulk part of `discount` (0.00 when none).
-    'volume_discount',
+    // Appended so existing column positions stay put: the bulk part of `discount` (0.00 when none), and the
+    // recipient GSTIN of B2B invoices (GSTR-1 B2B section; empty for consumers).
+    'volume_discount', 'buyer_gstin',
   ] as const;
   const rows = orders.map(o => {
     const g = gstSplit(o, sellerState);
@@ -176,6 +177,7 @@ export function buildOrdersCsv(orders: readonly Order[], { sellerState }: Export
       amount(g.taxPaise), amount(o.ops?.shippingPaise ?? Math.round(o.shippingTotal * 100)), amount(o.ops?.codFeePaise ?? 0),
       amount(o.ops?.discountPaise ?? Math.round(o.discountTotal * 100)), amount(totalPaise(o)), amount(collectedPaise(o)),
       amount(o.ops?.refundedPaise ?? 0), o.ops?.invoiceNumber ?? '', amount(o.ops?.volumeDiscount?.discountPaise ?? 0),
+      o.ops?.buyerGstin ?? '',
     ];
   });
   return toCsv(header, rows);

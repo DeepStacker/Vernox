@@ -25,6 +25,9 @@ export interface CustomerDetails {
   state: string;
   pincode: string;
   country: string;
+  /** Business purchase: the buyer's legal name and GSTIN, printed on the tax invoice so they can claim input credit. */
+  companyName?: string;
+  gstin?: string;
 }
 
 export interface OrderItemSnapshot {

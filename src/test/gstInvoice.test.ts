@@ -279,3 +279,31 @@ describe('GST state names from codes', () => {
     expect(gstStateCode(stateForGstCode('33'))).toBe('33');
   });
 });
+
+describe('business (B2B) buyer on the tax invoice', () => {
+  const customer = {
+    email: 'buyer@example.com', name: 'Ravi Kumar', phone: '+91 98765 43210', address: '5 Residency Road',
+    city: 'Bengaluru', state: 'Karnataka', pincode: '560025', country: 'India',
+  };
+
+  it('prints the registered name and GSTIN; place of supply stays the delivery state', async () => {
+    const store = seededStore();
+    const { invoice } = await invoicedOrder(store, { customer: { ...customer, companyName: 'Acme Interiors Pvt Ltd', gstin: '27aabca1234c1z5' } });
+    expect(invoice.buyer).toMatchObject({ gstin: '27AABCA1234C1Z5', legalName: 'Acme Interiors Pvt Ltd', name: 'Ravi Kumar' });
+    expect(invoice.placeOfSupply.state).toBe('Karnataka');
+    await expect(renderTaxDocumentPdf(invoice)).resolves.toBeInstanceOf(Uint8Array);
+  });
+
+  it('keeps consumer invoices unregistered', async () => {
+    const { invoice } = await invoicedOrder(seededStore(), { customer });
+    expect(invoice.buyer.gstin).toBeUndefined();
+  });
+
+  it('refuses a malformed GSTIN or a GSTIN without the business name', async () => {
+    const { checkoutRequestSchema } = await import('../../api/_lib/checkout');
+    const base = { items: [{ productId: 'p-01', sizeLabel: 'Medium · 50cm', finish: 'brass', quantity: 1 }], idempotencyKey: 'idem-key-b2b1' };
+    expect(checkoutRequestSchema.safeParse({ ...base, customer: { ...customer, companyName: 'Acme', gstin: '27AABCA1234C1Z' } }).success).toBe(false);
+    expect(checkoutRequestSchema.safeParse({ ...base, customer: { ...customer, gstin: '27AABCA1234C1Z5' } }).success).toBe(false);
+    expect(checkoutRequestSchema.safeParse({ ...base, customer: { ...customer, companyName: '', gstin: '' } }).success).toBe(true);
+  });
+});

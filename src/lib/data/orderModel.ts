@@ -137,6 +137,7 @@ function normalizeOps(raw: Raw): OrderOps {
     subtotalPaise: paise(a.subtotalPaise),
     discountPaise: paise(a.discountPaise),
     volumeDiscount: volumeOf(a.discountParts?.volume),
+    buyerGstin: typeof raw.customer?.gstin === 'string' && raw.customer.gstin ? raw.customer.gstin : null,
     shippingPaise: paise(a.shippingPaise),
     codFeePaise: paise(a.codFeePaise),
     taxPaise: paise(a.taxPaise),

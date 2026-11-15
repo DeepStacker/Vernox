@@ -43,6 +43,9 @@ An invalid/expired token returns 401 (it is not silently treated as a guest).
 }
 ```
 
+`customer.companyName` and `customer.gstin` are optional (business purchase): the GSTIN must match the GSTIN format and needs
+the registered name; both are printed on the tax invoice ("Registered buyer (B2B)") and the GSTIN is the finance CSV's `buyer_gstin`.
+
 Item rules:
 - Catalog items: `productId` must be a `products/{id}` document. `sizeLabel` must match one of the product's sizes
   (case-insensitive); otherwise exact `widthMm`/`heightMm` is matched. If the product lists `finishes`, `finish` must be one of

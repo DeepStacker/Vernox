@@ -70,7 +70,7 @@ import { PAYMENT_LINK_TTL_HOURS, type DesignFile } from '../../src/types/staffOr
 import { itemLeadTimeDays, serviceabilityFor } from './shipping';
 import type { ShippingProvider } from './shipping/types';
 import { increment, type DocStore } from './store';
-import type { StoreConfig } from './storeConfig';
+import { GSTIN_PATTERN, type StoreConfig } from './storeConfig';
 
 const MAX_DESIGN_REF_CHARS = ORDER_LIMITS.maxDesignRefChars;
 const MAX_TOTAL_DESIGN_REF_CHARS = ORDER_LIMITS.maxTotalDesignRefChars;
@@ -99,8 +99,14 @@ export const customerSchema = z
     state: z.string().trim().min(1).max(100),
     pincode: z.string().trim().regex(/^[A-Za-z0-9 -]{3,12}$/, 'must be a valid postal code'),
     country: z.string().trim().min(2).max(56),
+    companyName: z.string().trim().max(120).optional().transform(v => v || undefined),
+    gstin: z.string().trim().toUpperCase().max(15).optional().transform(v => v || undefined)
+      .refine(v => v === undefined || GSTIN_PATTERN.test(v), 'is not a valid GSTIN (15 characters, e.g. 29ABCDE1234F1Z5)'),
   })
   .superRefine((c, ctx) => {
+    if (c.gstin && !c.companyName) {
+      ctx.addIssue({ code: "custom", path: ['companyName'], message: 'is required with a GSTIN (the registered business name)' });
+    }
     if (INDIA.has(c.country.toLowerCase()) && !/^[1-9][0-9]{5}$/.test(c.pincode)) {
       ctx.addIssue({ code: "custom", path: ['pincode'], message: 'must be a 6-digit Indian PIN code' });
     }

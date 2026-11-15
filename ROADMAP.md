@@ -227,11 +227,10 @@ Not built, on purpose:
   malware under our domain) and would need App Check or a signed-upload API with size/type checks and scanning. For now the page
   asks buyers to attach the file to their reply to our email. Follow-up: an API-issued, single-use signed upload URL under
   `trade-uploads/{enquiryId}/` (PDF/SVG/PNG/JPEG, ≤ 10 MB, staff-only read, rules tests), once App Check is on.
-- **Company GSTIN at checkout (B2B invoice).** Invoices have no recipient-GSTIN field yet (`buyerOf` in `api/_lib/gst/invoice.ts`
-  prints "Unregistered buyer (B2C)"), so adding it only at checkout would be half a feature. Follow-up: optional `buyerGstin` on
-  the checkout request (GSTIN pattern, state code = first two digits, shown against the delivery state), frozen on the order,
-  printed as recipient GSTIN with B2B wording, and reported in the finance CSV for GSTR-1 (B2B section); the Trade page asks for
-  the GSTIN in the enquiry meanwhile.
+- **Company GSTIN at checkout (B2B invoice): done.** Optional "Buying for a business?" at checkout takes the registered name and
+  GSTIN (`customer.companyName` / `customer.gstin`, GSTIN pattern shared in `src/types/gstStateCodes.ts`, name required with a GSTIN).
+  The invoice prints them with "Registered buyer (B2B)"; place of supply stays the delivery state (goods). The finance CSV's last
+  column `buyer_gstin` feeds the GSTR-1 B2B section. Staff-entered orders do not take a GSTIN yet.
 
 ## Performance and scale plan (2026-11-07)
 

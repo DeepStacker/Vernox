@@ -49,7 +49,7 @@ The admin Settings screen edits `seller`, the contact fields, `codEnabled`, `cod
 ### `orders/{orderId}` — written only by the API (`api/_lib/orders.ts`)
 `id`, `orderNumber` (`VX-YYYYMMDD-XXXXXX`, also the Razorpay receipt), `status` (see lifecycle), `statusHistory[{ status, at, by,
 note? }]`, `userId` (Firebase uid or null for guests), `email` (lower-case), `customer{ email, name, phone, address, city, state,
-pincode, country }`, `items[{ productId, name, category, sizeLabel, widthMm, heightMm, finish, quantity, unitPricePaise,
+pincode, country, companyName?, gstin? }` (the last two only for a business purchase; printed on the B2B tax invoice), `items[{ productId, name, category, sizeLabel, widthMm, heightMm, finish, quantity, unitPricePaise,
 lineTotalPaise, isCustom, customDesignRef, designFiles? }]` (frozen snapshot; `designFiles[{ path, name, contentType }]` only on a custom line of a staff-entered order: up to 5 Storage paths `staff-designs/{draftId}/{file}` of SVG, DXF, PDF, PNG, JPEG or WebP, uploaded from Admin > New order before the order existed; order staff read them, never overwritten or deleted; offered as downloads only, never inlined, because SVG can carry script), `amounts{ subtotalPaise, discountPaise, shippingPaise, taxPaise,
 totalPaise, gstRateBps }`, `coupon{ id, code, discountPaise } | null`, `stockReservation{ status: held|released|committed|none,
 items[{ productId, quantity }] }`, `reservationExpiresAt` (ms, placed + 15 min), `idempotencyKey`, `razorpayOrderId`,

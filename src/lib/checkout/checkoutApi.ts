@@ -17,6 +17,9 @@ export interface CheckoutCustomer {
   state: string;
   pincode: string;
   country: string;
+  /** Optional business purchase details for a B2B tax invoice. */
+  companyName?: string;
+  gstin?: string;
 }
 
 export interface ServerPricing {

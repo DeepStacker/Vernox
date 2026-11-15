@@ -57,3 +57,6 @@ export function stateForGstCode(code: string | null | undefined): string | null 
   if (!code) return null;
   return INDIAN_STATES_AND_UTS.find(name => GST_STATE_CODES[normalise(name)] === code) ?? null;
 }
+
+/** GSTIN format: 2-digit state code, PAN (5 letters, 4 digits, letter), entity number, Z, check character. */
+export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;

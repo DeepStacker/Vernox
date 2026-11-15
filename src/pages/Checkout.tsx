@@ -12,6 +12,7 @@ import { ShapeThumb } from '@/components/shop/ShapeThumb';
 import { useCart } from '@/lib/cartContext';
 import { useCatalog } from '@/lib/catalogContext';
 import { finishName } from '@/lib/catalog';
+import { GSTIN_PATTERN } from '@/types/gstStateCodes';
 import { rememberConfirmationEmail } from '@/lib/orders/confirmationEmail';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { trackStoreEvent } from '@/lib/storeAnalytics';
@@ -58,6 +59,9 @@ export default function Checkout() {
     name: '', email: '', phone: '', address: '', city: '', state: '', pincode: '', country: 'India',
   });
   const [errors, setErrors] = useState<AddressErrors>({});
+  // Optional business purchase: the server validates the GSTIN and prints both on the tax invoice.
+  const [business, setBusiness] = useState({ open: false, companyName: '', gstin: '' });
+  const [businessErrors, setBusinessErrors] = useState<{ companyName?: string; gstin?: string }>({});
   const prefilled = useRef(false);
 
   // Prefill once from the signed-in customer's profile; never overwrite what they have typed.
@@ -150,7 +154,10 @@ export default function Checkout() {
     state: form.state,
     pincode: form.pincode.trim(),
     country: 'India',
-  }), [form]);
+    ...(business.open && business.gstin.trim()
+      ? { companyName: business.companyName.trim(), gstin: business.gstin.trim().toUpperCase() }
+      : {}),
+  }), [form, business]);
 
   const fingerprint = useMemo(
     () => JSON.stringify({ customer, couponCode, paymentMethod, items: items.map(i => [i.productId, i.sizeLabel, i.finish, i.quantity, i.customDesignRef]) }),
@@ -189,7 +196,15 @@ export default function Checkout() {
     if (items.length === 0) { toast.error('Your cart is empty.'); return; }
     const found = validateAddress(form);
     setErrors(found);
-    if (Object.keys(found).length > 0) { toast.error('Please correct the highlighted fields.'); return; }
+    const gstin = business.gstin.trim().toUpperCase();
+    const foundBusiness = business.open && gstin
+      ? {
+        ...(GSTIN_PATTERN.test(gstin) ? {} : { gstin: 'Enter a valid 15-character GSTIN, e.g. 29ABCDE1234F1Z5.' }),
+        ...(business.companyName.trim() ? {} : { companyName: 'Enter the business name registered with this GSTIN.' }),
+      }
+      : {};
+    setBusinessErrors(foundBusiness);
+    if (Object.keys(found).length > 0 || Object.keys(foundBusiness).length > 0) { toast.error('Please correct the highlighted fields.'); return; }
     if (delivery.estimate && !delivery.estimate.serviceable) {
       setErrors(prev => ({ ...prev, pincode: 'We do not deliver to this PIN code yet.' }));
       toast.error('We do not deliver to this PIN code yet.');
@@ -357,6 +372,30 @@ export default function Checkout() {
                 </select>
                 <FieldError message={errors.state} />
               </div>
+            </div>
+
+            <div className="border-t border-border/60 pt-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={business.open} onChange={e => setBusiness(b => ({ ...b, open: e.target.checked }))} className="h-4 w-4 accent-burgundy" />
+                Buying for a business? Add your GSTIN for a GST invoice
+              </label>
+              {business.open && (
+                <div className="mt-3 grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelClass} htmlFor="co-company">Registered business name</label>
+                    <input id="co-company" autoComplete="organization" maxLength={120} value={business.companyName}
+                      onChange={e => setBusiness(b => ({ ...b, companyName: e.target.value }))} className={inputClass} />
+                    <FieldError message={businessErrors.companyName} />
+                  </div>
+                  <div>
+                    <label className={labelClass} htmlFor="co-gstin">GSTIN</label>
+                    <input id="co-gstin" maxLength={15} value={business.gstin} placeholder="29ABCDE1234F1Z5" autoCapitalize="characters" spellCheck={false}
+                      onChange={e => setBusiness(b => ({ ...b, gstin: e.target.value.toUpperCase() }))} className={`${inputClass} font-mono`} />
+                    <FieldError message={businessErrors.gstin} />
+                  </div>
+                  <p className="sm:col-span-2 text-xs text-muted-foreground">The invoice shows this name and GSTIN so you can claim input tax credit. Prices stay the same.</p>
+                </div>
+              )}
             </div>
           </div>
 

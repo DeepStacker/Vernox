@@ -31,6 +31,8 @@ export interface OrderOps {
   /** All discounts; volumeDiscount is the bulk part of it (null when none or on orders before volume discounts). */
   discountPaise: number;
   volumeDiscount?: { minUnits: number; percent: number; units: number; discountPaise: number } | null;
+  /** Registered business buyer (B2B tax invoice), from customer.gstin at checkout; null for consumers. */
+  buyerGstin?: string | null;
   shippingPaise: number;
   codFeePaise: number;
   /** GST inside totalPaise when pricesIncludeTax; GST added to reach it on older orders. */

@@ -70,7 +70,8 @@ export interface TaxDocument {
   orderNumber: string;
   issuedAt: number;
   seller: SellerDetails;
-  buyer: { name: string; email: string; address: string; city: string; state: string; stateCode: string | null; pincode: string };
+  /** `gstin` and `legalName` only for a registered (B2B) buyer; absent means an unregistered (B2C) buyer. */
+  buyer: { name: string; email: string; address: string; city: string; state: string; stateCode: string | null; pincode: string; gstin?: string; legalName?: string };
   placeOfSupply: { state: string; stateCode: string | null };
   supplyType: SupplyType;
   lines: TaxDocumentLine[];
@@ -224,7 +225,11 @@ function buyerOf(order: OrderDoc) {
   const c = order.customer;
   const stateCode = gstStateCode(c.state);
   return {
-    buyer: { name: c.name, email: order.email, address: c.address, city: c.city, state: c.state, stateCode, pincode: c.pincode },
+    buyer: {
+      name: c.name, email: order.email, address: c.address, city: c.city, state: c.state, stateCode, pincode: c.pincode,
+      // Place of supply stays the delivery state (goods): a GSTIN registered elsewhere does not move it.
+      ...(c.gstin ? { gstin: c.gstin, legalName: c.companyName ?? c.name } : {}),
+    },
     placeOfSupply: { state: c.state, stateCode },
   };
 }

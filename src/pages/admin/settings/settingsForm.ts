@@ -9,8 +9,9 @@ import type { StoreConfig } from '@/types/store';
 import { DEFAULT_CONSULTATION_SETTINGS } from '@/types/consultation';
 import { parseVolumeDiscounts, type VolumeDiscountTier } from '@/lib/pricing/volumeDiscount';
 
-/** Mirror of GSTIN_PATTERN in api/_lib/storeConfig.ts. */
-export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+import { GSTIN_PATTERN } from '@/types/gstStateCodes';
+
+export { GSTIN_PATTERN };
 
 export const SELLER_FIELDS = ['legalName', 'tradeName', 'gstin', 'address', 'city', 'state', 'stateCode', 'pincode', 'email', 'phone'] as const;
 /** Seller fields the server requires before it can issue a GST invoice (assertSellerConfigured). */
